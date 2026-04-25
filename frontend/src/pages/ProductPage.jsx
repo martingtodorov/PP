@@ -44,7 +44,7 @@ export default function ProductPage() {
         <div className="grid lg:grid-cols-2 gap-12">
           {/* Gallery */}
           <div>
-            <div className="aspect-square bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+            <div className="aspect-square bg-white border border-slate-200 rounded-xl overflow-hidden">
               <img src={images[imgIdx]} alt={p.title} className="w-full h-full object-contain p-10" data-testid="product-main-image" />
             </div>
             {images.length > 1 && (
@@ -53,7 +53,7 @@ export default function ProductPage() {
                   <button
                     key={i}
                     onClick={() => setImgIdx(i)}
-                    className={`w-20 h-20 bg-slate-50 border rounded-lg overflow-hidden ${i === imgIdx ? "border-slate-900" : "border-slate-200"}`}
+                    className={`w-20 h-20 bg-white border rounded-lg overflow-hidden ${i === imgIdx ? "border-slate-900" : "border-slate-200"}`}
                     aria-label={`Изображение ${i + 1}`}
                   >
                     <img src={src} alt="" className="w-full h-full object-contain p-2" />

@@ -9,7 +9,7 @@
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 217 91% 50%;
+    --primary: 5 99% 69%;
     --primary-foreground: 0 0% 100%;
     --secondary: 210 40% 96%;
     --secondary-foreground: 222 47% 11%;
@@ -21,7 +21,7 @@
     --destructive-foreground: 0 0% 100%;
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 217 91% 50%;
+    --ring: 5 99% 69%;
     --radius: 0.5rem;
 
     /* Shopify-aligned design tokens */
@@ -63,7 +63,7 @@ h1, h2, h3, h4, h5, h6, .font-display {
 
 .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; }
 
-::selection { background: #0b66d4; color: white; }
+::selection { background: #FE6F61; color: white; }
 
 /* Subtle clinical grid bg */
 .bg-grid {
@@ -247,7 +247,7 @@ h1, h2, h3, h4, h5, h6, .font-display {
     position: relative;
     overflow: hidden;
     border-radius: var(--pc-border-radius);
-    background: hsl(var(--secondary));
+    background: #ffffff;
     aspect-ratio: 1 / 1;
 }
 .product-card__image {
@@ -289,7 +289,7 @@ h1, h2, h3, h4, h5, h6, .font-display {
     opacity: 1;
     transform: translateY(0);
 }
-.product-card__quick-add:hover { background: #0b66d4; }
+.product-card__quick-add:hover { background: #FE6F61; }
 .product-card__quick-add:disabled {
     background: hsl(var(--muted));
     color: hsl(var(--muted-foreground));
@@ -453,7 +453,7 @@ h1, h2, h3, h4, h5, h6, .font-display {
     cursor: pointer;
     transition: background .15s ease, transform .15s ease;
 }
-.button-secondary:hover { background: #0b66d4; border-color: #0b66d4; }
+.button-secondary:hover { background: #FE6F61; border-color: #FE6F61; }
 .button-secondary:disabled { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); border-color: hsl(var(--border)); cursor: not-allowed; }
 .product-details__trust {
     display: flex;

@@ -4,7 +4,7 @@ import { TrendingUp, ShoppingBag, Clock, Truck, Users, Package, Coins } from "lu
 import AdminLayout from "../components/AdminLayout";
 import { api, fmtEUR } from "../lib/api";
 
-const Stat = ({ icon: Icon, label, value, hint, accent = "blue" }) => (
+const Stat = ({ icon: Icon, label, value, hint, accent = "coral" }) => (
   <div className="bg-white border border-slate-200 rounded-xl p-5">
     <div className={`w-9 h-9 rounded-lg flex items-center justify-center bg-${accent}-50 text-${accent}-600`}>
       <Icon className="h-5 w-5" />
@@ -28,10 +28,10 @@ export default function AdminDashboardPage() {
     <AdminLayout title="Табло">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat icon={Coins} label="Приходи" value={stats ? fmtEUR(stats.revenue_eur) : "…"} hint="Платени поръчки" accent="emerald" />
-        <Stat icon={ShoppingBag} label="Поръчки" value={stats?.total_orders ?? "…"} accent="blue" />
+        <Stat icon={ShoppingBag} label="Поръчки" value={stats?.total_orders ?? "…"} accent="coral" />
         <Stat icon={Clock} label="Очакват плащане" value={stats?.awaiting_payment ?? "…"} accent="amber" />
         <Stat icon={Truck} label="За изпращане" value={stats?.pending_shipments ?? "…"} accent="indigo" />
-        <Stat icon={Users} label="Клиенти" value={stats?.customers ?? "…"} accent="blue" />
+        <Stat icon={Users} label="Клиенти" value={stats?.customers ?? "…"} accent="coral" />
         <Stat icon={Package} label="Продукти" value={stats?.products ?? "…"} accent="slate" />
         <Stat icon={TrendingUp} label="Платени" value={stats?.paid ?? "…"} accent="emerald" />
       </div>
@@ -39,7 +39,7 @@ export default function AdminDashboardPage() {
       <section className="mt-10 bg-white border border-slate-200 rounded-xl">
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <h2 className="font-display font-bold text-slate-900">Последни поръчки</h2>
-          <Link to="/admin/orders" className="text-sm font-semibold text-blue-600">Виж всички →</Link>
+          <Link to="/admin/orders" className="text-sm font-semibold text-coral-600">Виж всички →</Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

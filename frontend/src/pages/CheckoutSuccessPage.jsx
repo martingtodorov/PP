@@ -81,7 +81,7 @@ export default function CheckoutSuccessPage() {
 
         <div className="mt-10 flex justify-center gap-3">
           <Link to="/"><Button variant="outline">Към началото</Button></Link>
-          <Link to="/account"><Button className="bg-blue-600 hover:bg-blue-700">Моите поръчки</Button></Link>
+          <Link to="/account"><Button className="bg-coral-600 hover:bg-coral-700">Моите поръчки</Button></Link>
         </div>
       </div>
     </Layout>

@@ -76,7 +76,7 @@ export default function CheckoutPage() {
               </div>
               {!user && (
                 <p className="text-xs text-slate-500 mt-4">
-                  Имате профил? <Link to="/account" className="text-blue-600 font-medium">Влезте</Link>, за да следите поръчките си.
+                  Имате профил? <Link to="/account" className="text-coral-600 font-medium">Влезте</Link>, за да следите поръчките си.
                 </p>
               )}
             </section>
@@ -99,7 +99,7 @@ export default function CheckoutPage() {
                   { v: "econt_address", t: "Еконт – до адрес", d: "Куриер до посочения адрес", p: "5.99" },
                   { v: "speedy", t: "Speedy – до адрес", d: "Куриер Speedy до посочения адрес", p: "7.49" },
                 ].map((s) => (
-                  <label key={s.v} className={`flex items-center gap-4 border rounded-lg p-4 cursor-pointer ${shippingMethod === s.v ? "border-blue-600 bg-blue-50/40" : "border-slate-200"}`}>
+                  <label key={s.v} className={`flex items-center gap-4 border rounded-lg p-4 cursor-pointer ${shippingMethod === s.v ? "border-coral-600 bg-coral-50/40" : "border-slate-200"}`}>
                     <RadioGroupItem value={s.v} id={s.v} />
                     <div className="flex-1">
                       <p className="font-medium text-slate-900">{s.t}</p>
@@ -113,7 +113,7 @@ export default function CheckoutPage() {
 
             <section className="bg-white border border-slate-200 rounded-xl p-6">
               <h2 className="font-display font-bold text-lg text-slate-900 mb-3">Метод за плащане</h2>
-              <div className="border-2 border-blue-600 bg-blue-50/40 rounded-lg p-4">
+              <div className="border-2 border-coral-600 bg-coral-50/40 rounded-lg p-4">
                 <p className="font-medium text-slate-900">Банков превод</p>
                 <p className="text-sm text-slate-600 mt-1">След потвърждение ще получите банкови данни и референция на поръчката. Поръчката се обработва след получаване на превода.</p>
               </div>
@@ -146,7 +146,7 @@ export default function CheckoutPage() {
                   </div>
                 </div>
               </div>
-              <Button type="submit" disabled={submitting} className="w-full bg-blue-600 hover:bg-blue-700" data-testid="place-order-btn">
+              <Button type="submit" disabled={submitting} className="w-full bg-coral-600 hover:bg-coral-700" data-testid="place-order-btn">
                 {submitting ? "Обработка…" : "Завърши поръчката"}
               </Button>
             </div>

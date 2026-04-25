@@ -47,7 +47,7 @@ const CalcSection = () => {
     <section className="bg-slate-50 border-y border-slate-200" data-testid="calculator-section">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 grid lg:grid-cols-2 gap-12 items-center">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-blue-600 font-bold">Инструмент</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-coral-600 font-bold">Инструмент</p>
           <h2 className="font-display text-3xl sm:text-4xl font-extrabold text-slate-900 mt-3 leading-tight">Калкулатор за концентрация</h2>
           <p className="text-slate-600 mt-4 leading-relaxed max-w-md">
             Изчислете точно нужния обем разтвор за желаната доза пептид. За научни и лабораторни цели.
@@ -56,19 +56,19 @@ const CalcSection = () => {
         <div className="bg-white border border-slate-200 rounded-2xl p-8 space-y-5">
           <div>
             <label className="text-sm font-medium text-slate-700">Количество пептид <span className="text-slate-400">(mg)</span></label>
-            <input type="number" min="0" step="0.1" value={pep} onChange={(e) => setPep(Number(e.target.value))} className="mt-1.5 block w-full border border-slate-300 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500" data-testid="calc-pep" />
+            <input type="number" min="0" step="0.1" value={pep} onChange={(e) => setPep(Number(e.target.value))} className="mt-1.5 block w-full border border-slate-300 rounded-md p-3 focus:ring-coral-500 focus:border-coral-500" data-testid="calc-pep" />
           </div>
           <div>
             <label className="text-sm font-medium text-slate-700">Обем разтвор <span className="text-slate-400">(mL)</span></label>
-            <input type="number" min="0" step="0.1" value={vol} onChange={(e) => setVol(Number(e.target.value))} className="mt-1.5 block w-full border border-slate-300 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500" data-testid="calc-vol" />
+            <input type="number" min="0" step="0.1" value={vol} onChange={(e) => setVol(Number(e.target.value))} className="mt-1.5 block w-full border border-slate-300 rounded-md p-3 focus:ring-coral-500 focus:border-coral-500" data-testid="calc-vol" />
           </div>
           <div>
             <label className="text-sm font-medium text-slate-700">Желана доза <span className="text-slate-400">(mcg)</span></label>
-            <input type="number" min="0" step="1" value={dose} onChange={(e) => setDose(Number(e.target.value))} className="mt-1.5 block w-full border border-slate-300 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500" data-testid="calc-dose" />
+            <input type="number" min="0" step="1" value={dose} onChange={(e) => setDose(Number(e.target.value))} className="mt-1.5 block w-full border border-slate-300 rounded-md p-3 focus:ring-coral-500 focus:border-coral-500" data-testid="calc-dose" />
           </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-5 flex items-baseline justify-between">
-            <span className="text-sm text-blue-900 font-medium">Нужен обем</span>
-            <span className="font-display font-extrabold text-3xl text-blue-700" data-testid="calc-result">{isFinite(ml) ? ml.toFixed(2) : "0.00"} mL</span>
+          <div className="bg-coral-50 border border-coral-200 rounded-lg p-5 flex items-baseline justify-between">
+            <span className="text-sm text-coral-900 font-medium">Нужен обем</span>
+            <span className="font-display font-extrabold text-3xl text-coral-700" data-testid="calc-result">{isFinite(ml) ? ml.toFixed(2) : "0.00"} mL</span>
           </div>
         </div>
       </div>
@@ -198,7 +198,7 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="flex items-end justify-between mb-10">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-blue-600 font-bold mb-2">Най-търсени</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-coral-600 font-bold mb-2">Най-търсени</p>
               <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900">Най-продавани пептиди</h2>
             </div>
           </div>
@@ -240,7 +240,7 @@ export default function HomePage() {
       {/* FAQ */}
       <section id="faq" className="bg-slate-50 border-t border-slate-200">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <p className="text-xs uppercase tracking-[0.2em] text-blue-600 font-bold text-center mb-3">Имате въпроси?</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-coral-600 font-bold text-center mb-3">Имате въпроси?</p>
           <h2 className="font-display text-3xl sm:text-4xl font-extrabold text-slate-900 text-center mb-10">Ето отговорите</h2>
           <Accordion type="single" collapsible className="space-y-3" data-testid="faq-accordion">
             {FAQ.map((f, i) => (

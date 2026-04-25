@@ -12,7 +12,7 @@ import { api, fmtEUR, formatErr } from "../lib/api";
 
 const STATUS_BG = {
   awaiting_payment: { label: "Очаква плащане", cls: "bg-amber-100 text-amber-800 border-amber-300" },
-  paid: { label: "Платена", cls: "bg-blue-100 text-blue-800 border-blue-300" },
+  paid: { label: "Платена", cls: "bg-coral-100 text-coral-800 border-coral-300" },
   cancelled: { label: "Отказана", cls: "bg-slate-200 text-slate-700 border-slate-300" },
   shipped: { label: "Изпратена", cls: "bg-emerald-100 text-emerald-800 border-emerald-300" },
   fulfilled: { label: "Завършена", cls: "bg-emerald-100 text-emerald-800 border-emerald-300" },
@@ -63,7 +63,7 @@ export default function AccountPage() {
               <form onSubmit={doLogin} className="bg-white border border-slate-200 rounded-xl p-6 space-y-4 mt-4">
                 <div><Label>Имейл</Label><Input type="email" required value={li.email} onChange={(e) => setLi({...li, email: e.target.value})} data-testid="login-email" /></div>
                 <div><Label>Парола</Label><Input type="password" required value={li.password} onChange={(e) => setLi({...li, password: e.target.value})} data-testid="login-password" /></div>
-                <Button type="submit" disabled={busy} className="w-full bg-blue-600 hover:bg-blue-700" data-testid="login-submit">{busy ? "…" : "Вход"}</Button>
+                <Button type="submit" disabled={busy} className="w-full bg-coral-600 hover:bg-coral-700" data-testid="login-submit">{busy ? "…" : "Вход"}</Button>
               </form>
             </TabsContent>
             <TabsContent value="register">
@@ -72,7 +72,7 @@ export default function AccountPage() {
                 <div><Label>Имейл</Label><Input type="email" required value={reg.email} onChange={(e) => setReg({...reg, email: e.target.value})} data-testid="register-email" /></div>
                 <div><Label>Телефон</Label><Input value={reg.phone} onChange={(e) => setReg({...reg, phone: e.target.value})} data-testid="register-phone" /></div>
                 <div><Label>Парола</Label><Input type="password" required minLength={6} value={reg.password} onChange={(e) => setReg({...reg, password: e.target.value})} data-testid="register-password" /></div>
-                <Button type="submit" disabled={busy} className="w-full bg-blue-600 hover:bg-blue-700" data-testid="register-submit">{busy ? "…" : "Създай профил"}</Button>
+                <Button type="submit" disabled={busy} className="w-full bg-coral-600 hover:bg-coral-700" data-testid="register-submit">{busy ? "…" : "Създай профил"}</Button>
               </form>
             </TabsContent>
           </Tabs>
@@ -95,7 +95,7 @@ export default function AccountPage() {
         <h2 className="font-display text-2xl font-bold text-slate-900 mb-4">Моите поръчки</h2>
         {orders.length === 0 ? (
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-10 text-center text-slate-500">
-            Все още нямате поръчки. <Link to="/collections/all-peptides" className="text-blue-600 font-medium">Към каталога →</Link>
+            Все още нямате поръчки. <Link to="/collections/all-peptides" className="text-coral-600 font-medium">Към каталога →</Link>
           </div>
         ) : (
           <div className="space-y-3">

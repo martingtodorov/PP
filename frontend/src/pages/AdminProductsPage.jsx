@@ -43,7 +43,7 @@ export default function AdminProductsPage() {
                 <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50" data-testid={`admin-product-${p.handle}`}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <img src={p.image} alt="" className="w-10 h-10 object-contain bg-slate-50 rounded" />
+                      <img src={p.image} alt="" className="w-10 h-10 object-contain bg-white border border-slate-200 rounded" />
                       <span className="font-medium">{p.title}</span>
                     </div>
                   </td>

@@ -42,7 +42,7 @@ export default function AdminImportPage() {
               data-testid="import-file-input"
             />
             {file && <p className="text-xs text-slate-700 mt-3 font-medium">{file.name}</p>}
-            <Button onClick={upload} disabled={!file || busy} className="mt-6 bg-blue-600 hover:bg-blue-700" data-testid="import-submit-btn">
+            <Button onClick={upload} disabled={!file || busy} className="mt-6 bg-coral-600 hover:bg-coral-700" data-testid="import-submit-btn">
               {busy ? "Качване…" : "Импортирай"}
             </Button>
           </div>

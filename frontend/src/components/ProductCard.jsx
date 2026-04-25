@@ -92,7 +92,7 @@ export default function ProductCard({ product }) {
 
       <div className="product-card__meta">
         {product.subtitle && (
-          <p className="text-[10px] uppercase tracking-[0.18em] text-blue-600 font-bold">{product.subtitle}</p>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-coral-600 font-bold">{product.subtitle}</p>
         )}
         <h3 className="product-card__title">{product.title}</h3>
         <div className="product-card__price">

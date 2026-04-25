@@ -26,7 +26,7 @@ export default function AdminLayout({ children, title }) {
     <div className="min-h-screen bg-slate-50 flex">
       <aside className="w-60 bg-white border-r border-slate-200 flex flex-col" data-testid="admin-sidebar">
         <Link to="/admin" className="px-6 py-5 border-b border-slate-200">
-          <p className="font-display font-extrabold text-lg">Pure<span className="text-blue-600">Peptide</span></p>
+          <p className="font-display font-extrabold text-lg">Pure<span className="text-coral-600">Peptide</span></p>
           <p className="text-[10px] uppercase tracking-widest text-slate-500 mt-0.5">Admin</p>
         </Link>
         <nav className="flex-1 px-3 py-4 space-y-1">
@@ -37,7 +37,7 @@ export default function AdminLayout({ children, title }) {
               end={end}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isActive ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                  isActive ? "bg-coral-50 text-coral-700" : "text-slate-700 hover:bg-slate-50"
                 }`
               }
               data-testid={`admin-nav-${to.split("/").pop() || "dashboard"}`}
@@ -51,7 +51,7 @@ export default function AdminLayout({ children, title }) {
           <button onClick={async () => { await logout(); nav("/admin/login"); }} className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-slate-700 hover:bg-slate-50">
             <LogOut className="h-4 w-4" /> Изход
           </button>
-          <Link to="/" className="block text-xs text-slate-500 hover:text-blue-600 mt-2 px-2">← Към магазина</Link>
+          <Link to="/" className="block text-xs text-slate-500 hover:text-coral-600 mt-2 px-2">← Към магазина</Link>
         </div>
       </aside>
       <main className="flex-1 min-w-0">

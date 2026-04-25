@@ -40,7 +40,7 @@ const Header = () => {
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           <Link to="/" className="font-display font-extrabold text-xl tracking-tight" data-testid="logo-link">
-            Pure<span className="text-blue-600">Peptide</span>
+            Pure<span className="text-coral-600">Peptide</span>
           </Link>
           <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-700">
             {NAV.map((n) => (
@@ -48,7 +48,7 @@ const Header = () => {
                 key={n.to}
                 to={n.to}
                 className={({ isActive }) =>
-                  `link-underline ${isActive ? "text-blue-600" : "hover:text-slate-900"}`
+                  `link-underline ${isActive ? "text-coral-600" : "hover:text-slate-900"}`
                 }
                 data-testid={`nav-${n.to.split("/").pop()}`}
               >
@@ -58,7 +58,7 @@ const Header = () => {
           </nav>
           <div className="flex items-center gap-2">
             {user && user.role === "admin" && (
-              <Link to="/admin" className="hidden md:inline text-xs uppercase tracking-wider text-blue-600 font-bold">
+              <Link to="/admin" className="hidden md:inline text-xs uppercase tracking-wider text-coral-600 font-bold">
                 Админ
               </Link>
             )}
@@ -77,7 +77,7 @@ const Header = () => {
             >
               <ShoppingCart className="h-5 w-5" />
               {count > 0 && (
-                <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs h-5 min-w-[20px] rounded-full flex items-center justify-center px-1 font-bold">
+                <span className="absolute -top-1 -right-1 bg-coral-600 text-white text-xs h-5 min-w-[20px] rounded-full flex items-center justify-center px-1 font-bold">
                   {count}
                 </span>
               )}
@@ -129,7 +129,7 @@ const Header = () => {
             )}
             {items.map((it) => (
               <div key={it.variant_sku} className="flex gap-3 border-b border-slate-100 pb-4">
-                <img src={it.image} alt={it.title} className="w-20 h-20 object-contain bg-slate-50 rounded" />
+                <img src={it.image} alt={it.title} className="w-20 h-20 object-contain bg-white border border-slate-200 rounded" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-900 truncate">{it.title}</p>
                   <p className="text-xs text-slate-500">{it.variant_name}</p>
@@ -153,7 +153,7 @@ const Header = () => {
                 <span className="font-semibold">{fmtEUR(subtotal)} <span className="text-slate-500 text-xs font-normal">({fmtBGN(subtotal)})</span></span>
               </div>
               <Button
-                className="w-full bg-blue-600 hover:bg-blue-700"
+                className="w-full bg-coral-600 hover:bg-coral-700"
                 onClick={() => { setOpen(false); nav("/checkout"); }}
                 data-testid="cart-checkout-btn"
               >
@@ -174,17 +174,17 @@ const Footer = () => (
   <footer className="bg-slate-900 text-white mt-24" data-testid="footer">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 grid grid-cols-1 md:grid-cols-4 gap-10">
       <div className="md:col-span-2">
-        <p className="font-display font-extrabold text-2xl">Pure<span className="text-blue-400">Peptide</span></p>
+        <p className="font-display font-extrabold text-2xl">Pure<span className="text-coral-400">Peptide</span></p>
         <p className="text-slate-300 text-sm mt-3 max-w-md leading-relaxed">
           Лиофилизирани пептиди с лабораторно доказана чистота над 99%. Тествани от Janoshik Labs.
         </p>
         <div className="mt-6 flex flex-col sm:flex-row gap-2 max-w-md">
-          <input placeholder="Имейл за бюлетин" className="bg-slate-800 border border-slate-700 px-4 py-2.5 rounded-md text-sm flex-1 placeholder:text-slate-500 focus:outline-none focus:border-blue-500" data-testid="newsletter-input" />
-          <button className="bg-blue-600 hover:bg-blue-700 px-5 py-2.5 rounded-md text-sm font-semibold">Абонирай се</button>
+          <input placeholder="Имейл за бюлетин" className="bg-slate-800 border border-slate-700 px-4 py-2.5 rounded-md text-sm flex-1 placeholder:text-slate-500 focus:outline-none focus:border-coral-500" data-testid="newsletter-input" />
+          <button className="bg-coral-600 hover:bg-coral-700 px-5 py-2.5 rounded-md text-sm font-semibold">Абонирай се</button>
         </div>
       </div>
       <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-blue-400 mb-4 font-bold">Магазин</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-coral-400 mb-4 font-bold">Магазин</p>
         <ul className="space-y-2 text-sm text-slate-300">
           {NAV.map((n) => (
             <li key={n.to}><Link to={n.to} className="hover:text-white">{n.label}</Link></li>
@@ -192,7 +192,7 @@ const Footer = () => (
         </ul>
       </div>
       <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-blue-400 mb-4 font-bold">Помощ</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-coral-400 mb-4 font-bold">Помощ</p>
         <ul className="space-y-2 text-sm text-slate-300">
           <li><Link to="/account" className="hover:text-white">Моят профил</Link></li>
           <li><a href="#faq" className="hover:text-white">Въпроси и отговори</a></li>
@@ -219,7 +219,7 @@ export const USPRow = () => (
         { Icon: Atom, title: "Доказано качество", desc: "Тествани пептиди в Janoshik Labs" },
       ].map(({ Icon, title, desc }) => (
         <div key={title} className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+          <div className="w-12 h-12 bg-coral-50 text-coral-600 rounded-lg flex items-center justify-center flex-shrink-0">
             <Icon className="h-6 w-6" strokeWidth={1.5} />
           </div>
           <div>

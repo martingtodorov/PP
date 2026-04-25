@@ -8,7 +8,7 @@ import { api, fmtEUR, formatErr } from "../lib/api";
 
 const STATUS = {
   awaiting_payment: { label: "Очаква плащане", cls: "bg-amber-100 text-amber-800 border-amber-300" },
-  paid: { label: "Платена", cls: "bg-blue-100 text-blue-800 border-blue-300" },
+  paid: { label: "Платена", cls: "bg-coral-100 text-coral-800 border-coral-300" },
   cancelled: { label: "Отказана", cls: "bg-slate-200 text-slate-700 border-slate-300" },
 };
 const FSTATUS = {
@@ -118,7 +118,7 @@ export default function AdminOrdersPage() {
               )}
               <div className="flex gap-2 border-t border-slate-200 pt-4">
                 {open.payment_status === "awaiting_payment" && (
-                  <Button onClick={() => markPaid(open.id)} className="bg-blue-600 hover:bg-blue-700" data-testid="mark-paid-btn">Маркирай като платена</Button>
+                  <Button onClick={() => markPaid(open.id)} className="bg-coral-600 hover:bg-coral-700" data-testid="mark-paid-btn">Маркирай като платена</Button>
                 )}
                 {open.payment_status === "paid" && open.fulfillment_status === "unfulfilled" && (
                   <>

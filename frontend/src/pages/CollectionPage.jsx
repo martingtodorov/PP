@@ -28,7 +28,7 @@ export default function CollectionPage() {
     <Layout>
       <div className="bg-slate-50 border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <p className="text-xs uppercase tracking-[0.2em] text-blue-600 font-bold mb-2">Колекция</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-coral-600 font-bold mb-2">Колекция</p>
           <h1 className="font-display text-4xl sm:text-5xl font-extrabold text-slate-900" data-testid="collection-title">
             {data.collection?.title || handle}
           </h1>

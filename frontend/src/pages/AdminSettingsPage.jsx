@@ -39,7 +39,7 @@ export default function AdminSettingsPage() {
           <div><Label>Телефон</Label><Input value={s.contact_phone || ""} onChange={(e) => set("contact_phone", e.target.value)} /></div>
         </div>
         <div><Label>Текст за футъра</Label><Textarea rows={2} value={s.footer_text || ""} onChange={(e) => set("footer_text", e.target.value)} /></div>
-        <Button onClick={save} disabled={busy} className="bg-blue-600 hover:bg-blue-700" data-testid="settings-save-btn">{busy ? "…" : "Запази"}</Button>
+        <Button onClick={save} disabled={busy} className="bg-coral-600 hover:bg-coral-700" data-testid="settings-save-btn">{busy ? "…" : "Запази"}</Button>
       </div>
     </AdminLayout>
   );

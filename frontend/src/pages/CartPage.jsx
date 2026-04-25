@@ -17,7 +17,7 @@ export default function CartPage() {
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-12 text-center">
             <p className="text-slate-600">Количката е празна.</p>
             <Link to="/collections/all-peptides">
-              <Button className="mt-6 bg-blue-600 hover:bg-blue-700">Към каталога</Button>
+              <Button className="mt-6 bg-coral-600 hover:bg-coral-700">Към каталога</Button>
             </Link>
           </div>
         ) : (
@@ -25,9 +25,9 @@ export default function CartPage() {
             <div className="lg:col-span-2 space-y-3">
               {items.map((it) => (
                 <div key={it.variant_sku} className="bg-white border border-slate-200 rounded-xl p-4 flex gap-4" data-testid={`cart-line-${it.variant_sku}`}>
-                  <img src={it.image} alt={it.title} className="w-24 h-24 object-contain bg-slate-50 rounded" />
+                  <img src={it.image} alt={it.title} className="w-24 h-24 object-contain bg-white border border-slate-200 rounded" />
                   <div className="flex-1 min-w-0">
-                    <Link to={`/products/${it.product_handle}`} className="font-display font-semibold text-slate-900 hover:text-blue-600">{it.title}</Link>
+                    <Link to={`/products/${it.product_handle}`} className="font-display font-semibold text-slate-900 hover:text-coral-600">{it.title}</Link>
                     <p className="text-sm text-slate-500">{it.variant_name}</p>
                     <div className="flex items-center gap-3 mt-3">
                       <div className="flex items-center border border-slate-300 rounded">
@@ -52,7 +52,7 @@ export default function CartPage() {
                   <div className="flex justify-between"><span className="text-slate-600">Междинна сума</span><span className="font-semibold">{fmtEUR(subtotal)}</span></div>
                   <div className="flex justify-between"><span className="text-slate-600">Доставка</span><span className="font-semibold">{shipping === 0 ? "Безплатна" : fmtEUR(shipping)}</span></div>
                   {subtotal < 100 && subtotal > 0 && (
-                    <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded p-2">
+                    <p className="text-xs text-coral-700 bg-coral-50 border border-coral-200 rounded p-2">
                       Добавете още {fmtEUR(100 - subtotal)} за безплатна доставка.
                     </p>
                   )}
@@ -63,7 +63,7 @@ export default function CartPage() {
                   <p className="text-right text-xs text-slate-500">≈ {fmtBGN(total)}</p>
                 </div>
                 <Link to="/checkout">
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700" data-testid="cart-checkout-btn">
+                  <Button className="w-full bg-coral-600 hover:bg-coral-700" data-testid="cart-checkout-btn">
                     Към плащане
                   </Button>
                 </Link>
