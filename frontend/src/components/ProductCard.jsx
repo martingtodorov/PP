@@ -1,17 +1,18 @@
 import { Link } from "react-router-dom";
-import { toast } from "sonner";
 import { fmtEUR, fmtBGN } from "../lib/api";
-import { useCart } from "../context/CartContext";
 
 /**
- * Port of Shopify _product-card.liquid + _product-card-gallery.liquid
- * - corner badges (sale / sold-out / featured) at top-left or top-right
- * - hover swaps to second product image when available (gallery effect)
- * - quick-add button overlay on hover (adds first available variant)
- * - title + min-price meta below image (zoomed-out grid view)
+ * Faithful port of the _product-list.liquid `products_grid` preset
+ * `static-product-card` block_order = [product-card-gallery, product_title, price]
+ *
+ * Matched settings:
+ *   product_card_gap: 4               → 4px column-gap between gallery / title / price
+ *   product-card-gallery.image_ratio: adapt
+ *   product_title.font_size: 1rem, alignment: left, color: var(--color-foreground)
+ *   price.font_size: 1rem,        alignment: left, type_preset: h6, color: var(--color-foreground)
+ *   _product-card-gallery: hover swaps to second image
  */
 export default function ProductCard({ product }) {
-  const { add } = useCart();
   const variants = product.variants || [];
   const minPrice = variants.length ? Math.min(...variants.map((v) => v.price_eur)) : 0;
   const totalStock = variants.reduce((s, v) => s + (v.stock || 0), 0);
@@ -22,22 +23,13 @@ export default function ProductCard({ product }) {
   const primary = images[0];
   const alt = images[1] || images[0];
 
-  const firstAvailable = variants.find((v) => (v.stock || 0) > 0) || variants[0];
-
-  const onQuickAdd = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!firstAvailable || out) return;
-    add(product, firstAvailable, 1);
-    toast.success("Добавено в количката", { description: `${product.title} — ${firstAvailable.name}` });
-  };
-
   return (
     <Link
       to={`/products/${product.handle}`}
       className="product-card"
       data-testid={`product-card-${product.handle}`}
     >
+      {/* product-card-gallery */}
       <div className="product-card__media">
         <img
           src={primary}
@@ -55,21 +47,14 @@ export default function ProductCard({ product }) {
           />
         )}
 
-        {/* Top-left badges (Sale / Featured) */}
+        {/* product-badges (top-left for sale, top-right for sold-out) */}
         <div className="product-badges product-badges--top-left">
           {hasCompare && !out && (
             <span className="product-badges__badge product-badges__badge--rectangle product-badges__badge--sale">
               Промоция
             </span>
           )}
-          {product.featured && !out && !hasCompare && (
-            <span className="product-badges__badge product-badges__badge--rectangle">
-              Топ
-            </span>
-          )}
         </div>
-
-        {/* Top-right: sold out */}
         {out && (
           <div className="product-badges product-badges--top-right">
             <span className="product-badges__badge product-badges__badge--rectangle product-badges__badge--soldout">
@@ -77,29 +62,16 @@ export default function ProductCard({ product }) {
             </span>
           </div>
         )}
-
-        {/* Quick add overlay (hover) */}
-        <button
-          type="button"
-          className="product-card__quick-add"
-          onClick={onQuickAdd}
-          disabled={out || !firstAvailable}
-          data-testid={`quick-add-${product.handle}`}
-        >
-          {out ? "Изчерпано" : `Бързо добавяне${variants.length > 1 ? " — " + firstAvailable.name : ""}`}
-        </button>
       </div>
 
-      <div className="product-card__meta">
-        {product.subtitle && (
-          <p className="text-[10px] uppercase tracking-[0.18em] text-coral-600 font-bold">{product.subtitle}</p>
-        )}
-        <h3 className="product-card__title">{product.title}</h3>
-        <div className="product-card__price">
-          {variants.length > 1 && <span className="text-slate-500 text-xs mr-1">от</span>}
-          <span className="font-semibold">{fmtEUR(minPrice)}</span>
-          <span className="text-slate-500 text-xs ml-1.5">({fmtBGN(minPrice)})</span>
-        </div>
+      {/* product-title — alignment: left, font-size: 1rem */}
+      <h3 className="product-card__title">{product.title}</h3>
+
+      {/* price — alignment: left, font-size: 1rem, h6 preset */}
+      <div className="product-card__price">
+        {variants.length > 1 && <span className="text-slate-500 mr-1">от</span>}
+        <span>{fmtEUR(minPrice)}</span>
+        <span className="text-slate-500 ml-1.5 text-[12px]">({fmtBGN(minPrice)})</span>
       </div>
     </Link>
   );

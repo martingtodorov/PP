@@ -266,34 +266,9 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .product-card:hover .product-card__image--alt { opacity: 1; }
 .product-card:hover .product-card__image { transform: scale(1.04); }
 
-/* Quick add overlay */
+/* Quick add overlay (disabled by default to match _product-card.liquid which has no quick-add block by default) */
 .product-card__quick-add {
-    position: absolute;
-    bottom: 12px;
-    left: 12px;
-    right: 12px;
-    background: hsl(var(--foreground));
-    color: hsl(var(--background));
-    border: none;
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-size: var(--font-size--sm);
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    cursor: pointer;
-    opacity: 0;
-    transform: translateY(8px);
-    transition: opacity .2s ease, transform .2s ease, background .2s ease;
-}
-.product-card:hover .product-card__quick-add {
-    opacity: 1;
-    transform: translateY(0);
-}
-.product-card__quick-add:hover { background: #FE6F61; }
-.product-card__quick-add:disabled {
-    background: hsl(var(--muted));
-    color: hsl(var(--muted-foreground));
-    cursor: not-allowed;
+    display: none;
 }
 
 /* Product badges (from product-card.liquid stylesheet) */
@@ -345,24 +320,26 @@ h1, h2, h3, h4, h5, h6, .font-display {
     color: hsl(var(--background));
 }
 
-/* Product card meta row (title + price below image, gallery view) */
-.product-card__meta {
-    margin-top: 12px;
+/* product-card meta — _product-card.liquid `product_card_gap: 4` */
+.product-card {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding-inline: 4px;
 }
 .product-card__title {
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 1rem;
+    font-weight: 400;
     color: hsl(var(--foreground));
-    line-height: 1.3;
+    line-height: 1.35;
     margin: 0;
+    padding-top: 4px;
+    text-align: left;
 }
 .product-card__price {
-    font-size: 14px;
+    font-size: 1rem;
+    line-height: 1.3;
     color: hsl(var(--foreground));
+    text-align: left;
 }
 
 /* ───── Product details page (port of product-details.liquid preset) ───── */
@@ -500,6 +477,88 @@ h1, h2, h3, h4, h5, h6, .font-display {
     color: hsl(var(--muted-foreground));
     line-height: 1.6;
 }
+
+/* ───── Collections carousel — _collection-list.liquid `collections_carousel` preset
+   mobile_card_size: 44cqw  → 2.3 cards visible
+   placement: below_image, vertical_alignment: center
+   icons_style: arrow, icons_shape: circle
+   columns: 3 (desktop), columns_gap: 8px
+*/
+.collection-carousel {
+    container-type: inline-size;
+    position: relative;
+}
+.collection-carousel__track {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+}
+.collection-carousel__track::-webkit-scrollbar { display: none; }
+.collection-carousel__track { -ms-overflow-style: none; scrollbar-width: none; }
+
+.collection-carousel__item {
+    flex: 0 0 44cqw;          /* mobile_card_size: 44cqw */
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;                 /* collection_card_gap below image */
+    align-items: stretch;
+    justify-content: center;  /* vertical_alignment: center */
+}
+@media (min-width: 1024px) {
+    .collection-carousel__item {
+        flex: 0 0 calc((100% - 16px) / 3);  /* columns: 3, columns_gap: 8 */
+    }
+}
+.collection-carousel__media {
+    aspect-ratio: 4 / 5;       /* image_ratio: adapt — using portrait default */
+    overflow: hidden;
+    background: hsl(var(--secondary));
+}
+.collection-carousel__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform .5s ease;
+}
+.collection-carousel__item:hover .collection-carousel__media img { transform: scale(1.04); }
+
+.collection-carousel__title {
+    font-size: 1rem;
+    font-weight: 500;
+    text-align: left;
+    color: hsl(var(--foreground));
+    line-height: 1.3;
+    padding: 0;
+    margin: 0;
+}
+
+/* Carousel nav buttons — icons_shape: circle, icons_style: arrow */
+.collection-carousel__nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid hsl(var(--border));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    transition: opacity .2s ease, background .2s ease;
+}
+.collection-carousel__nav:hover { background: #fff; }
+.collection-carousel__nav--prev { left: 8px; }
+.collection-carousel__nav--next { right: 8px; }
+.collection-carousel__nav:disabled { opacity: 0; pointer-events: none; }
 
 /* ───── Product list "View all" button ───── */
 .product-list-button {

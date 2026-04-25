@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, FlaskConical } from "lucide-react";
+import { FlaskConical, ArrowLeft, ArrowRight } from "lucide-react";
 import Layout, { USPRow } from "../components/Layout";
 import ProductCard from "../components/ProductCard";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion";
@@ -19,60 +19,90 @@ const BRAND_LOGOS = [
 const HERO_BG = "https://cdn.shopify.com/s/files/1/0941/8965/0294/files/brand-3_b5f4565b-7bec-41db-9d3b-7bbd1c49e2ac.png?v=1767112972";
 
 const FAQ = [
-  {
-    q: "Какво отличава пептидите на PurePeptide?",
-    a: "Прозрачност и контрол на качеството. Всеки продукт е лиофилизиран за по-дълъг срок на съхранение и е преминал HPLC и LC-MS анализ с чистота над 99%. Тестовете се извършват от чешката лаборатория Janoshik. Сертификатите са качени в продуктовите страници.",
-  },
-  {
-    q: "Как мога да проверя сертификатите за анализ?",
-    a: "Всеки продукт разполага със сертификат за анализ (CoA), извършен от Janoshik Labs. Документите са достъпни директно в продуктовите страници и съдържат партиден номер.",
-  },
-  {
-    q: "Колко време са стабилни неразтворените пептиди?",
-    a: "В лиофилизиран вид при 2–8°C, защитени от светлина и влага, пептидите запазват стабилност до 24 месеца. При стайна температура – около 4 месеца.",
-  },
-  {
-    q: "Колко време отнема доставката?",
-    a: "Работим с Еконт. Пратки в България обикновено пристигат в рамките на 1–3 работни дни.",
-  },
+  { q: "Какво отличава пептидите на PurePeptide?", a: "Прозрачност и контрол на качеството. Всеки продукт е лиофилизиран за по-дълъг срок на съхранение и е преминал HPLC и LC-MS анализ с чистота над 99%. Тестовете се извършват от чешката лаборатория Janoshik. Сертификатите са качени в продуктовите страници." },
+  { q: "Как мога да проверя сертификатите за анализ?", a: "Всеки продукт разполага със сертификат за анализ (CoA), извършен от Janoshik Labs. Документите са достъпни директно в продуктовите страници и съдържат партиден номер." },
+  { q: "Колко време са стабилни неразтворените пептиди?", a: "В лиофилизиран вид при 2–8°C, защитени от светлина и влага, пептидите запазват стабилност до 24 месеца. При стайна температура – около 4 месеца." },
+  { q: "Колко време отнема доставката?", a: "Работим с Еконт. Пратки в България обикновено пристигат в рамките на 1–3 работни дни." },
 ];
 
-const CalcSection = () => {
-  const [pep, setPep] = useState(5);
-  const [vol, setVol] = useState(2);
-  const [dose, setDose] = useState(250);
-  const concPerMl = (pep * 1000) / vol; // mcg/ml
-  const ml = dose / concPerMl;
+/**
+ * _collection-list.liquid `collections_carousel` preset:
+ *   layout_type: carousel, columns: 3, mobile_card_size: 44cqw  (≈ 2.3 visible)
+ *   placement: below_image, vertical_alignment: center
+ *   icons_style: arrow, icons_shape: circle
+ *   columns_gap: 8, gap (header→list): 12, padding-block: 48
+ */
+const CollectionsCarousel = ({ collections }) => {
+  const trackRef = useRef(null);
+  const [canPrev, setCanPrev] = useState(false);
+  const [canNext, setCanNext] = useState(true);
+
+  const checkBounds = () => {
+    const el = trackRef.current;
+    if (!el) return;
+    setCanPrev(el.scrollLeft > 4);
+    setCanNext(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    checkBounds();
+    const el = trackRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", checkBounds, { passive: true });
+    window.addEventListener("resize", checkBounds);
+    return () => {
+      el.removeEventListener("scroll", checkBounds);
+      window.removeEventListener("resize", checkBounds);
+    };
+  }, [collections.length]);
+
+  const scrollBy = (dir) => {
+    const el = trackRef.current;
+    if (!el) return;
+    const card = el.querySelector(".collection-carousel__item");
+    const step = card ? card.getBoundingClientRect().width + 8 : el.clientWidth * 0.6;
+    el.scrollBy({ left: dir * step, behavior: "smooth" });
+  };
+
   return (
-    <section className="bg-slate-50 border-y border-slate-200" data-testid="calculator-section">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 grid lg:grid-cols-2 gap-12 items-center">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-coral-600 font-bold">Инструмент</p>
-          <h2 className="font-display text-3xl sm:text-4xl font-extrabold text-slate-900 mt-3 leading-tight">Калкулатор за концентрация</h2>
-          <p className="text-slate-600 mt-4 leading-relaxed max-w-md">
-            Изчислете точно нужния обем разтвор за желаната доза пептид. За научни и лабораторни цели.
-          </p>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 space-y-5">
-          <div>
-            <label className="text-sm font-medium text-slate-700">Количество пептид <span className="text-slate-400">(mg)</span></label>
-            <input type="number" min="0" step="0.1" value={pep} onChange={(e) => setPep(Number(e.target.value))} className="mt-1.5 block w-full border border-slate-300 rounded-md p-3 focus:ring-coral-500 focus:border-coral-500" data-testid="calc-pep" />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700">Обем разтвор <span className="text-slate-400">(mL)</span></label>
-            <input type="number" min="0" step="0.1" value={vol} onChange={(e) => setVol(Number(e.target.value))} className="mt-1.5 block w-full border border-slate-300 rounded-md p-3 focus:ring-coral-500 focus:border-coral-500" data-testid="calc-vol" />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700">Желана доза <span className="text-slate-400">(mcg)</span></label>
-            <input type="number" min="0" step="1" value={dose} onChange={(e) => setDose(Number(e.target.value))} className="mt-1.5 block w-full border border-slate-300 rounded-md p-3 focus:ring-coral-500 focus:border-coral-500" data-testid="calc-dose" />
-          </div>
-          <div className="bg-coral-50 border border-coral-200 rounded-lg p-5 flex items-baseline justify-between">
-            <span className="text-sm text-coral-900 font-medium">Нужен обем</span>
-            <span className="font-display font-extrabold text-3xl text-coral-700" data-testid="calc-result">{isFinite(ml) ? ml.toFixed(2) : "0.00"} mL</span>
-          </div>
-        </div>
+    <div className="collection-carousel" data-testid="collection-list">
+      <button
+        type="button"
+        aria-label="Previous"
+        className="collection-carousel__nav collection-carousel__nav--prev"
+        onClick={() => scrollBy(-1)}
+        disabled={!canPrev}
+        data-testid="carousel-prev"
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        aria-label="Next"
+        className="collection-carousel__nav collection-carousel__nav--next"
+        onClick={() => scrollBy(1)}
+        disabled={!canNext}
+        data-testid="carousel-next"
+      >
+        <ArrowRight className="h-4 w-4" />
+      </button>
+
+      <div ref={trackRef} className="collection-carousel__track">
+        {collections.map((c) => (
+          <Link
+            key={c.handle}
+            to={`/collections/${c.handle}`}
+            className="collection-carousel__item"
+            data-testid={`category-${c.handle}`}
+          >
+            <div className="collection-carousel__media">
+              <img src={c.image} alt={c.title} loading="lazy" />
+            </div>
+            <h3 className="collection-carousel__title">{c.title}</h3>
+          </Link>
+        ))}
       </div>
-    </section>
+    </div>
   );
 };
 
@@ -107,7 +137,7 @@ export default function HomePage() {
             <div className="pp-hero__inner">
               <div className="pp-hero__kicker flex items-center gap-2" data-testid="hero-overline">
                 <FlaskConical className="h-4 w-4" />
-                {settings.tagline ? "лабораторно доказани пептиди" : "лабораторно доказани пептиди"}
+                лабораторно доказани пептиди
               </div>
               <h1 className="pp-hero__title" data-testid="hero-title">
                 {settings.hero_title || "PurePeptide"}
@@ -117,18 +147,10 @@ export default function HomePage() {
                   "Лиофилизираните пептиди са златен стандарт за качество и са стабилни до 2 години, за разлика от готовите разтвори със срок около месец. Пептидите ни са тествани от Janoshik Labs."}
               </p>
               <div className="pp-hero__cta">
-                <Link
-                  to="/collections/all-peptides"
-                  className="pp-hero__btn pp-hero__btn--primary"
-                  data-testid="hero-cta-primary"
-                >
+                <Link to="/collections/all-peptides" className="pp-hero__btn pp-hero__btn--primary" data-testid="hero-cta-primary">
                   {settings.hero_cta_primary || "Пазарувай Пептиди"}
                 </Link>
-                <Link
-                  to="/pages/chemical-analysis"
-                  className="pp-hero__btn"
-                  data-testid="hero-cta-secondary"
-                >
+                <Link to="/pages/chemical-analysis" className="pp-hero__btn" data-testid="hero-cta-secondary">
                   {settings.hero_cta_secondary || "Виж Сертификати"}
                 </Link>
               </div>
@@ -144,16 +166,12 @@ export default function HomePage() {
             <div className="pp-track">
               <div className="pp-set">
                 {BRAND_LOGOS.map((src, i) => (
-                  <div key={`a-${i}`} className="pp-slide">
-                    <img src={src} alt={`Logo ${i + 1}`} loading="eager" />
-                  </div>
+                  <div key={`a-${i}`} className="pp-slide"><img src={src} alt={`Logo ${i + 1}`} loading="eager" /></div>
                 ))}
               </div>
               <div className="pp-set" aria-hidden="true">
                 {BRAND_LOGOS.map((src, i) => (
-                  <div key={`b-${i}`} className="pp-slide">
-                    <img src={src} alt="" loading="eager" />
-                  </div>
+                  <div key={`b-${i}`} className="pp-slide"><img src={src} alt="" loading="eager" /></div>
                 ))}
               </div>
             </div>
@@ -163,67 +181,23 @@ export default function HomePage() {
 
       <USPRow />
 
-      {/* COLLECTION LIST — bento preset (max 4, gap 8px, on_image title with white bg) */}
-      <section
-        className="bg-white section--page-width section-resource-list"
-        style={{ paddingBlock: "48px" }}
-        data-testid="collection-list"
-      >
+      {/* COLLECTION-LIST · carousel preset */}
+      <section className="bg-white section--page-width section-resource-list" style={{ paddingBlock: "48px" }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* section-resource-list__header — group block, vertical, header text */}
+          {/* group header — content_direction: column, gap: 12, padding-block-end: 16 (text) */}
           <div className="mb-4">
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+            <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight">
               Пазарувай по категория
             </h2>
           </div>
-
-          {/* Bento layout — first item large, next 3 smaller in a 12-col grid (typical bento) */}
-          <div
-            className="grid grid-cols-2 lg:grid-cols-12 lg:grid-rows-2 auto-rows-[180px] sm:auto-rows-[220px]"
-            style={{ gap: "8px" }}
-          >
-            {collections.slice(0, 4).map((c, i) => {
-              const layout = [
-                "lg:col-span-7 lg:row-span-2 col-span-2 row-span-2", // hero tile
-                "lg:col-span-5 col-span-2",
-                "lg:col-span-3",
-                "lg:col-span-2",
-              ];
-              return (
-                <Link
-                  key={c.handle}
-                  to={`/collections/${c.handle}`}
-                  className={`resource-list__item collection-card relative block overflow-hidden bg-slate-100 ${layout[i]}`}
-                  data-testid={`category-${c.handle}`}
-                >
-                  <img
-                    src={c.image}
-                    alt={c.title}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 via-transparent to-transparent pointer-events-none" />
-                  {/* collection-title — placement: on_image, bg #ffffff, padding 4/8 */}
-                  <span
-                    className="absolute left-3 top-3 bg-white text-slate-900 text-sm font-semibold"
-                    style={{ padding: "4px 8px" }}
-                  >
-                    {c.title}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
+          <CollectionsCarousel collections={collections} />
         </div>
       </section>
 
-      {/* PRODUCT LIST — grid preset (header: title + view-all link, 4 cols, max 8) */}
-      <section
-        className="bg-slate-50 border-y border-slate-200 section--page-width section-resource-list"
-        style={{ paddingBlock: "48px" }}
-        data-testid="product-list"
-      >
+      {/* PRODUCT-LIST · products_grid preset */}
+      <section className="bg-slate-50 border-y border-slate-200 section--page-width section-resource-list" style={{ paddingBlock: "48px" }} data-testid="product-list">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* section-resource-list__header — _product-list-content group, row, space-between, flex-end, align-baseline */}
+          {/* _product-list-content header: row · space-between · flex-end · align_baseline · gap 12 */}
           <div className="flex flex-row justify-between items-baseline gap-3 mb-7">
             <h3 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">
               Най-продавани пептиди
@@ -236,23 +210,17 @@ export default function HomePage() {
               Виж всички
             </Link>
           </div>
-
-          {/* resource-list-grid: 4 columns desktop, 2 mobile, 8px column gap, 24px row gap */}
-          <div
-            className="grid grid-cols-2 lg:grid-cols-4"
-            style={{ columnGap: "8px", rowGap: "24px" }}
-          >
+          {/* resource-list-grid: cols 4 desktop / 2 mobile, columns_gap 8px, rows_gap 24px */}
+          <div className="grid grid-cols-2 lg:grid-cols-4" style={{ columnGap: "8px", rowGap: "24px" }}>
             {products.slice(0, 8).map((p) => <ProductCard key={p.id} product={p} />)}
           </div>
         </div>
       </section>
 
-      <CalcSection />
-
       {/* ARTICLES */}
       <section className="bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <h2 className="font-display text-3xl sm:text-4xl font-extrabold text-slate-900 mb-10">Научни статии</h2>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-10">Научни статии</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
             {articles.map((a) => (
               <article key={a.handle} className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow" data-testid={`article-${a.handle}`}>
@@ -260,7 +228,7 @@ export default function HomePage() {
                   <img src={a.image} alt={a.title} className="w-full h-full object-cover" />
                 </div>
                 <div className="p-5">
-                  <h3 className="font-display font-semibold text-slate-900 leading-snug line-clamp-3">{a.title}</h3>
+                  <h3 className="font-semibold text-slate-900 leading-snug line-clamp-3">{a.title}</h3>
                   <p className="text-sm text-slate-500 mt-2 line-clamp-2">{a.excerpt}</p>
                 </div>
               </article>
@@ -273,11 +241,11 @@ export default function HomePage() {
       <section id="faq" className="bg-slate-50 border-t border-slate-200">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <p className="text-xs uppercase tracking-[0.2em] text-coral-600 font-bold text-center mb-3">Имате въпроси?</p>
-          <h2 className="font-display text-3xl sm:text-4xl font-extrabold text-slate-900 text-center mb-10">Ето отговорите</h2>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 text-center mb-10">Ето отговорите</h2>
           <Accordion type="single" collapsible className="space-y-3" data-testid="faq-accordion">
             {FAQ.map((f, i) => (
               <AccordionItem key={i} value={`q${i}`} className="bg-white border border-slate-200 rounded-xl px-5">
-                <AccordionTrigger className="font-display font-semibold text-left text-slate-900 hover:no-underline">{f.q}</AccordionTrigger>
+                <AccordionTrigger className="font-semibold text-left text-slate-900 hover:no-underline">{f.q}</AccordionTrigger>
                 <AccordionContent className="text-slate-600 leading-relaxed">{f.a}</AccordionContent>
               </AccordionItem>
             ))}
