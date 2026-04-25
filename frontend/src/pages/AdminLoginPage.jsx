@@ -30,9 +30,9 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-8">
-        <Link to="/" className="block text-center mb-6">
-          <p className="font-display font-extrabold text-2xl">Pure<span className="text-coral-600">Peptide</span></p>
-          <p className="text-xs uppercase tracking-widest text-slate-500 mt-1">Admin портал</p>
+        <Link to="/" className="flex flex-col items-center mb-6">
+          <img src="/logo.svg" alt="PurePeptide" className="h-9 w-auto" />
+          <p className="text-xs uppercase tracking-widest text-slate-500 mt-2">Admin портал</p>
         </Link>
         <form onSubmit={submit} className="space-y-4">
           <div><Label>Имейл</Label><Input type="email" required value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} data-testid="admin-email" /></div>

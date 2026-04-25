@@ -25,9 +25,9 @@ export default function AdminLayout({ children, title }) {
   return (
     <div className="min-h-screen bg-slate-50 flex">
       <aside className="w-60 bg-white border-r border-slate-200 flex flex-col" data-testid="admin-sidebar">
-        <Link to="/admin" className="px-6 py-5 border-b border-slate-200">
-          <p className="font-display font-extrabold text-lg">Pure<span className="text-coral-600">Peptide</span></p>
-          <p className="text-[10px] uppercase tracking-widest text-slate-500 mt-0.5">Admin</p>
+        <Link to="/admin" className="px-6 py-5 border-b border-slate-200 block">
+          <img src="/logo.svg" alt="PurePeptide" className="h-7 w-auto" />
+          <p className="text-[10px] uppercase tracking-widest text-slate-500 mt-1">Admin</p>
         </Link>
         <nav className="flex-1 px-3 py-4 space-y-1">
           {NAV.map(({ to, label, icon: Icon, end }) => (

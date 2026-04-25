@@ -39,8 +39,8 @@ const Header = () => {
       )}
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          <Link to="/" className="font-display font-extrabold text-xl tracking-tight" data-testid="logo-link">
-            Pure<span className="text-coral-600">Peptide</span>
+          <Link to="/" className="flex items-center" data-testid="logo-link" aria-label="PurePeptide">
+            <img src="/logo.svg" alt="PurePeptide" className="h-7 sm:h-8 w-auto" />
           </Link>
           <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-700">
             {NAV.map((n) => (
@@ -174,7 +174,7 @@ const Footer = () => (
   <footer className="bg-slate-900 text-white mt-24" data-testid="footer">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 grid grid-cols-1 md:grid-cols-4 gap-10">
       <div className="md:col-span-2">
-        <p className="font-display font-extrabold text-2xl">Pure<span className="text-coral-400">Peptide</span></p>
+        <img src="/logo-white.svg" alt="PurePeptide" className="h-9 w-auto" />
         <p className="text-slate-300 text-sm mt-3 max-w-md leading-relaxed">
           Лиофилизирани пептиди с лабораторно доказана чистота над 99%. Тествани от Janoshik Labs.
         </p>

@@ -163,55 +163,87 @@ export default function HomePage() {
 
       <USPRow />
 
-      {/* CATEGORIES */}
-      <section className="bg-white" data-testid="category-grid">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <div className="flex items-end justify-between mb-10">
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900">Пазарувай по категория</h2>
+      {/* COLLECTION LIST — bento preset (max 4, gap 8px, on_image title with white bg) */}
+      <section
+        className="bg-white section--page-width section-resource-list"
+        style={{ paddingBlock: "48px" }}
+        data-testid="collection-list"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* section-resource-list__header — group block, vertical, header text */}
+          <div className="mb-4">
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+              Пазарувай по категория
+            </h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {collections.map((c) => (
-              <Link
-                key={c.handle}
-                to={`/collections/${c.handle}`}
-                className="group relative aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-50"
-                data-testid={`category-${c.handle}`}
-              >
-                <img src={c.image} alt={c.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/10 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-4">
-                  <p className="font-bold text-white text-lg">{c.title}</p>
-                </div>
-              </Link>
-            ))}
-          </div>
-          <div className="mt-10 flex justify-center">
-            <Link to="/collections/all-peptides" className="product-list-button" data-testid="view-all-categories-btn">
-              Виж всички продукти <ChevronRight className="h-4 w-4" />
-            </Link>
+
+          {/* Bento layout — first item large, next 3 smaller in a 12-col grid (typical bento) */}
+          <div
+            className="grid grid-cols-2 lg:grid-cols-12 lg:grid-rows-2 auto-rows-[180px] sm:auto-rows-[220px]"
+            style={{ gap: "8px" }}
+          >
+            {collections.slice(0, 4).map((c, i) => {
+              const layout = [
+                "lg:col-span-7 lg:row-span-2 col-span-2 row-span-2", // hero tile
+                "lg:col-span-5 col-span-2",
+                "lg:col-span-3",
+                "lg:col-span-2",
+              ];
+              return (
+                <Link
+                  key={c.handle}
+                  to={`/collections/${c.handle}`}
+                  className={`resource-list__item collection-card relative block overflow-hidden bg-slate-100 ${layout[i]}`}
+                  data-testid={`category-${c.handle}`}
+                >
+                  <img
+                    src={c.image}
+                    alt={c.title}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 via-transparent to-transparent pointer-events-none" />
+                  {/* collection-title — placement: on_image, bg #ffffff, padding 4/8 */}
+                  <span
+                    className="absolute left-3 top-3 bg-white text-slate-900 text-sm font-semibold"
+                    style={{ padding: "4px 8px" }}
+                  >
+                    {c.title}
+                  </span>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      {/* BEST SELLERS */}
-      <section className="bg-slate-50 border-y border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <div className="flex items-end justify-between mb-10">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-coral-600 font-bold mb-2">Най-търсени</p>
-              <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900">Най-продавани пептиди</h2>
-            </div>
+      {/* PRODUCT LIST — grid preset (header: title + view-all link, 4 cols, max 8) */}
+      <section
+        className="bg-slate-50 border-y border-slate-200 section--page-width section-resource-list"
+        style={{ paddingBlock: "48px" }}
+        data-testid="product-list"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* section-resource-list__header — _product-list-content group, row, space-between, flex-end, align-baseline */}
+          <div className="flex flex-row justify-between items-baseline gap-3 mb-7">
+            <h3 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">
+              Най-продавани пептиди
+            </h3>
+            <Link
+              to="/collections/all-peptides"
+              className="text-sm font-medium text-slate-700 hover:text-coral-600 underline-offset-4 hover:underline"
+              data-testid="view-all-products-btn"
+            >
+              Виж всички
+            </Link>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+
+          {/* resource-list-grid: 4 columns desktop, 2 mobile, 8px column gap, 24px row gap */}
+          <div
+            className="grid grid-cols-2 lg:grid-cols-4"
+            style={{ columnGap: "8px", rowGap: "24px" }}
+          >
             {products.slice(0, 8).map((p) => <ProductCard key={p.id} product={p} />)}
           </div>
-          {products.length > 8 && (
-            <div className="mt-10 flex justify-center">
-              <Link to="/collections/all-peptides" className="product-list-button" data-testid="view-all-products-btn">
-                Виж всички пептиди <ChevronRight className="h-4 w-4" />
-              </Link>
-            </div>
-          )}
         </div>
       </section>
 
