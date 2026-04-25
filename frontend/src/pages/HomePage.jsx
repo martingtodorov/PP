@@ -167,10 +167,7 @@ export default function HomePage() {
       <section className="bg-white" data-testid="category-grid">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="flex items-end justify-between mb-10">
-            <h2 className="font-display text-3xl sm:text-4xl font-extrabold text-slate-900">Пазарувай по категория</h2>
-            <Link to="/collections/all-peptides" className="text-sm font-semibold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1">
-              Всички <ChevronRight className="h-4 w-4" />
-            </Link>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900">Пазарувай по категория</h2>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {collections.map((c) => (
@@ -183,10 +180,15 @@ export default function HomePage() {
                 <img src={c.image} alt={c.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/10 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-4">
-                  <p className="font-display font-bold text-white text-lg">{c.title}</p>
+                  <p className="font-bold text-white text-lg">{c.title}</p>
                 </div>
               </Link>
             ))}
+          </div>
+          <div className="mt-10 flex justify-center">
+            <Link to="/collections/all-peptides" className="product-list-button" data-testid="view-all-categories-btn">
+              Виж всички продукти <ChevronRight className="h-4 w-4" />
+            </Link>
           </div>
         </div>
       </section>
@@ -197,15 +199,19 @@ export default function HomePage() {
           <div className="flex items-end justify-between mb-10">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-blue-600 font-bold mb-2">Най-търсени</p>
-              <h2 className="font-display text-3xl sm:text-4xl font-extrabold text-slate-900">Най-продавани пептиди</h2>
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900">Най-продавани пептиди</h2>
             </div>
-            <Link to="/collections/all-peptides" className="text-sm font-semibold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1">
-              Всички <ChevronRight className="h-4 w-4" />
-            </Link>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
             {products.slice(0, 8).map((p) => <ProductCard key={p.id} product={p} />)}
           </div>
+          {products.length > 8 && (
+            <div className="mt-10 flex justify-center">
+              <Link to="/collections/all-peptides" className="product-list-button" data-testid="view-all-products-btn">
+                Виж всички пептиди <ChevronRight className="h-4 w-4" />
+              </Link>
+            </div>
+          )}
         </div>
       </section>
 
