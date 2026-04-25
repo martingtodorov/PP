@@ -6,17 +6,20 @@ const KEY = "pp_cart_v1";
 export const CartProvider = ({ children }) => {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(KEY) || "[]");
       if (Array.isArray(saved)) setItems(saved);
     } catch {}
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     localStorage.setItem(KEY, JSON.stringify(items));
-  }, [items]);
+  }, [items, hydrated]);
 
   const add = (product, variant, quantity = 1) => {
     setItems((cur) => {

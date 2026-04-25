@@ -58,12 +58,147 @@ h1, h2, h3, h4, h5, h6, .font-display {
     background-size: 32px 32px;
 }
 
-/* Marquee logos */
-@keyframes marquee {
-    from { transform: translateX(0); }
-    to { transform: translateX(-50%); }
+/* ───── PurePeptide Hero (custom Liquid port) ───── */
+.pp-hero {
+    position: relative;
+    width: 100%;
+    min-height: 480px;
+    border-radius: 18px;
+    overflow: hidden;
+    --bg-blur: 4px;
+    --bg-scale: 1.06;
 }
-.animate-marquee { animation: marquee 40s linear infinite; }
+.pp-hero__bg {
+    position: absolute; inset: 0;
+    background: center / cover no-repeat var(--pp-bg);
+    filter: blur(var(--bg-blur));
+    transform: scale(var(--bg-scale));
+}
+@media (min-width: 769px) {
+    .pp-hero__bg {
+        background-position: 50% 65%;
+        transform: translateX(230px) scale(var(--bg-scale));
+    }
+}
+.pp-hero__overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, rgba(40,40,40,0.85), rgba(0,0,0,0) 165%);
+}
+.pp-hero__inner {
+    position: relative;
+    padding: clamp(24px, 4vw, 64px);
+    display: grid;
+    grid-template-columns: 1fr;
+    align-content: center;
+    gap: 18px;
+    color: #fff;
+    max-width: 1200px;
+    min-height: 480px;
+    margin: 0 auto;
+}
+.pp-hero__kicker {
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: #fff;
+    opacity: 0.95;
+}
+.pp-hero__title {
+    font-family: 'Manrope', system-ui, sans-serif;
+    font-size: clamp(40px, 5vw, 68px);
+    line-height: 1.02;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    max-width: 18ch;
+    color: #fff;
+    margin: 0;
+}
+.pp-hero__sub {
+    font-size: clamp(15px, 1.4vw, 18px);
+    line-height: 1.5;
+    font-weight: 400;
+    margin: 0;
+    max-width: 52ch;
+    color: rgba(255,255,255,0.92);
+}
+.pp-hero__cta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+}
+.pp-hero__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 13px 22px;
+    border-radius: 8px;
+    font-weight: 650;
+    font-size: 15px;
+    text-decoration: none;
+    border: 1px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.10);
+    backdrop-filter: blur(14px);
+    color: #fff;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+.pp-hero__btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.28);
+}
+.pp-hero__btn--primary {
+    background: #ff6f61;
+    border-color: rgba(0,0,0,0.08);
+    color: #fff;
+}
+.pp-hero__btn--primary:hover {
+    background: #ff5a4a;
+}
+@media (max-width: 768px) {
+    .pp-hero { --bg-blur: 4px; --bg-scale: 1.08; min-height: 440px; border-radius: 14px; }
+    .pp-hero__overlay { background: linear-gradient(180deg, rgba(30,30,30,0.90), rgba(0,0,0,0) 160%); }
+    .pp-hero__bg { background-position: 35% center; }
+    .pp-hero__inner { min-height: 440px; }
+}
+
+/* ───── Logo marquee ───── */
+.pp-logo-cloud {
+    background: #ffffff;
+    box-shadow: 4px 4px 20px rgba(191,191,191,0.5);
+    padding: 18px 0;
+    overflow: hidden;
+}
+.pp-marquee { overflow: hidden; width: 100%; }
+.pp-track {
+    display: flex;
+    align-items: center;
+    gap: 36px;
+    width: max-content;
+    will-change: transform;
+    animation: pp-scroll 30s linear infinite;
+}
+.pp-set { display: flex; align-items: center; gap: 36px; }
+.pp-slide { flex: 0 0 auto; padding: 6px 4px; }
+.pp-slide img {
+    height: 48px;
+    width: auto;
+    max-width: 220px;
+    object-fit: contain;
+    display: block;
+    opacity: 0.95;
+}
+@keyframes pp-scroll {
+    from { transform: translate3d(0,0,0); }
+    to   { transform: translate3d(-50%, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .pp-track { animation: none !important; transform: none !important; }
+}
+@media (max-width: 749px) {
+    .pp-track, .pp-set { gap: 24px; }
+    .pp-slide img { height: 36px; max-width: 180px; }
+}
 
 /* Card hover lift */
 .product-card { transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }

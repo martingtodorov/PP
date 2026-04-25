@@ -1,11 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ChevronRight, FlaskConical, ShieldCheck, FileCheck2 } from "lucide-react";
+import { ChevronRight, FlaskConical } from "lucide-react";
 import Layout, { USPRow } from "../components/Layout";
 import ProductCard from "../components/ProductCard";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion";
-import { Button } from "../components/ui/button";
 import { api } from "../lib/api";
+
+const BRAND_LOGOS = [
+  "https://cdn.shopify.com/s/files/1/0941/8965/0294/files/IMG_2354.webp?v=1767538317",
+  "https://cdn.shopify.com/s/files/1/0941/8965/0294/files/IMG_2351.webp?v=1767538317",
+  "https://cdn.shopify.com/s/files/1/0941/8965/0294/files/IMG_2357.webp?v=1767538316",
+  "https://cdn.shopify.com/s/files/1/0941/8965/0294/files/IMG_2353.webp?v=1767538316",
+  "https://cdn.shopify.com/s/files/1/0941/8965/0294/files/IMG_2352.webp?v=1767538316",
+  "https://cdn.shopify.com/s/files/1/0941/8965/0294/files/IMG_2356.webp?v=1767538317",
+  "https://cdn.shopify.com/s/files/1/0941/8965/0294/files/IMG_2355.webp?v=1767538317",
+];
+
+const HERO_BG = "https://cdn.shopify.com/s/files/1/0941/8965/0294/files/brand-3_b5f4565b-7bec-41db-9d3b-7bbd1c49e2ac.png?v=1767112972";
 
 const FAQ = [
   {
@@ -88,48 +99,63 @@ export default function HomePage() {
   return (
     <Layout>
       {/* HERO */}
-      <section className="relative overflow-hidden bg-white">
-        <div className="absolute inset-0 bg-grid opacity-60 pointer-events-none" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28 grid lg:grid-cols-12 gap-12 items-center">
-          <div className="lg:col-span-7">
-            <p className="text-xs uppercase tracking-[0.25em] text-blue-600 font-bold flex items-center gap-2" data-testid="hero-overline">
-              <FlaskConical className="h-4 w-4" /> лабораторно доказани пептиди
-            </p>
-            <h1 className="mt-5 font-display font-extrabold text-5xl sm:text-6xl lg:text-7xl tracking-tight text-slate-900 leading-[1.05]" data-testid="hero-title">
-              {settings.hero_title || "PurePeptide"}
-            </h1>
-            <p className="mt-6 text-lg text-slate-600 leading-relaxed max-w-2xl" data-testid="hero-subtitle">
-              {settings.hero_subtitle ||
-                "Лиофилизираните пептиди са златен стандарт за качество и са стабилни до 2 години, за разлика от готовите разтвори със срок около месец."}
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link to="/collections/all-peptides">
-                <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="hero-cta-primary">
-                  {settings.hero_cta_primary || "Пазарувай Пептиди"} <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-              <Button size="lg" variant="outline" className="border-slate-300" data-testid="hero-cta-secondary">
-                {settings.hero_cta_secondary || "Виж Сертификати"}
-              </Button>
-            </div>
-            <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-slate-600">
-              <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-blue-600" /> &gt;99% чистота HPLC</span>
-              <span className="flex items-center gap-2"><FileCheck2 className="h-4 w-4 text-blue-600" /> Janoshik CoA</span>
-              <span className="flex items-center gap-2"><FlaskConical className="h-4 w-4 text-blue-600" /> Лиофилизирани</span>
+      <section className="bg-white pt-6 pb-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="pp-hero" style={{ "--pp-bg": `url('${HERO_BG}')` }} data-testid="hero-section">
+            <div className="pp-hero__bg" />
+            <div className="pp-hero__overlay" />
+            <div className="pp-hero__inner">
+              <div className="pp-hero__kicker flex items-center gap-2" data-testid="hero-overline">
+                <FlaskConical className="h-4 w-4" />
+                {settings.tagline ? "лабораторно доказани пептиди" : "лабораторно доказани пептиди"}
+              </div>
+              <h1 className="pp-hero__title" data-testid="hero-title">
+                {settings.hero_title || "PurePeptide"}
+              </h1>
+              <p className="pp-hero__sub" data-testid="hero-subtitle">
+                {settings.hero_subtitle ||
+                  "Лиофилизираните пептиди са златен стандарт за качество и са стабилни до 2 години, за разлика от готовите разтвори със срок около месец. Пептидите ни са тествани от Janoshik Labs."}
+              </p>
+              <div className="pp-hero__cta">
+                <Link
+                  to="/collections/all-peptides"
+                  className="pp-hero__btn pp-hero__btn--primary"
+                  data-testid="hero-cta-primary"
+                >
+                  {settings.hero_cta_primary || "Пазарувай Пептиди"}
+                </Link>
+                <Link
+                  to="/pages/chemical-analysis"
+                  className="pp-hero__btn"
+                  data-testid="hero-cta-secondary"
+                >
+                  {settings.hero_cta_secondary || "Виж Сертификати"}
+                </Link>
+              </div>
             </div>
           </div>
-          <div className="lg:col-span-5 relative">
-            <div className="aspect-[4/5] rounded-2xl overflow-hidden bg-slate-100 border border-slate-200">
-              <img
-                src="https://images.unsplash.com/photo-1579154341184-22069e4614d2?auto=format&fit=crop&w=1200&q=80"
-                alt="Лаборатория"
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="absolute -bottom-6 -left-6 bg-white border border-slate-200 rounded-xl p-4 shadow-sm hidden sm:block">
-              <p className="text-[10px] uppercase tracking-widest text-blue-600 font-bold">Janoshik Labs</p>
-              <p className="font-display font-bold text-slate-900 text-2xl mt-1">99.4%</p>
-              <p className="text-xs text-slate-500">средна чистота на партидите</p>
+        </div>
+      </section>
+
+      {/* LOGO MARQUEE */}
+      <section className="mt-10" data-testid="logo-marquee">
+        <div className="pp-logo-cloud">
+          <div className="pp-marquee">
+            <div className="pp-track">
+              <div className="pp-set">
+                {BRAND_LOGOS.map((src, i) => (
+                  <div key={`a-${i}`} className="pp-slide">
+                    <img src={src} alt={`Logo ${i + 1}`} loading="eager" />
+                  </div>
+                ))}
+              </div>
+              <div className="pp-set" aria-hidden="true">
+                {BRAND_LOGOS.map((src, i) => (
+                  <div key={`b-${i}`} className="pp-slide">
+                    <img src={src} alt="" loading="eager" />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
