@@ -1,6 +1,6 @@
-import { Link, NavLink, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { ShoppingCart, Menu, X, Search, User, LogOut, Truck, Banknote, Atom } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { ShoppingCart, Search, User, X, Truck, Banknote, Atom } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "./ui/sheet";
 import { Button } from "./ui/button";
 import { useCart } from "../context/CartContext";
@@ -8,7 +8,7 @@ import { useAuth } from "../context/AuthContext";
 import { api, fmtEUR, fmtBGN } from "../lib/api";
 
 const NAV = [
-  { to: "/collections/all-peptides", label: "Всички" },
+  { to: "/collections/all-peptides", label: "Всички пептиди" },
   { to: "/collections/weight-loss", label: "Отслабване" },
   { to: "/collections/regeneration", label: "Възстановяване" },
   { to: "/collections/muscles", label: "Мускули" },
@@ -17,10 +17,107 @@ const NAV = [
   { to: "/collections/immune-system", label: "Имунитет" },
 ];
 
+const SearchDrawer = ({ open, setOpen }) => {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef(null);
+  const nav = useNavigate();
+
+  useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 100);
+    else { setQ(""); setResults([]); }
+  }, [open]);
+
+  useEffect(() => {
+    if (!q || q.length < 2) { setResults([]); return; }
+    setLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const { data } = await api.get(`/products?search=${encodeURIComponent(q)}&limit=8`);
+        setResults(data.products);
+      } finally { setLoading(false); }
+    }, 200);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const goTo = (handle) => { setOpen(false); nav(`/products/${handle}`); };
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetContent side="top" className="h-auto max-h-[85vh] overflow-hidden flex flex-col" data-testid="search-drawer">
+        <SheetHeader className="text-left">
+          <SheetTitle>Търсене</SheetTitle>
+        </SheetHeader>
+        <div className="relative mt-2">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            ref={inputRef}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Търсене на пептиди…"
+            className="w-full pl-10 pr-10 py-3 rounded-md border border-slate-300 focus:outline-none focus:border-coral-600 text-base"
+            data-testid="search-input"
+          />
+          {q && (
+            <button onClick={() => setQ("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <div className="mt-4 overflow-y-auto -mx-6 px-6">
+          {loading && <p className="text-sm text-slate-500">Зареждане…</p>}
+          {!loading && q.length >= 2 && results.length === 0 && (
+            <p className="text-sm text-slate-500">Няма резултати за „{q}".</p>
+          )}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {results.map((p) => {
+              const min = Math.min(...(p.variants || [{ price_eur: 0 }]).map((v) => v.price_eur));
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => goTo(p.handle)}
+                  className="text-left bg-white border border-slate-200 rounded-md p-3 hover:border-slate-400 transition-colors"
+                  data-testid={`search-result-${p.handle}`}
+                >
+                  <div className="aspect-square bg-white">
+                    <img src={p.image} alt={p.title} className="w-full h-full object-contain" />
+                  </div>
+                  <p className="text-sm font-medium text-slate-900 mt-2 line-clamp-2">{p.title}</p>
+                  <p className="text-sm font-semibold text-slate-900 mt-1">
+                    {fmtEUR(min)} <span className="text-xs text-slate-500 font-normal">({fmtBGN(min)})</span>
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+          {q.length < 2 && (
+            <div>
+              <p className="text-xs uppercase tracking-wider text-slate-500 mb-3">Категории</p>
+              <div className="flex flex-wrap gap-2">
+                {NAV.map((n) => (
+                  <Link
+                    key={n.to}
+                    to={n.to}
+                    onClick={() => setOpen(false)}
+                    className="px-3 py-1.5 rounded-full border border-slate-200 text-sm text-slate-700 hover:border-slate-400"
+                  >
+                    {n.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+};
+
 const Header = () => {
-  const { items, count, subtotal, remove, updateQty, open, setOpen } = useCart();
+  const { count, items, subtotal, remove, updateQty, open, setOpen } = useCart();
   const { user, logout } = useAuth();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const nav = useNavigate();
 
@@ -42,38 +139,45 @@ const Header = () => {
           <Link to="/" className="flex items-center" data-testid="logo-link" aria-label="PurePeptide">
             <img src="/logo.svg" alt="PurePeptide" className="h-7 sm:h-8 w-auto" />
           </Link>
-          <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-700">
-            {NAV.map((n) => (
-              <NavLink
-                key={n.to}
-                to={n.to}
-                className={({ isActive }) =>
-                  `link-underline ${isActive ? "text-coral-600" : "hover:text-slate-900"}`
-                }
-                data-testid={`nav-${n.to.split("/").pop()}`}
-              >
-                {n.label}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="flex items-center gap-2">
+
+          {/* Center search trigger (purepeptide.bg pattern) */}
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="hidden md:flex flex-1 max-w-md items-center gap-2 px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-500 hover:border-slate-400 transition-colors"
+            data-testid="search-trigger-desktop"
+          >
+            <Search className="h-4 w-4" />
+            <span>Търсене на пептиди…</span>
+          </button>
+
+          <div className="flex items-center gap-1">
             {user && user.role === "admin" && (
-              <Link to="/admin" className="hidden md:inline text-xs uppercase tracking-wider text-coral-600 font-bold">
+              <Link to="/admin" className="hidden md:inline text-xs uppercase tracking-wider text-coral-600 font-bold mr-2">
                 Админ
               </Link>
             )}
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="md:hidden p-2 hover:bg-slate-50 rounded-md text-slate-700"
+              data-testid="search-trigger-mobile"
+              aria-label="Търсене"
+            >
+              <Search className="h-5 w-5" />
+            </button>
             <Link
               to="/account"
-              className="p-2 hover:bg-slate-50 rounded-md text-slate-600"
+              className="p-2 hover:bg-slate-50 rounded-md text-slate-700"
               data-testid="account-link"
               title={user ? user.email : "Вход"}
+              aria-label="Профил"
             >
               <User className="h-5 w-5" />
             </Link>
             <button
               onClick={() => setOpen(true)}
-              className="relative p-2 hover:bg-slate-50 rounded-md text-slate-600"
+              className="relative p-2 hover:bg-slate-50 rounded-md text-slate-700"
               data-testid="cart-button"
+              aria-label="Количка"
             >
               <ShoppingCart className="h-5 w-5" />
               {count > 0 && (
@@ -82,46 +186,17 @@ const Header = () => {
                 </span>
               )}
             </button>
-            <button
-              className="lg:hidden p-2 hover:bg-slate-50 rounded-md text-slate-600"
-              onClick={() => setMobileOpen(!mobileOpen)}
-              data-testid="mobile-menu-toggle"
-            >
-              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
           </div>
         </div>
-        {mobileOpen && (
-          <div className="lg:hidden border-t border-slate-200 bg-white">
-            <div className="px-4 py-3 space-y-1">
-              {NAV.map((n) => (
-                <Link
-                  key={n.to}
-                  to={n.to}
-                  onClick={() => setMobileOpen(false)}
-                  className="block px-3 py-2 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  {n.label}
-                </Link>
-              ))}
-              {user && (
-                <button
-                  onClick={async () => { await logout(); setMobileOpen(false); }}
-                  className="w-full text-left px-3 py-2 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Изход
-                </button>
-              )}
-            </div>
-          </div>
-        )}
       </header>
+
+      <SearchDrawer open={searchOpen} setOpen={setSearchOpen} />
 
       {/* Cart drawer */}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="w-full sm:max-w-md flex flex-col" data-testid="cart-drawer">
           <SheetHeader>
-            <SheetTitle className="font-display">Количка ({count})</SheetTitle>
+            <SheetTitle>Количка ({count})</SheetTitle>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto -mx-6 px-6 py-4 space-y-4">
             {items.length === 0 && (
@@ -162,6 +237,11 @@ const Header = () => {
               <Button variant="outline" className="w-full" onClick={() => { setOpen(false); nav("/cart"); }}>
                 Виж количката
               </Button>
+              {user && (
+                <button onClick={async () => { await logout(); }} className="w-full text-xs text-slate-500 hover:text-slate-700">
+                  Изход
+                </button>
+              )}
             </div>
           )}
         </SheetContent>
@@ -179,12 +259,12 @@ const Footer = () => (
           Лиофилизирани пептиди с лабораторно доказана чистота над 99%. Тествани от Janoshik Labs.
         </p>
         <div className="mt-6 flex flex-col sm:flex-row gap-2 max-w-md">
-          <input placeholder="Имейл за бюлетин" className="bg-slate-800 border border-slate-700 px-4 py-2.5 rounded-md text-sm flex-1 placeholder:text-slate-500 focus:outline-none focus:border-coral-500" data-testid="newsletter-input" />
+          <input placeholder="Имейл за бюлетин" className="bg-slate-800 border border-slate-700 px-4 py-2.5 rounded-md text-sm flex-1 placeholder:text-slate-500 focus:outline-none focus:border-coral-600" data-testid="newsletter-input" />
           <button className="bg-coral-600 hover:bg-coral-700 px-5 py-2.5 rounded-md text-sm font-semibold">Абонирай се</button>
         </div>
       </div>
       <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-coral-400 mb-4 font-bold">Магазин</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-coral-600 mb-4 font-bold">Магазин</p>
         <ul className="space-y-2 text-sm text-slate-300">
           {NAV.map((n) => (
             <li key={n.to}><Link to={n.to} className="hover:text-white">{n.label}</Link></li>
@@ -192,7 +272,7 @@ const Footer = () => (
         </ul>
       </div>
       <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-coral-400 mb-4 font-bold">Помощ</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-coral-600 mb-4 font-bold">Помощ</p>
         <ul className="space-y-2 text-sm text-slate-300">
           <li><Link to="/account" className="hover:text-white">Моят профил</Link></li>
           <li><a href="#faq" className="hover:text-white">Въпроси и отговори</a></li>
@@ -223,7 +303,7 @@ export const USPRow = () => (
             <Icon className="h-6 w-6" strokeWidth={1.5} />
           </div>
           <div>
-            <h3 className="font-display font-bold text-slate-900">{title}</h3>
+            <h3 className="font-bold text-slate-900">{title}</h3>
             <p className="text-sm text-slate-500 mt-1">{desc}</p>
           </div>
         </div>

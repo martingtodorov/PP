@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { FlaskConical, ArrowLeft, ArrowRight } from "lucide-react";
 import Layout, { USPRow } from "../components/Layout";
-import ProductCard from "../components/ProductCard";
+import ProductsCarousel from "../components/ProductsCarousel";
 import PPCalculator from "../components/PPCalculator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion";
 import { api } from "../lib/api";
@@ -211,10 +211,8 @@ export default function HomePage() {
               Виж всички
             </Link>
           </div>
-          {/* resource-list-grid: cols 4 desktop / 2 mobile, columns_gap 8px, rows_gap 24px */}
-          <div className="grid grid-cols-2 lg:grid-cols-4" style={{ columnGap: "8px", rowGap: "24px" }}>
-            {products.slice(0, 8).map((p) => <ProductCard key={p.id} product={p} />)}
-          </div>
+          {/* resource-list-grid → carousel layout per `products_carousel` preset */}
+          <ProductsCarousel products={products} />
         </div>
       </section>
 
