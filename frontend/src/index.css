@@ -290,15 +290,20 @@ h1, h2, h3, h4, h5, h6, .font-display {
     opacity: 1;
 }
 
-/* ───── Shopify product-card / product-card-gallery (ported) ───── */
+/* ───── Shopify _product-card.liquid · stripped to schema spec ─────
+   border_radius: 0, padding: 0, product_card_gap: 4
+*/
 .product-card {
-    --pc-border-radius: 12px;
+    --pc-border-radius: 0px;
     --pc-padding-block-start: 0px;
     --pc-padding-block-end: 0px;
     --pc-padding-inline-start: 0px;
     --pc-padding-inline-end: 0px;
     position: relative;
-    display: block;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;     /* alignment: left on all child blocks */
+    gap: 4px;                    /* product_card_gap: 4 */
     border-radius: var(--pc-border-radius);
     padding: var(--pc-padding-block-start) var(--pc-padding-inline-end) var(--pc-padding-block-end) var(--pc-padding-inline-start);
     text-decoration: none;
@@ -307,9 +312,10 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .product-card__media {
     position: relative;
     overflow: hidden;
-    border-radius: var(--pc-border-radius);
+    border-radius: 0;            /* _product-card-gallery border_radius: 0 */
     background: #ffffff;
     aspect-ratio: 1 / 1;
+    width: 100%;
 }
 .product-card__image {
     position: absolute;
@@ -317,7 +323,7 @@ h1, h2, h3, h4, h5, h6, .font-display {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    padding: 12%;
+    padding: 0;                  /* _product-card-gallery padding: 0 */
     transition: opacity .3s ease, transform .5s ease;
 }
 .product-card__image--alt {
@@ -381,26 +387,35 @@ h1, h2, h3, h4, h5, h6, .font-display {
     color: hsl(var(--background));
 }
 
-/* product-card meta — _product-card.liquid `product_card_gap: 4` */
-.product-card {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
+/* product-card meta — _product-card.liquid product_card_gap: 4
+   product_title:  width fit-content, alignment left, font_size 1rem, padding-block-start 4, wrap pretty
+   price:          width 100%, alignment left, font_size 1rem, type_preset h6
+*/
 .product-card__title {
     font-size: 1rem;
     font-weight: 400;
-    color: hsl(var(--foreground));
-    line-height: 1.35;
-    margin: 0;
-    padding-top: 4px;
+    color: var(--color-foreground);
+    line-height: normal;
+    letter-spacing: normal;
+    text-transform: none;
+    text-wrap: pretty;
     text-align: left;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0;
+    padding-block-start: 4px;
+    padding-block-end: 0;
+    padding-inline: 0;
 }
 .product-card__price {
     font-size: 1rem;
-    line-height: 1.3;
-    color: hsl(var(--foreground));
+    font-weight: 600;             /* h6 type_preset */
+    line-height: normal;
+    letter-spacing: normal;
+    color: var(--color-foreground);
     text-align: left;
+    width: 100%;
+    padding: 0;
 }
 
 /* ───── Product details page (port of product-details.liquid preset) ───── */
