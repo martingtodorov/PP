@@ -229,6 +229,67 @@ h1, h2, h3, h4, h5, h6, .font-display {
 }
 .link-underline:hover { background-size: 100% 1px; }
 
+/* ───── PurePeptide concentration calculator (verbatim port) ───── */
+.ppcalc {
+    max-width: 650px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 16px;
+
+    border: 1px solid rgba(0,0,0,.12);
+    border-radius: 14px;
+
+    /* OUTER SHADOW ONLY */
+    box-shadow: 0 6px 20px rgba(191,191,191,.5);
+    background: #ffffff;
+}
+.ppcalc__title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 15px;
+}
+.ppcalc label {
+    display: block;
+    margin-bottom: 20px;
+    font-size: 16px;
+}
+.ppcalc input {
+    width: 100%;
+    padding: 10px;
+    margin-top: 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(0,0,0,.2);
+    font-weight: 600;
+}
+.ppcalc__result {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #ff6f61;
+    color: #ffffff;
+}
+.ppcalc__badge {
+    font-weight: 750;
+    font-size: 16px;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    opacity: 1;
+}
+.ppcalc__value {
+    font-weight: 750;
+    font-size: 18px;
+    line-height: 1.4;
+}
+.ppcalc__note {
+    margin-top: 8px;
+    font-size: 12px;
+    opacity: 1;
+}
+
 /* ───── Shopify product-card / product-card-gallery (ported) ───── */
 .product-card {
     --pc-border-radius: 12px;

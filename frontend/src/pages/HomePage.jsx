@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { FlaskConical, ArrowLeft, ArrowRight } from "lucide-react";
 import Layout, { USPRow } from "../components/Layout";
 import ProductCard from "../components/ProductCard";
+import PPCalculator from "../components/PPCalculator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion";
 import { api } from "../lib/api";
 
@@ -214,6 +215,13 @@ export default function HomePage() {
           <div className="grid grid-cols-2 lg:grid-cols-4" style={{ columnGap: "8px", rowGap: "24px" }}>
             {products.slice(0, 8).map((p) => <ProductCard key={p.id} product={p} />)}
           </div>
+        </div>
+      </section>
+
+      {/* PP CALCULATOR */}
+      <section className="bg-white" style={{ paddingBlock: "48px" }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <PPCalculator />
         </div>
       </section>
 
