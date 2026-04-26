@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { FlaskConical, ArrowLeft, ArrowRight } from "lucide-react";
 import Layout, { USPRow } from "../components/Layout";
 import ProductsCarousel from "../components/ProductsCarousel";
@@ -127,6 +127,16 @@ export default function HomePage() {
     });
   }, []);
 
+  /* Scroll to #articles or #faq when arriving via mobile-nav hash link */
+  const location = useLocation();
+  useEffect(() => {
+    if (!location.hash) return;
+    const id = location.hash.slice(1);
+    requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [location]);
+
   return (
     <Layout>
       {/* HERO */}
@@ -224,7 +234,7 @@ export default function HomePage() {
       </section>
 
       {/* ARTICLES */}
-      <section className="bg-white">
+      <section id="articles" className="bg-white scroll-mt-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-10">Научни статии</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">

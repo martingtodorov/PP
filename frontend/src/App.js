@@ -17,6 +17,7 @@ import AdminOrdersPage from "./pages/AdminOrdersPage";
 import AdminCustomersPage from "./pages/AdminCustomersPage";
 import AdminImportPage from "./pages/AdminImportPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
+import StaticPage from "./pages/StaticPage";
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
               <Route path="/cart" element={<CartPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/checkout/success/:orderId" element={<CheckoutSuccessPage />} />
+              <Route path="/pages/:slug" element={<StaticPage />} />
               <Route path="/account/*" element={<AccountPage />} />
               <Route path="/admin/login" element={<AdminLoginPage />} />
               <Route path="/admin" element={<AdminDashboardPage />} />

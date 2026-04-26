@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { ShoppingCart, Search, User, X, Truck, Banknote, Atom } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "./ui/sheet";
@@ -15,6 +15,18 @@ const NAV = [
   { to: "/collections/skin-longevity", label: "Кожа" },
   { to: "/collections/melanin-and-libido", label: "Меланин" },
   { to: "/collections/immune-system", label: "Имунитет" },
+];
+
+/* Mobile sliding nav — order per user request */
+const MOBILE_NAV = [
+  { to: "/", label: "Начало", end: true },
+  { to: "/collections/all-peptides", label: "Пазарувай" },
+  { to: "/pages/what-are-peptides", label: "Какво са пептиди" },
+  { to: "/#articles", label: "Научни статии" },
+  { to: "/pages/chemical-analysis", label: "Химичен анализ" },
+  { to: "/#faq", label: "FAQ" },
+  { to: "/pages/partners", label: "Партньори" },
+  { to: "/collections/all-peptides", label: "Каталог" },
 ];
 
 const SearchDrawer = ({ open, setOpen }) => {
@@ -135,12 +147,33 @@ const Header = () => {
         </div>
       )}
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          <Link to="/" className="flex items-center" data-testid="logo-link" aria-label="PurePeptide">
-            <img src="/logo.svg" alt="PurePeptide" className="h-7 sm:h-8 w-auto" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 relative flex items-center justify-between gap-4">
+          {/* Mobile: search icon (left) */}
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="md:hidden p-2 -ml-2 hover:bg-slate-50 rounded-md text-slate-700"
+            data-testid="search-trigger-mobile"
+            aria-label="Търсене"
+          >
+            <Search className="h-5 w-5" />
+          </button>
+
+          {/* Desktop logo (left) */}
+          <Link to="/" className="hidden md:flex items-center" data-testid="logo-link-desktop" aria-label="PurePeptide">
+            <img src="/logo.svg" alt="PurePeptide" className="h-8 w-auto" />
           </Link>
 
-          {/* Center search trigger (purepeptide.bg pattern) */}
+          {/* Mobile logo (absolutely centered) */}
+          <Link
+            to="/"
+            className="md:hidden absolute left-1/2 -translate-x-1/2 flex items-center"
+            data-testid="logo-link-mobile"
+            aria-label="PurePeptide"
+          >
+            <img src="/logo.svg" alt="PurePeptide" className="h-7 w-auto" />
+          </Link>
+
+          {/* Center search trigger (desktop only) */}
           <button
             onClick={() => setSearchOpen(true)}
             className="hidden md:flex flex-1 max-w-md items-center gap-2 px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-500 hover:border-slate-400 transition-colors"
@@ -156,14 +189,6 @@ const Header = () => {
                 Админ
               </Link>
             )}
-            <button
-              onClick={() => setSearchOpen(true)}
-              className="md:hidden p-2 hover:bg-slate-50 rounded-md text-slate-700"
-              data-testid="search-trigger-mobile"
-              aria-label="Търсене"
-            >
-              <Search className="h-5 w-5" />
-            </button>
             <Link
               to="/account"
               className="p-2 hover:bg-slate-50 rounded-md text-slate-700"
@@ -175,7 +200,7 @@ const Header = () => {
             </Link>
             <button
               onClick={() => setOpen(true)}
-              className="relative p-2 hover:bg-slate-50 rounded-md text-slate-700"
+              className="relative p-2 -mr-2 hover:bg-slate-50 rounded-md text-slate-700"
               data-testid="cart-button"
               aria-label="Количка"
             >
@@ -188,6 +213,34 @@ const Header = () => {
             </button>
           </div>
         </div>
+
+        {/* Mobile sliding nav */}
+        <nav
+          className="md:hidden border-t border-slate-100 bg-white overflow-x-auto no-scrollbar"
+          data-testid="mobile-sliding-nav"
+          aria-label="Mobile primary"
+        >
+          <ul className="flex items-center gap-1 px-2 py-2 whitespace-nowrap">
+            {MOBILE_NAV.map((n) => (
+              <li key={n.label}>
+                <NavLink
+                  to={n.to}
+                  end={n.end}
+                  className={({ isActive }) =>
+                    `inline-flex items-center px-3 py-1.5 rounded-full text-sm transition-colors ${
+                      isActive
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-700 hover:bg-slate-100"
+                    }`
+                  }
+                  data-testid={`mobile-nav-${n.label.toLowerCase().replace(/\s+/g, "-")}`}
+                >
+                  {n.label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
       </header>
 
       <SearchDrawer open={searchOpen} setOpen={setSearchOpen} />
