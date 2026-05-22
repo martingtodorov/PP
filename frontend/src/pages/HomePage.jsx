@@ -98,8 +98,8 @@ const CollectionsCarousel = ({ collections }) => {
           >
             <div className="collection-carousel__media">
               <img src={c.image} alt={c.title} loading="lazy" />
+              <h3 className="collection-carousel__title">{c.title}</h3>
             </div>
-            <h3 className="collection-carousel__title">{c.title}</h3>
           </Link>
         ))}
       </div>
@@ -190,8 +190,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      <USPRow />
-
       {/* COLLECTION-LIST · carousel preset */}
       <section className="bg-white section--page-width section-resource-list" style={{ paddingBlock: "48px" }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -233,20 +231,46 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* TRUST PRINCIPLES — numbered cards stacked on mobile */}
+      <section className="bg-white" style={{ paddingBlock: "16px 48px" }} data-testid="trust-principles">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {[
+            {
+              n: "01",
+              title: "Документация преди обещания",
+              body: "Вярваме, че доверието започва от ясната информация. Затова PurePeptide поставя акцент върху лабораторни анализи и научни източници, вместо върху преувеличени твърдения.",
+            },
+            {
+              n: "02",
+              title: "Научен и неутрален подход",
+              body: "Описанията ни са изградени около публикувана научна литература, изследователски контекст и неутрален език. Целта е информацията да бъде полезна, точна и ясна.",
+            },
+            {
+              n: "03",
+              title: "Качество и прозрачност",
+              body: "Всеки партиден номер преминава HPLC и LC-MS анализ от независимата лаборатория Janoshik. Сертификатите са достъпни директно в продуктовите страници.",
+            },
+          ].map(({ n, title, body }) => (
+            <article key={n} className="trust-card" data-testid={`trust-${n}`}>
+              <span className="trust-card__num">{n}</span>
+              <h3 className="trust-card__title">{title}</h3>
+              <p className="trust-card__body">{body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
       {/* ARTICLES */}
       <section id="articles" className="bg-white scroll-mt-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-10">Научни статии</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight mb-6">Научни Статии</h2>
+          <div className="grid grid-flow-col auto-cols-[68%] sm:auto-cols-[44%] lg:grid-flow-row lg:grid-cols-4 lg:auto-cols-auto gap-3 lg:gap-5 overflow-x-auto lg:overflow-visible no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 pb-2">
             {articles.map((a) => (
-              <article key={a.handle} className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow" data-testid={`article-${a.handle}`}>
-                <div className="aspect-[4/3] bg-slate-50 overflow-hidden">
-                  <img src={a.image} alt={a.title} className="w-full h-full object-cover" />
+              <article key={a.handle} className="article-card" data-testid={`article-${a.handle}`}>
+                <div className="article-card__media">
+                  <img src={a.image} alt={a.title} loading="lazy" />
                 </div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-slate-900 leading-snug line-clamp-3">{a.title}</h3>
-                  <p className="text-sm text-slate-500 mt-2 line-clamp-2">{a.excerpt}</p>
-                </div>
+                <h3 className="article-card__title">{a.title}</h3>
               </article>
             ))}
           </div>
@@ -254,13 +278,14 @@ export default function HomePage() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="bg-slate-50 border-t border-slate-200">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <p className="text-xs uppercase tracking-[0.2em] text-coral-600 font-bold text-center mb-3">Имате въпроси?</p>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 text-center mb-10">Ето отговорите</h2>
+      <section id="faq" className="bg-slate-50 border-t border-slate-200 scroll-mt-24">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <h2 className="text-3xl sm:text-5xl font-extrabold text-slate-900 text-center mb-10 leading-[1.1] tracking-tight">
+            Имате въпроси?<br />Ето отговорите
+          </h2>
           <Accordion type="single" collapsible className="space-y-3" data-testid="faq-accordion">
             {FAQ.map((f, i) => (
-              <AccordionItem key={i} value={`q${i}`} className="bg-white border border-slate-200 rounded-xl px-5">
+              <AccordionItem key={i} value={`q${i}`} className="bg-white border border-slate-200 rounded-2xl px-5">
                 <AccordionTrigger className="font-semibold text-left text-slate-900 hover:no-underline">{f.q}</AccordionTrigger>
                 <AccordionContent className="text-slate-600 leading-relaxed">{f.a}</AccordionContent>
               </AccordionItem>
@@ -268,6 +293,9 @@ export default function HomePage() {
           </Accordion>
         </div>
       </section>
+
+      {/* USP — moved to bottom per reference */}
+      <USPRow />
     </Layout>
   );
 }
