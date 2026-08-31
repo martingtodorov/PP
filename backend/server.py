@@ -27,8 +27,9 @@ from seed_data import COLLECTIONS, PRODUCTS, ARTICLES, DEFAULT_SETTINGS, SEED_VE
 from translations_seed import COLLECTION_TR, PRODUCT_TR, ARTICLE_TR
 from i18n import (
     LOCALES, DEFAULT_LOCALE, LOCALE_META, SITE_ORIGINS,
-    normalize_locale, localize_doc, localize_list, ai_translate,
+    normalize_locale, localize_doc, localize_list, ai_translate, ai_translate_page,
 )
+from pages_seed import PAGE_SLUGS, PAGE_LABELS, DEFAULT_PAGES
 import storage
 import email_service
 
@@ -313,6 +314,24 @@ async def seed_catalog():
             )
 
 
+async def seed_pages():
+    """Insert the default Bulgarian/English static page content once."""
+    for slug, per_locale in DEFAULT_PAGES.items():
+        for locale, content in per_locale.items():
+            existing = await db.pages.find_one({"slug": slug, "locale": locale})
+            if existing:
+                continue
+            await db.pages.insert_one({
+                "id": str(uuid.uuid4()),
+                "slug": slug,
+                "locale": locale,
+                "title": content.get("title", ""),
+                "html": content.get("html", ""),
+                "faq_items": content.get("faq_items", []),
+                "updated_at": now_utc(),
+            })
+
+
 async def ensure_indexes():
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
@@ -321,6 +340,7 @@ async def ensure_indexes():
     await db.collections_cat.create_index("handle", unique=True)
     await db.orders.create_index("id", unique=True)
     await db.orders.create_index("order_number", unique=True)
+    await db.pages.create_index([("slug", 1), ("locale", 1)], unique=True)
 
 
 @app.on_event("startup")
@@ -328,6 +348,7 @@ async def on_startup():
     await ensure_indexes()
     await seed_admin()
     await seed_catalog()
+    await seed_pages()
     try:
         storage.init_storage()
         log.info("Object storage initialized")
@@ -1023,6 +1044,152 @@ async def serve_file(path: str):
         media_type=record.get("content_type", content_type),
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
+
+
+# ---------- Static pages (editable per locale) ----------
+class PageIn(BaseModel):
+    title: str = ""
+    html: str = ""
+    faq_items: List[Dict[str, str]] = []
+
+
+class PageTranslateIn(BaseModel):
+    locales: List[str] = []
+    overwrite: bool = False
+
+
+def _page_out(doc: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "slug": doc.get("slug"),
+        "locale": doc.get("locale"),
+        "title": doc.get("title", ""),
+        "html": doc.get("html", ""),
+        "faq_items": doc.get("faq_items", []),
+        "updated_at": doc.get("updated_at"),
+    }
+
+
+def _has_content(doc: Optional[Dict[str, Any]]) -> bool:
+    if not doc:
+        return False
+    return bool(doc.get("title") or doc.get("html") or doc.get("faq_items"))
+
+
+@api.get("/pages/{slug}")
+async def public_page(slug: str, locale: str = Query(DEFAULT_LOCALE)):
+    loc = normalize_locale(locale)
+    chain = [loc] + [l for l in ("en", "bg") if l != loc]
+    for candidate in chain:
+        doc = await db.pages.find_one({"slug": slug, "locale": candidate}, {"_id": 0})
+        if _has_content(doc):
+            out = _page_out(doc)
+            out["locale"] = loc
+            out["source_locale"] = candidate
+            return {"page": out}
+    raise HTTPException(404, "Страницата не е намерена")
+
+
+@api.get("/admin/pages")
+async def admin_pages(user=Depends(require_admin)):
+    docs = await db.pages.find({}, {"_id": 0}).to_list(500)
+    by_slug: Dict[str, Dict[str, Any]] = {}
+    for d in docs:
+        by_slug.setdefault(d["slug"], {})[d["locale"]] = _has_content(d)
+    return {
+        "slugs": [
+            {"slug": s, "label": PAGE_LABELS.get(s, s), "filled": by_slug.get(s, {})}
+            for s in PAGE_SLUGS
+        ],
+        "locales": LOCALES,
+    }
+
+
+@api.get("/admin/pages/{slug}/{locale}")
+async def admin_get_page(slug: str, locale: str, user=Depends(require_admin)):
+    if slug not in PAGE_SLUGS:
+        raise HTTPException(404, "Непозната страница")
+    loc = normalize_locale(locale)
+    doc = await db.pages.find_one({"slug": slug, "locale": loc}, {"_id": 0})
+    if not doc:
+        return {"page": {"slug": slug, "locale": loc, "title": "", "html": "", "faq_items": [], "updated_at": None}}
+    return {"page": _page_out(doc)}
+
+
+@api.put("/admin/pages/{slug}/{locale}")
+async def admin_update_page(slug: str, locale: str, payload: PageIn, user=Depends(require_admin)):
+    if slug not in PAGE_SLUGS:
+        raise HTTPException(404, "Непозната страница")
+    loc = normalize_locale(locale)
+    items = [{"q": (i.get("q") or ""), "a": (i.get("a") or "")} for i in payload.faq_items]
+    await db.pages.update_one(
+        {"slug": slug, "locale": loc},
+        {
+            "$set": {
+                "title": payload.title,
+                "html": payload.html,
+                "faq_items": items,
+                "updated_at": now_utc(),
+            },
+            "$setOnInsert": {"id": str(uuid.uuid4()), "slug": slug, "locale": loc},
+        },
+        upsert=True,
+    )
+    doc = await db.pages.find_one({"slug": slug, "locale": loc}, {"_id": 0})
+    return {"ok": True, "page": _page_out(doc)}
+
+
+@api.post("/admin/pages/{slug}/translate")
+async def admin_translate_page(slug: str, payload: PageTranslateIn, user=Depends(require_admin)):
+    if slug not in PAGE_SLUGS:
+        raise HTTPException(404, "Непозната страница")
+    source_doc = await db.pages.find_one({"slug": slug, "locale": "bg"}, {"_id": 0})
+    if not _has_content(source_doc):
+        raise HTTPException(400, "Първо въведете съдържание на български")
+
+    targets = [normalize_locale(l) for l in (payload.locales or LOCALES)]
+    targets = [l for l in targets if l != "bg"]
+    if not payload.overwrite:
+        kept = []
+        for loc in targets:
+            existing = await db.pages.find_one({"slug": slug, "locale": loc})
+            if not _has_content(existing):
+                kept.append(loc)
+        targets = kept
+    if not targets:
+        return {"ok": True, "translated": [], "message": "Няма нови езици за превод"}
+
+    source = {"title": source_doc.get("title", ""), "html": source_doc.get("html", "")}
+    if source_doc.get("faq_items"):
+        source["faq_items"] = source_doc["faq_items"]
+
+    translated: List[str] = []
+    failed: List[str] = []
+    for chunk_start in range(0, len(targets), 3):
+        chunk = targets[chunk_start:chunk_start + 3]
+        try:
+            result = await ai_translate_page(source, chunk)
+        except Exception as ex:
+            log.exception("Page translation failed for %s", chunk)
+            failed.extend(chunk)
+            continue
+        for loc, fields in result.items():
+            await db.pages.update_one(
+                {"slug": slug, "locale": loc},
+                {
+                    "$set": {
+                        "title": fields.get("title", ""),
+                        "html": fields.get("html", ""),
+                        "faq_items": fields.get("faq_items", []),
+                        "updated_at": now_utc(),
+                    },
+                    "$setOnInsert": {"id": str(uuid.uuid4()), "slug": slug, "locale": loc},
+                },
+                upsert=True,
+            )
+            translated.append(loc)
+    if not translated and failed:
+        raise HTTPException(502, "Преводът се провали")
+    return {"ok": True, "translated": translated, "failed": failed}
 
 
 # ---------- AI translation ----------

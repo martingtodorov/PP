@@ -55,17 +55,25 @@ export default function StaticPage() {
   const { lp, t, locale } = useLocaleCtx();
   const [articles, setArticles] = useState([]);
   const [collections, setCollections] = useState([]);
+  const [remote, setRemote] = useState(null);
 
   useEffect(() => {
     api.get("/articles").then(({ data }) => setArticles(data.articles));
     api.get("/collections").then(({ data }) => setCollections(data.collections.filter((c) => (c.base_handle || c.handle) !== "all-peptides")));
   }, [locale]);
 
+  useEffect(() => {
+    setRemote(null);
+    api.get(`/pages/${slug}`).then(({ data }) => setRemote(data.page)).catch(() => setRemote(null));
+  }, [slug, locale]);
+
   const table = BODY[locale] || BODY.en;
-  const page = table[slug] || (BODY.en[slug] ? BODY.en[slug] : null);
+  const fallback = table[slug] || BODY.en[slug] || null;
+  const page = remote?.title || remote?.html ? remote : fallback;
   const isFaq = slug === "faq";
   const isArticles = slug === "articles";
-  const title = isFaq ? t("faq") : isArticles ? t("articles") : page?.title || slug;
+  const faqItems = remote?.faq_items?.length ? remote.faq_items : pick(FAQ_ITEMS, locale);
+  const title = isArticles ? t("articles") : remote?.title || (isFaq ? t("faq") : page?.title) || slug;
 
   useSeo({
     title: `${title} | PurePeptide`,
@@ -82,7 +90,7 @@ export default function StaticPage() {
 
         {isFaq && (
           <Accordion type="single" collapsible className="space-y-3 mt-8" data-testid="static-faq">
-            {pick(FAQ_ITEMS, locale).map((f, i) => (
+            {faqItems.map((f, i) => (
               <AccordionItem key={i} value={`q${i}`} className="bg-white border border-slate-200 rounded-2xl px-5">
                 <AccordionTrigger className="font-semibold text-left text-slate-900 hover:no-underline">{f.q}</AccordionTrigger>
                 <AccordionContent className="text-slate-600 leading-relaxed">{f.a}</AccordionContent>
@@ -109,7 +117,7 @@ export default function StaticPage() {
           </ul>
         )}
 
-        {page && !isFaq && !isArticles && (
+        {page?.html && !isArticles && (
           <div className="pp-rte mt-6" dangerouslySetInnerHTML={{ __html: page.html }} data-testid="static-body" />
         )}
 

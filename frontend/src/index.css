@@ -1167,10 +1167,17 @@ img { max-width: 100%; height: auto; }
     }
 }
 
-/* Hero: tighter vertical breathing room (less above the kicker, less below the CTAs) */
-.pp-hero__inner { padding-block: clamp(14px, 2vw, 30px); }
+/* Hero: ~20px of air above and below the PurePeptide title, almost none below the CTAs */
+.pp-hero { min-height: 0; }
+.pp-hero__inner {
+  padding-block: 28px 10px;
+  gap: 14px;
+  align-content: start;
+}
+.pp-hero__title { margin-block: 10px; }
+.pp-hero__cta { margin-top: 6px; }
 @media (max-width: 768px) {
-  .pp-hero { min-height: 360px; }
-  .pp-hero__inner { padding-block: 12px; gap: 14px; }
+  .pp-hero__inner { padding-block: 20px 10px; gap: 12px; }
+  .pp-hero__title { margin-block: 8px; }
   .pp-hero__cta { margin-top: 4px; }
 }

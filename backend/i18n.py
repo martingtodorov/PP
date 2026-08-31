@@ -130,3 +130,70 @@ async def ai_translate(source: Dict[str, str], locales: List[str], context: str 
             text = text.lstrip()[4:]
     data = json.loads(text)
     return {loc: {k: v for k, v in vals.items() if k in TRANSLATABLE} for loc, vals in data.items() if loc in LOCALES}
+
+
+async def ai_translate_page(source: Dict[str, Any], locales: List[str]) -> Dict[str, Dict[str, Any]]:
+    """Translate a static page (title, html body, FAQ items) into the requested locales."""
+    from anthropic import AsyncAnthropic
+
+    api_key = os.environ["ANTHROPIC_API_KEY"]
+    model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
+    targets = [normalize_locale(l) for l in locales]
+    lang_list = ", ".join(f"{l} = {LOCALE_META[l]['name']}" for l in targets)
+
+    system = (
+        "You are a professional translator for a peptide research supplier's website. "
+        "Translate the static page content faithfully. Keep scientific terminology, peptide names, "
+        "dosages, laboratory names, email addresses, URLs and ALL HTML markup exactly intact — never "
+        "add, remove or reorder HTML tags. Keep the same number of faq_items in the same order. "
+        "Return ONLY valid minified JSON shaped as "
+        "{\"<locale>\": {\"title\": \"...\", \"html\": \"...\", \"faq_items\": [{\"q\": \"...\", \"a\": \"...\"}]}}, "
+        "omitting faq_items when the source has none. No markdown fences, no commentary."
+    )
+    payload = {
+        "source_language": "Bulgarian",
+        "target_locales": {l: LOCALE_META[l]["name"] for l in targets},
+        "page": source,
+    }
+
+    client = AsyncAnthropic(api_key=api_key)
+    try:
+        response = await client.messages.create(
+            model=model,
+            max_tokens=16000,
+            system=system,
+            messages=[{
+                "role": "user",
+                "content": f"Target locales: {lang_list}\n\n{json.dumps(payload, ensure_ascii=False)}",
+            }],
+        )
+    finally:
+        await client.close()
+
+    block = next((b for b in response.content if getattr(b, "type", None) == "text"), None)
+    if block is None:
+        raise RuntimeError("Claude returned no text block")
+    text = block.text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.lstrip().startswith("json"):
+            text = text.lstrip()[4:]
+    data = json.loads(text)
+    out: Dict[str, Dict[str, Any]] = {}
+    for loc, vals in data.items():
+        if loc not in LOCALES or not isinstance(vals, dict):
+            continue
+        entry: Dict[str, Any] = {}
+        if vals.get("title"):
+            entry["title"] = vals["title"]
+        if isinstance(vals.get("html"), str):
+            entry["html"] = vals["html"]
+        items = vals.get("faq_items")
+        if isinstance(items, list):
+            entry["faq_items"] = [
+                {"q": str(i.get("q", "")), "a": str(i.get("a", ""))}
+                for i in items if isinstance(i, dict)
+            ]
+        if entry:
+            out[loc] = entry
+    return out

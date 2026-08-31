@@ -23,6 +23,7 @@ import AdminImportPage from "./pages/AdminImportPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AdminDelistedLinksPage from "./pages/AdminDelistedLinksPage";
 import AdminLocalesPage from "./pages/AdminLocalesPage";
+import AdminPagesPage from "./pages/AdminPagesPage";
 import StaticPage from "./pages/StaticPage";
 
 const STOREFRONT = [
@@ -65,6 +66,7 @@ function App() {
                 <Route path="/admin/settings" element={<AdminSettingsPage />} />
                 <Route path="/admin/delisted-links" element={<AdminDelistedLinksPage />} />
                 <Route path="/admin/locales" element={<AdminLocalesPage />} />
+                <Route path="/admin/pages" element={<AdminPagesPage />} />
               </Routes>
             </LocaleProvider>
           </BrowserRouter>

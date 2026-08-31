@@ -59,12 +59,22 @@ Domains & languages
 - Resend is live (`RESEND_API_KEY` in .env). Sender is still `onboarding@resend.dev` — the owner must verify
   purepeptide.bg in Resend and then set the From address in Admin → Настройки.
 - Speedy/Econt shipment creation is MOCKED (fake tracking numbers).
-- Static page bodies exist in bg + en only; other locales fall back to English.
+- Static page bodies are stored in Mongo (`pages` collection), seeded in bg + en; missing locales fall back
+  to English, then Bulgarian.
+
+## 2026-06 — Editable static pages per locale + hero spacing (DONE, tested iteration_8)
+- Hero: ~20–24px of air above/below the "PurePeptide" title, ~10px below the CTA row
+  (`index.css` last block: `.pp-hero{min-height:0}`, `.pp-hero__inner{padding-block:28px 10px;gap:14px}`).
+- New admin section **Страници по език** (`/admin/pages`): 9 slugs × 11 locales, HTML body editor,
+  structured FAQ Q&A editor (add / delete / reorder), AI translate from Bulgarian (missing-only or overwrite).
+- Backend: `pages_seed.py` (defaults + labels), `seed_pages()` on startup, `ai_translate_page()` in `i18n.py`,
+  endpoints `GET /api/pages/{slug}`, `GET/PUT /api/admin/pages[...]`, `POST /api/admin/pages/{slug}/translate`.
+- Storefront `StaticPage.jsx` reads from the API with fallback to the previous hardcoded copy.
+- Tests: `/app/backend/tests/test_pages.py` (26 cases, all pass).
 
 ## Backlog
 - P0: real Matrixify import of the full catalog (user will supply export + theme)
 - P1: Speedy API integration with real credentials; admin payment verification workflow
-- P1: per-locale static page editor in admin (currently code-level)
 - P2: abandoned cart recovery, customer accounts created by admin, reviews
 
 ## Key endpoints
@@ -78,4 +88,5 @@ Domains & languages
 ## Admin access
 - URL: `https://<domain>/admin/login` (preview: https://shopify-migrate-3.preview.emergentagent.com/admin/login)
 - Email `admin@purepeptide.bg`, password `Admin@PurePeptide2026`
-- Sections: Табло, Продукти (+ редактор), Поръчки, Клиенти, Импорт, Езици и URL, Изтеглени линкове, Настройки
+- Sections: Табло, Продукти (+ редактор), Поръчки, Клиенти, Импорт, Езици и URL, Страници по език,
+  Изтеглени линкове, Настройки

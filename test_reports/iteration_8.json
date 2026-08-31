@@ -1,0 +1,53 @@
+{
+  "summary": "Backend + Frontend testing of the new editable-static-pages feature (per-locale content, admin CRUD, AI translate) and the hero-spacing regression. All 26 pytest cases pass, all UI checks pass. AI translate endpoint was called EXACTLY once (contacts/de, overwrite=true) as instructed and cleaned up afterwards.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_pages.py",
+    "/app/test_reports/pytest/pages_results.xml"
+  ],
+  "verification": {
+    "public_pages_api": {
+      "status": "PASS",
+      "evidence": "GET /api/pages/{slug}?locale=bg returns Bulgarian for all 9 slugs. GET /api/pages/what-are-peptides?locale=de returns English fallback with source_locale=en. GET /api/pages/does-not-exist-xyz -> 404."
+    },
+    "admin_pages_api": {
+      "status": "PASS",
+      "evidence": "GET /api/admin/pages returns 9 slugs with labels and per-locale filled map (bg=True for every seeded slug). GET /admin/pages/{slug}/{locale} returns empty scaffold when no doc. PUT upserts and public GET reflects immediately (verified with contacts/pl, faq/sk). PUT unknown slug -> 404. All admin endpoints return 401 without cookie and 403 for customer role."
+    },
+    "ai_translate_once": {
+      "status": "PASS",
+      "evidence": "POST /api/admin/pages/contacts/translate {locales:[de], overwrite:true} -> 200 with translated=['de']. Subsequent GET /api/pages/contacts?locale=de returned German (source_locale=de), no Cyrillic leakage. Called EXACTLY ONCE. Test doc restored to empty and Mongo doc deleted post-test."
+    },
+    "admin_ui_editor": {
+      "status": "PASS",
+      "evidence": "/admin/pages loads: admin-pages-slug-list shows 9 items, 11 locale tabs. Editing admin-page-title-input + save shows toast 'Запазено: Български'; value persists after switching locale to EN and back to BG. Sidebar has data-testid='admin-nav-pages' with label 'Страници по език'."
+    },
+    "admin_ui_faq_editor": {
+      "status": "PASS",
+      "evidence": "Slug 'faq' -> admin-page-faq-editor visible with 4 seeded BG Q&A. admin-faq-add-btn adds item (4->5); admin-faq-delete-{i} removes it (5->4); admin-faq-down-0 swaps first two questions; admin-faq-up-1 restores order. Public /pages/faq accordion has 4 <details> items (data-testid=static-faq present)."
+    },
+    "storefront_pages": {
+      "status": "PASS",
+      "evidence": "/pages/what-are-peptides shows [data-testid=static-body] with BG copy and PPCalculator ([data-testid=pp-calculator]) renders below body. /pages/faq shows [data-testid=static-faq] with 4 accordion items. /pages/contacts shows BG body. /en/pages/contacts shows English copy ('Get in touch about products...')."
+    },
+    "hero_spacing": {
+      "status": "PASS",
+      "evidence": "Desktop 1920x1080: kicker->title gap = 24.0px, title->sub gap = 24.0px, cta->hero bottom = 10.0px. Mobile 390x844: kicker->title = 20.0px, title->sub = 20.0px, cta->hero bottom = 10.0px. All within the requested 20-26px / <=16px envelopes. Logo marquee present (.logo-marquee), bestsellers carousel has 12 items, homepage renders cleanly."
+    }
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Console emits a benign React warning: 'Invalid DOM property fetchpriority. Did you mean fetchPriority?' on every page render. React 19+ accepts fetchpriority lowercase but the codebase still uses the old camelCase warning; harmless but noisy — worth grepping/fixing when time permits.",
+    "server.py is 1424 lines and growing (>700 line threshold). Consider splitting admin_pages / pages_public into a routes/pages.py module along with settings, translate, discount, etc.",
+    "admin_translate_page endpoint always uses BG as the source (`db.pages.find_one({slug, locale:'bg'})`). If an admin edits only the EN copy and clicks translate, they'll be forced to have BG source content first (400: 'Първо въведете съдържание на български'). Reasonable for this shop but note in the UI/docs.",
+    "PageIn.faq_items uses List[Dict[str, str]] with no schema; malformed items (extra keys) are silently normalised — acceptable, but a Pydantic sub-model would be cleaner and give better 4xx errors."
+  ],
+  "updated_files": ["/app/backend/tests/test_pages.py"],
+  "success_rate": {"backend": "100% (26/26)", "frontend": "100% of tested items"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 works via [data-testid=admin-email/admin-password/admin-login-submit].",
+  "seed_data_creation": "None. Cleanup: deleted Mongo docs {slug=contacts, locale=de} (from AI translate), {slug=contacts, locale=pl} and {slug=faq, locale=sk} (from PUT tests) so the storefront keeps EN/BG fallback for those locales.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Static pages CRUD lives at server.py:1049-1192; tests at /app/backend/tests/test_pages.py (26 cases). The AI translate test intentionally calls Anthropic ONCE per run for slug=contacts locale=de then restores; if you need to re-run backend tests in a paid-call-sensitive iteration, use `pytest backend/tests/test_pages.py -k 'not TestAITranslateOnce'`. Admin UI testids: admin-pages-slug-list, admin-page-slug-{slug}, admin-page-locale-{loc}, admin-page-title-input, admin-page-html-input, admin-page-save-btn, admin-page-faq-editor, admin-faq-q-{i}, admin-faq-a-{i}, admin-faq-add-btn, admin-faq-up-{i}, admin-faq-down-{i}, admin-faq-delete-{i}. Hero spacing measurements match main-agent's manual numbers exactly."
+}
