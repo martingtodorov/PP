@@ -1,13 +1,20 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
 import { Button } from "../components/ui/button";
 import { useCart } from "../context/CartContext";
 import { fmtEUR, fmtBGN } from "../lib/api";
+import { useLocaleCtx } from "../i18n/LocaleContext";
+import { formatErr } from "../lib/api";
+import { toast } from "sonner";
 
 export default function CartPage() {
-  const { items, remove, updateQty, subtotal } = useCart();
+  const { items, remove, updateQty, subtotal, discount, discountAmount, applyDiscount, removeDiscount } = useCart();
+  const [code, setCode] = useState("");
+  const [applying, setApplying] = useState(false);
+  const { lp } = useLocaleCtx();
   const shipping = subtotal === 0 ? 0 : subtotal >= 100 ? 0 : 5.99;
-  const total = subtotal + shipping;
+  const total = Math.max(subtotal - discountAmount, 0) + shipping;
 
   return (
     <Layout>
@@ -16,7 +23,7 @@ export default function CartPage() {
         {items.length === 0 ? (
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-12 text-center">
             <p className="text-slate-600">Количката е празна.</p>
-            <Link to="/collections/all-peptides">
+            <Link to={lp("/collections/all-peptides")}>
               <Button className="mt-6 bg-coral-600 hover:bg-coral-700">Към каталога</Button>
             </Link>
           </div>
@@ -27,7 +34,7 @@ export default function CartPage() {
                 <div key={it.variant_sku} className="bg-white border border-slate-200 rounded-xl p-4 flex gap-4" data-testid={`cart-line-${it.variant_sku}`}>
                   <img src={it.image} alt={it.title} className="w-24 h-24 object-contain bg-white border border-slate-200 rounded" />
                   <div className="flex-1 min-w-0">
-                    <Link to={`/products/${it.product_handle}`} className="font-display font-semibold text-slate-900 hover:text-coral-600">{it.title}</Link>
+                    <Link to={lp(`/products/${it.product_handle}`)} className="font-display font-semibold text-slate-900 hover:text-coral-600">{it.title}</Link>
                     <p className="text-sm text-slate-500">{it.variant_name}</p>
                     <div className="flex items-center gap-3 mt-3">
                       <div className="flex items-center border border-slate-300 rounded">
@@ -50,6 +57,9 @@ export default function CartPage() {
                 <h2 className="font-display font-bold text-lg text-slate-900">Обобщение</h2>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between"><span className="text-slate-600">Междинна сума</span><span className="font-semibold">{fmtEUR(subtotal)}</span></div>
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-coral-700"><span>Отстъпка ({discount?.code})</span><span className="font-semibold">− {fmtEUR(discountAmount)}</span></div>
+                  )}
                   <div className="flex justify-between"><span className="text-slate-600">Доставка</span><span className="font-semibold">{shipping === 0 ? "Безплатна" : fmtEUR(shipping)}</span></div>
                   {subtotal < 100 && subtotal > 0 && (
                     <p className="text-xs text-coral-700 bg-coral-50 border border-coral-200 rounded p-2">
@@ -62,7 +72,33 @@ export default function CartPage() {
                   </div>
                   <p className="text-right text-xs text-slate-500">≈ {fmtBGN(total)}</p>
                 </div>
-                <Link to="/checkout">
+                <div className="mb-4">
+                  {discount ? (
+                    <div className="flex items-center justify-between text-sm border border-coral-200 bg-coral-50 rounded-md px-3 py-2" data-testid="cart-page-discount-applied">
+                      <span className="font-mono font-semibold text-coral-700">{discount.code}</span>
+                      <button onClick={removeDiscount} className="text-xs text-slate-500 hover:text-red-600" data-testid="cart-page-discount-remove">Премахни</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Код за отстъпка"
+                        className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm uppercase focus:outline-none focus:border-coral-600"
+                        data-testid="cart-page-discount-input" />
+                      <button
+                        onClick={async () => {
+                          if (!code.trim()) return;
+                          setApplying(true);
+                          try { const d = await applyDiscount(code.trim()); toast.success(`Код ${d.code} е приложен`); setCode(""); }
+                          catch (e) { toast.error(formatErr(e)); } finally { setApplying(false); }
+                        }}
+                        disabled={applying}
+                        className="px-4 py-2 rounded-md bg-slate-900 text-white text-sm font-medium disabled:opacity-50"
+                        data-testid="cart-page-discount-apply">
+                        Приложи
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <Link to={lp("/checkout")}>
                   <Button className="w-full bg-coral-600 hover:bg-coral-700" data-testid="cart-checkout-btn">
                     Към плащане
                   </Button>

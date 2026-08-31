@@ -1,0 +1,57 @@
+{
+  "summary": "Frontend-only regression for PurePeptide bug-fix round. All three reported visual bugs confirmed fixed, both label changes verified, and the new /cart discount input feature works end-to-end (apply/remove/invalid). No regressions found in product page or /admin/products.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "bug_verification": {
+    "BUG_1_skip_link_flash": {
+      "status": "FIXED",
+      "evidence": "On both / and /en at 430x900 and 1920x900, immediately after DOMContentLoaded the .pp-skip-link bounding box was 1x1 with clip-path inset(50%), position:absolute, top:-1 left:-1, visible=false. Inline <style id='pp-skip-boot'> in public/index.html hides it before the bundle loads. Pressing Tab as first key focused the link with a visible focus outline (text: 'Прескочи към съдържанието') — a11y still works."
+    },
+    "BUG_2_hover_image_disappears": {
+      "status": "FIXED",
+      "evidence": "On /collections/all-peptides, hovered 3 single-image cards: fgtb-500, mots-c, 2-tesamorelin — each has hasAltClass=false, primaryOpacity=1 (image stays visible). Multi-image bpc-157-5 has hasAltClass=true, primaryOpacity=0, altOpacity=1 (correct crossfade). Guard class product-card--has-alt gates the hover rule."
+    },
+    "BUG_3_header_divider": {
+      "status": "FIXED",
+      "evidence": ".pp-topnav computed borderTopWidth = 0px on both mobile (430px) and desktop (1920px). No gray line between the icon row and the sliding nav row."
+    },
+    "CHANGE_4_catalog_rename": {
+      "status": "FIXED",
+      "evidence": "BG /collections/all-peptides: word 'Каталог' not present in page text; 'Всички пептиди' present. Product page breadcrumb crumb-1 = 'Всички пептиди'. /en collection contains 'All peptides' and no 'Catalog/Catalogue'. /de collection contains 'Alle Peptide'. (The DE substring 'Katalog' hit came from the descriptive sentence 'Vollständiger Katalog lyophilisierter Peptide' in the collection description — not a label; acceptable.)"
+    },
+    "NEW_5_cart_discount": {
+      "status": "WORKS",
+      "evidence": "cart-page-discount-input and cart-page-discount-apply render on /cart. Applied WELCOME10 → toast 'Код WELCOME10 е приложен', cart-page-discount-applied visible showing 'WELCOME10 Премахни', cart-total dropped from 34.99€ (29 subtotal + 5.99 shipping) to 32.09€ (~2.90€ = 10% of 29€ subtotal). Премахни removed the code and restored total. Invalid code 'BADCODE123' produced toast 'Невалиден код за отстъпка'."
+    },
+    "REGRESSION_product_page": {
+      "status": "PASS",
+      "evidence": "bpc-157-5 product page renders with breadcrumbs, product-main-image, 3 thumbs, 5 accordions, variant selector (5mg/10mg), Към количка button. Clicking add-to-cart opened cart drawer (data-testid=cart-drawer present)."
+    },
+    "REGRESSION_admin_products": {
+      "status": "PASS",
+      "evidence": "Login as admin@purepeptide.bg redirected to /admin. /admin/products loads cleanly, bulk-translate-btn present, status line 'AI превод: running · 8/23 · текущо: acjc-1295 · неуспешни: 1' visible. No Sparkles/ReferenceError/is-not-defined in DOM."
+    },
+    "REGRESSION_checkout": {
+      "status": "NOT_EXECUTED",
+      "note": "Skipped end-to-end checkout submission to avoid touching mocked shipment providers; based on iteration_5.json this flow was fully green and no files on the checkout path changed this round."
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BUG 1 hiding CSS is duplicated (inline pp-skip-boot in index.html AND lines ~1100-1112 in src/index.css). Duplication is intentional here to avoid the FOUC and low-risk, but a code comment linking the two locations would help future maintainers.",
+    "In ProductCard.jsx, hasAlt = alt !== primary — if a product has 2 image entries where the second is an empty string or accidentally equal URL, the crossfade will silently be disabled. Consider Boolean(images[1]) && images[1] !== images[0]."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% of tested flows"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 (worked)",
+  "seed_data_creation": "None — used existing seeded products.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 3 reported bugs + 1 rename + 1 new discount input confirmed fixed on preview URL. Do not re-trigger admin AI translation (it was already running mid-test). Checkout regression skipped intentionally; if future changes touch CartPage/CheckoutPage or discount API, re-run cart discount + full checkout flow.",
+  "rca_of_the_issue": "Not applicable — this iteration verifies fixes rather than diagnosing new bugs."
+}

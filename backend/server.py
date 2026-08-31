@@ -9,6 +9,7 @@ load_dotenv(ROOT_DIR / ".env")
 import os
 import csv
 import io
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -16,13 +17,20 @@ from typing import Optional, List, Dict, Any
 
 import bcrypt
 import jwt
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, UploadFile, File
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, UploadFile, File, Query
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from motor.motor_asyncio import AsyncIOMotorClient
 from starlette.middleware.cors import CORSMiddleware
 
-from seed_data import COLLECTIONS, PRODUCTS, ARTICLES, DEFAULT_SETTINGS
+from seed_data import COLLECTIONS, PRODUCTS, ARTICLES, DEFAULT_SETTINGS, SEED_VERSION
+from translations_seed import COLLECTION_TR, PRODUCT_TR, ARTICLE_TR
+from i18n import (
+    LOCALES, DEFAULT_LOCALE, LOCALE_META, SITE_ORIGINS,
+    normalize_locale, localize_doc, localize_list, ai_translate,
+)
+import storage
+import email_service
 
 # ---------- App + DB ----------
 mongo_url = os.environ["MONGO_URL"]
@@ -165,6 +173,8 @@ class CheckoutIn(BaseModel):
     customer_phone: str
     shipping_method: str = "econt_office"  # econt_office | econt_address | speedy
     notes: Optional[str] = ""
+    discount_code: Optional[str] = ""
+    terms_accepted: bool = False
 
 
 class ProductIn(BaseModel):
@@ -178,15 +188,28 @@ class ProductIn(BaseModel):
     collections: List[str] = []
     tags: List[str] = []
     featured: bool = False
+    specs: Dict[str, Any] = {}
+    seo_title: Optional[str] = ""
+    seo_description: Optional[str] = ""
+    translations: Dict[str, Dict[str, Any]] = {}
 
 
 class CollectionIn(BaseModel):
     handle: str
     title: str
-    title_en: Optional[str] = ""
     description: str = ""
     image: str = ""
     sort_order: int = 0
+    seo_title: Optional[str] = ""
+    seo_description: Optional[str] = ""
+    translations: Dict[str, Dict[str, Any]] = {}
+
+
+class TranslateIn(BaseModel):
+    resource: str  # product | collection
+    id: str
+    locales: List[str] = []
+    overwrite: bool = False
 
 
 # ---------- Seeders ----------
@@ -223,23 +246,43 @@ async def seed_admin():
 
 
 async def seed_catalog():
+    """Seed / re-seed the catalog. A change of SEED_VERSION rebuilds the mirrored Shopify catalog."""
+    current = await db.settings.find_one({"key": "site"})
+    seeded_version = (current or {}).get("value", {}).get("seed_version")
+    stale = seeded_version != SEED_VERSION
+
+    if stale:
+        await db.collections_cat.delete_many({})
+        await db.products.delete_many({})
+        await db.articles.delete_many({})
+        log.info("Re-seeding catalog for version %s", SEED_VERSION)
+
     if await db.collections_cat.count_documents({}) == 0:
         for c in COLLECTIONS:
+            base_tr = {**(c.get("translations") or {})}
+            for loc, fields in (COLLECTION_TR.get(c["handle"]) or {}).items():
+                base_tr[loc] = {**(base_tr.get(loc) or {}), **fields}
             await db.collections_cat.insert_one({
                 "id": str(uuid.uuid4()),
                 "created_at": now_utc(),
                 **c,
+                "translations": base_tr,
             })
         log.info("Seeded %d collections", len(COLLECTIONS))
 
     if await db.products.count_documents({}) == 0:
         for p in PRODUCTS:
+            base_tr = {**(p.get("translations") or {})}
+            for loc, fields in (PRODUCT_TR.get(p["handle"]) or {}).items():
+                base_tr[loc] = {**(base_tr.get(loc) or {}), **fields}
             doc = {
                 "id": str(uuid.uuid4()),
                 "created_at": now_utc(),
                 "featured": False,
+                "specs": {},
                 "images": p.get("images", [p["image"]]),
                 **p,
+                "translations": base_tr,
             }
             await db.products.insert_one(doc)
         log.info("Seeded %d products", len(PRODUCTS))
@@ -250,10 +293,24 @@ async def seed_catalog():
                 "id": str(uuid.uuid4()),
                 "published_at": now_utc(),
                 **a,
+                "translations": ARTICLE_TR.get(a["handle"], {}),
             })
 
-    if not await db.settings.find_one({"key": "site"}):
-        await db.settings.insert_one({"key": "site", "value": DEFAULT_SETTINGS, "updated_at": now_utc()})
+    if not current or stale:
+        merged = {**DEFAULT_SETTINGS, **(current or {}).get("value", {}), "seed_version": SEED_VERSION}
+        if stale:
+            merged = {**DEFAULT_SETTINGS}
+        await db.settings.update_one(
+            {"key": "site"}, {"$set": {"value": merged, "updated_at": now_utc()}}, upsert=True
+        )
+    else:
+        # backfill any newly introduced settings keys without touching existing values
+        existing_value = current.get("value", {})
+        missing = {k: v for k, v in DEFAULT_SETTINGS.items() if k not in existing_value}
+        if missing:
+            await db.settings.update_one(
+                {"key": "site"}, {"$set": {**{f"value.{k}": v for k, v in missing.items()}, "updated_at": now_utc()}}
+            )
 
 
 async def ensure_indexes():
@@ -271,6 +328,11 @@ async def on_startup():
     await ensure_indexes()
     await seed_admin()
     await seed_catalog()
+    try:
+        storage.init_storage()
+        log.info("Object storage initialized")
+    except Exception as ex:
+        log.error("Storage init failed: %s", ex)
 
 
 @app.on_event("shutdown")
@@ -281,22 +343,8 @@ async def on_shutdown():
 # ---------- Auth routes ----------
 @api.post("/auth/register")
 async def register(payload: RegisterIn, response: Response):
-    email = payload.email.lower()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="Имейлът вече е регистриран")
-    user = {
-        "id": str(uuid.uuid4()),
-        "email": email,
-        "password_hash": hash_password(payload.password),
-        "name": payload.name,
-        "phone": payload.phone,
-        "role": "customer",
-        "created_at": now_utc(),
-    }
-    await db.users.insert_one(user)
-    token = create_token(user["id"], user["email"], user["role"])
-    set_auth_cookie(response, token)
-    return {"user": public_user(user), "token": token}
+    """Self-registration is disabled — accounts are created by the shop owner only."""
+    raise HTTPException(status_code=403, detail="Създаването на профил не е достъпно")
 
 
 @api.post("/auth/login")
@@ -331,56 +379,147 @@ def clean_doc(d: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @api.get("/collections")
-async def list_collections():
+async def list_collections(locale: str = Query(DEFAULT_LOCALE)):
+    loc = normalize_locale(locale)
     docs = await db.collections_cat.find({}, {"_id": 0}).sort("sort_order", 1).to_list(100)
-    return {"collections": docs}
+    return {"collections": localize_list(docs, loc)}
 
 
 @api.get("/collections/{handle}")
-async def get_collection(handle: str):
-    col = await db.collections_cat.find_one({"handle": handle}, {"_id": 0})
+async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
+    loc = normalize_locale(locale)
+    col = await db.collections_cat.find_one(
+        {"$or": [{"handle": handle}, {f"translations.{loc}.handle": handle}]}, {"_id": 0}
+    )
     if not col:
         raise HTTPException(404, "Колекцията не е намерена")
-    if handle == "all-peptides":
+    base_handle = col["handle"]
+    if base_handle == "all-peptides":
         prods = await db.products.find({}, {"_id": 0}).to_list(500)
     else:
-        prods = await db.products.find({"collections": handle}, {"_id": 0}).to_list(500)
-    return {"collection": col, "products": prods}
+        prods = await db.products.find({"collections": base_handle}, {"_id": 0}).to_list(500)
+    siblings = await db.collections_cat.find(
+        {"handle": {"$nin": [base_handle, "all-peptides"]}}, {"_id": 0}
+    ).sort("sort_order", 1).to_list(50)
+    return {
+        "collection": localize_doc(col, loc),
+        "products": localize_list(prods, loc),
+        "siblings": localize_list(siblings, loc),
+    }
 
 
 @api.get("/products")
-async def list_products(featured: Optional[bool] = None, search: Optional[str] = None, limit: int = 100):
+async def list_products(
+    featured: Optional[bool] = None,
+    search: Optional[str] = None,
+    limit: int = 100,
+    locale: str = Query(DEFAULT_LOCALE),
+):
+    loc = normalize_locale(locale)
     q: Dict[str, Any] = {}
     if featured is not None:
         q["featured"] = featured
     if search:
-        q["title"] = {"$regex": search, "$options": "i"}
+        q["$or"] = [
+            {"title": {"$regex": search, "$options": "i"}},
+            {f"translations.{loc}.title": {"$regex": search, "$options": "i"}},
+        ]
     docs = await db.products.find(q, {"_id": 0}).limit(limit).to_list(limit)
-    return {"products": docs}
+    return {"products": localize_list(docs, loc)}
 
 
 @api.get("/products/{handle}")
-async def get_product(handle: str):
-    p = await db.products.find_one({"handle": handle}, {"_id": 0})
+async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
+    loc = normalize_locale(locale)
+    p = await db.products.find_one(
+        {"$or": [{"handle": handle}, {f"translations.{loc}.handle": handle}]}, {"_id": 0}
+    )
     if not p:
         raise HTTPException(404, "Продуктът не е намерен")
     related = await db.products.find(
-        {"handle": {"$ne": handle}, "collections": {"$in": p.get("collections", [])}},
+        {"handle": {"$ne": p["handle"]}, "collections": {"$in": p.get("collections", [])}},
         {"_id": 0},
-    ).limit(4).to_list(4)
-    return {"product": p, "related": related}
+    ).limit(8).to_list(8)
+    cols = await db.collections_cat.find(
+        {"handle": {"$in": p.get("collections", [])}}, {"_id": 0}
+    ).to_list(20)
+    articles = await db.articles.find({"product_handle": p["handle"]}, {"_id": 0}).to_list(5)
+    return {
+        "product": localize_doc(p, loc),
+        "related": localize_list(related, loc),
+        "collections": localize_list(cols, loc),
+        "articles": localize_list(articles, loc),
+    }
 
 
 @api.get("/articles")
-async def list_articles():
+async def list_articles(locale: str = Query(DEFAULT_LOCALE)):
+    loc = normalize_locale(locale)
     docs = await db.articles.find({}, {"_id": 0}).to_list(50)
-    return {"articles": docs}
+    return {"articles": localize_list(docs, loc)}
+
+
+@api.get("/locales")
+async def get_locales():
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
+    return {"locales": LOCALES, "meta": LOCALE_META, "routes": routes}
+
+
+# ---------- Delisted / retired URLs (content rotation board) ----------
+class DelistedLinkIn(BaseModel):
+    url: str
+    locale: str = "bg"
+    reason: str = ""
+    status: str = "pending"  # pending | rotated | redirected | ignored
+    replacement_url: str = ""
+    notes: str = ""
+
+
+@api.get("/admin/delisted-links")
+async def list_delisted_links(user=Depends(require_admin)):
+    docs = await db.delisted_links.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return {"links": docs}
+
+
+@api.post("/admin/delisted-links")
+async def create_delisted_link(payload: DelistedLinkIn, user=Depends(require_admin)):
+    doc = {
+        "id": str(uuid.uuid4()),
+        **payload.model_dump(),
+        "created_at": now_utc(),
+        "updated_at": now_utc(),
+        "created_by": user["email"],
+    }
+    await db.delisted_links.insert_one(doc)
+    return {"link": {k: v for k, v in doc.items() if k != "_id"}}
+
+
+@api.put("/admin/delisted-links/{link_id}")
+async def update_delisted_link(link_id: str, payload: DelistedLinkIn, user=Depends(require_admin)):
+    res = await db.delisted_links.update_one(
+        {"id": link_id}, {"$set": {**payload.model_dump(), "updated_at": now_utc()}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Линкът не е намерен")
+    return {"ok": True}
+
+
+@api.delete("/admin/delisted-links/{link_id}")
+async def delete_delisted_link(link_id: str, user=Depends(require_admin)):
+    res = await db.delisted_links.delete_one({"id": link_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Линкът не е намерен")
+    return {"ok": True}
 
 
 @api.get("/settings")
 async def get_settings():
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
-    return s["value"] if s else DEFAULT_SETTINGS
+    value = dict(s["value"]) if s else dict(DEFAULT_SETTINGS)
+    for secret in ("resend_api_key", "discount_codes"):
+        value.pop(secret, None)
+    return value
 
 
 # ---------- Checkout / Orders ----------
@@ -389,17 +528,53 @@ async def _next_order_number() -> str:
     return f"PP-{1000 + count + 1}"
 
 
-def _calc_totals(line_items: List[Dict[str, Any]], shipping_method: str) -> Dict[str, float]:
+async def _resolve_discount(code: str, subtotal: float) -> Dict[str, Any]:
+    """Returns {code, type, value, discount_eur} or raises HTTPException."""
+    if not code:
+        return {"code": "", "discount_eur": 0.0}
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    codes = ((s or {}).get("value") or {}).get("discount_codes", [])
+    found = next((c for c in codes if c.get("code", "").upper() == code.strip().upper() and c.get("active")), None)
+    if not found:
+        raise HTTPException(400, "Невалиден код за отстъпка")
+    if subtotal < float(found.get("min_subtotal", 0)):
+        raise HTTPException(400, f"Кодът е валиден при сума над {found['min_subtotal']} EUR")
+    if found["type"] == "percent":
+        amount = subtotal * float(found["value"]) / 100.0
+    else:
+        amount = float(found["value"])
+    amount = round(min(amount, subtotal), 2)
+    return {"code": found["code"].upper(), "type": found["type"], "value": found["value"], "discount_eur": amount}
+
+
+class DiscountIn(BaseModel):
+    code: str
+    subtotal_eur: float = 0.0
+
+
+@api.post("/discount/validate")
+async def validate_discount(payload: DiscountIn):
+    return await _resolve_discount(payload.code, payload.subtotal_eur)
+
+
+def _calc_totals(line_items: List[Dict[str, Any]], shipping_method: str, discount_eur: float = 0.0) -> Dict[str, float]:
     subtotal = sum(li["price_eur"] * li["quantity"] for li in line_items)
     shipping_cost = 0.0 if subtotal >= 100 else (5.99 if shipping_method != "speedy" else 7.49)
-    total = subtotal + shipping_cost
-    return {"subtotal_eur": round(subtotal, 2), "shipping_eur": shipping_cost, "total_eur": round(total, 2)}
+    total = subtotal - discount_eur + shipping_cost
+    return {
+        "subtotal_eur": round(subtotal, 2),
+        "discount_eur": round(discount_eur, 2),
+        "shipping_eur": shipping_cost,
+        "total_eur": round(max(total, 0), 2),
+    }
 
 
 @api.post("/checkout")
 async def checkout(payload: CheckoutIn, request: Request):
     if not payload.items:
         raise HTTPException(400, "Количката е празна")
+    if not payload.terms_accepted:
+        raise HTTPException(400, "Трябва да приемете общите условия")
 
     line_items = []
     for li in payload.items:
@@ -422,7 +597,9 @@ async def checkout(payload: CheckoutIn, request: Request):
             "quantity": li.quantity,
         })
 
-    totals = _calc_totals(line_items, payload.shipping_method)
+    subtotal_raw = sum(li["price_eur"] * li["quantity"] for li in line_items)
+    discount = await _resolve_discount(payload.discount_code or "", subtotal_raw)
+    totals = _calc_totals(line_items, payload.shipping_method, discount.get("discount_eur", 0.0))
     user = await get_user_from_request(request)
 
     order = {
@@ -436,6 +613,8 @@ async def checkout(payload: CheckoutIn, request: Request):
         "shipping": payload.shipping.model_dump(),
         "shipping_method": payload.shipping_method,
         "notes": payload.notes,
+        "discount": discount,
+        "terms_accepted": payload.terms_accepted,
         **totals,
         "currency": "EUR",
         "payment_status": "awaiting_payment",
@@ -464,6 +643,12 @@ async def checkout(payload: CheckoutIn, request: Request):
         "amount_eur": totals["total_eur"],
     }
     order_clean = {k: v for k, v in order.items() if k != "_id"}
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    site_settings = (s or {}).get("value", {})
+    try:
+        await email_service.send_order_confirmation(order_clean, bank, site_settings)
+    except Exception:
+        log.exception("Order confirmation email failed")
     return {"order": order_clean, "bank_transfer": bank}
 
 
@@ -540,6 +725,11 @@ async def mark_paid(order_id: str, user=Depends(require_admin)):
         "id": str(uuid.uuid4()), "actor": user["email"], "action": "mark_paid",
         "order_id": order_id, "at": now_utc(),
     })
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    try:
+        await email_service.send_payment_received({k: v for k, v in o.items() if k != "_id"}, (s or {}).get("value", {}))
+    except Exception:
+        log.exception("Payment email failed")
     return {"ok": True}
 
 
@@ -581,7 +771,31 @@ async def create_shipment(order_id: str, payload: ShipmentIn, user=Depends(requi
         }},
     )
     await db.shipments.insert_one({"id": str(uuid.uuid4()), "order_id": order_id, **tracking})
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    try:
+        await email_service.send_shipped({k: v for k, v in o.items() if k != "_id"}, tracking, (s or {}).get("value", {}))
+    except Exception:
+        log.exception("Shipping email failed")
     return {"ok": True, "tracking": tracking}
+
+
+class TestEmailIn(BaseModel):
+    to: EmailStr
+
+
+@api.post("/admin/email/test")
+async def admin_test_email(payload: TestEmailIn, user=Depends(require_admin)):
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    site_settings = (s or {}).get("value", {})
+    res = await email_service.send_email(
+        payload.to,
+        "PurePeptide — тестов имейл",
+        "<p>Това е тестов имейл от вашия PurePeptide магазин. Resend работи коректно.</p>",
+        site_settings,
+    )
+    if not res.get("sent"):
+        raise HTTPException(400, f"Имейлът не беше изпратен: {res.get('reason')}")
+    return res
 
 
 @api.post("/admin/orders/{order_id}/cancel")
@@ -649,6 +863,12 @@ async def admin_create_collection(payload: CollectionIn, user=Depends(require_ad
 
 class SettingsIn(BaseModel):
     value: Dict[str, Any]
+
+
+@api.get("/admin/settings")
+async def admin_get_settings(user=Depends(require_admin)):
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    return {"settings": (s or {}).get("value", DEFAULT_SETTINGS)}
 
 
 @api.put("/admin/settings")
@@ -736,6 +956,277 @@ async def admin_import_products(file: UploadFile = File(...), user=Depends(requi
 async def admin_imports_log(user=Depends(require_admin)):
     docs = await db.imports.find({}, {"_id": 0}).sort("at", -1).limit(50).to_list(50)
     return {"imports": docs}
+
+
+@api.get("/admin/products/{product_id}")
+async def admin_get_product(product_id: str, user=Depends(require_admin)):
+    doc = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Продуктът не е намерен")
+    return {"product": doc}
+
+
+@api.put("/admin/collections/{collection_id}")
+async def admin_update_collection(collection_id: str, payload: CollectionIn, user=Depends(require_admin)):
+    res = await db.collections_cat.update_one({"id": collection_id}, {"$set": payload.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Колекцията не е намерена")
+    return {"ok": True}
+
+
+@api.get("/admin/collections")
+async def admin_collections(user=Depends(require_admin)):
+    docs = await db.collections_cat.find({}, {"_id": 0}).sort("sort_order", 1).to_list(100)
+    return {"collections": docs}
+
+
+# ---------- Image uploads (Emergent object storage) ----------
+@api.post("/admin/upload")
+async def admin_upload(file: UploadFile = File(...), user=Depends(require_admin)):
+    ext = (file.filename or "img.png").rsplit(".", 1)[-1].lower()
+    if ext not in storage.MIME_TYPES:
+        raise HTTPException(400, "Неподдържан формат. Позволени: jpg, png, webp, gif, svg")
+    data = await file.read()
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(400, "Файлът е по-голям от 8MB")
+    path = f"{storage.APP_NAME}/products/{uuid.uuid4()}.{ext}"
+    content_type = storage.MIME_TYPES[ext]
+    try:
+        result = storage.put_object(path, data, content_type)
+    except Exception as ex:
+        log.exception("Upload failed")
+        raise HTTPException(502, f"Качването се провали: {ex}")
+    await db.files.insert_one({
+        "id": str(uuid.uuid4()),
+        "storage_path": result["path"],
+        "original_filename": file.filename,
+        "content_type": content_type,
+        "size": result.get("size", len(data)),
+        "is_deleted": False,
+        "created_at": now_utc(),
+        "uploaded_by": user["email"],
+    })
+    return {"url": f"/api/files/{result['path']}", "path": result["path"]}
+
+
+@api.get("/files/{path:path}")
+async def serve_file(path: str):
+    record = await db.files.find_one({"storage_path": path, "is_deleted": False})
+    if not record:
+        raise HTTPException(404, "Файлът не е намерен")
+    try:
+        data, content_type = storage.get_object(path)
+    except Exception:
+        raise HTTPException(404, "Файлът не е намерен")
+    return Response(
+        content=data,
+        media_type=record.get("content_type", content_type),
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
+# ---------- AI translation ----------
+@api.post("/admin/translate")
+async def admin_translate(payload: TranslateIn, user=Depends(require_admin)):
+    coll = db.products if payload.resource == "product" else db.collections_cat
+    doc = await coll.find_one({"id": payload.id})
+    if not doc:
+        raise HTTPException(404, "Ресурсът не е намерен")
+
+    targets = [normalize_locale(l) for l in (payload.locales or LOCALES) if normalize_locale(l) != "bg"]
+    existing = doc.get("translations") or {}
+    if not payload.overwrite:
+        targets = [l for l in targets if not (existing.get(l) or {}).get("title")]
+    if not targets:
+        return {"ok": True, "translated": [], "message": "Няма нови езици за превод"}
+
+    source = {
+        "title": doc.get("title", ""),
+        "handle": doc.get("handle", ""),
+        "description": doc.get("description", ""),
+    }
+    if doc.get("subtitle"):
+        source["subtitle"] = doc["subtitle"]
+
+    try:
+        result = await ai_translate(source, targets, context="PurePeptide research peptides e-commerce")
+    except Exception as ex:
+        log.exception("Translation failed")
+        raise HTTPException(502, f"Преводът се провали: {ex}")
+
+    updates = {}
+    for loc, fields in result.items():
+        merged = {**(existing.get(loc) or {}), **fields}
+        updates[f"translations.{loc}"] = merged
+    await coll.update_one({"id": payload.id}, {"$set": updates})
+    fresh = await coll.find_one({"id": payload.id}, {"_id": 0})
+    return {"ok": True, "translated": list(result.keys()), "resource": fresh}
+
+
+class BulkTranslateIn(BaseModel):
+    resource: str = "product"  # product | collection | all
+    locales: List[str] = []
+    overwrite: bool = False
+
+
+async def _translate_one(coll, doc, targets: List[str], overwrite: bool) -> List[str]:
+    existing = doc.get("translations") or {}
+    todo = [l for l in targets if overwrite or not (existing.get(l) or {}).get("title")]
+    if not todo:
+        return []
+    source = {
+        "title": doc.get("title", ""),
+        "handle": doc.get("handle", ""),
+        "description": doc.get("description", ""),
+    }
+    if doc.get("subtitle"):
+        source["subtitle"] = doc["subtitle"]
+    if doc.get("menu_title"):
+        source["menu_title"] = doc["menu_title"]
+    result = await ai_translate(source, todo, context="PurePeptide research peptides e-commerce")
+    updates = {f"translations.{loc}": {**(existing.get(loc) or {}), **fields} for loc, fields in result.items()}
+    if updates:
+        await coll.update_one({"id": doc["id"]}, {"$set": updates})
+    return list(result.keys())
+
+
+async def _run_bulk_translate(job_id: str, resource: str, targets: List[str], overwrite: bool):
+    collections_to_do = []
+    if resource in ("product", "all"):
+        collections_to_do.append(("product", db.products))
+    if resource in ("collection", "all"):
+        collections_to_do.append(("collection", db.collections_cat))
+
+    total = 0
+    for _, coll in collections_to_do:
+        total += await coll.count_documents({})
+    await db.translate_jobs.update_one(
+        {"id": job_id},
+        {"$set": {"status": "running", "total": total, "done": 0, "failed": [], "updated_at": now_utc()}},
+    )
+
+    done = 0
+    failed: List[str] = []
+    for kind, coll in collections_to_do:
+        docs = await coll.find({}, {"_id": 0}).to_list(1000)
+        for doc in docs:
+            try:
+                await _translate_one(coll, doc, targets, overwrite)
+            except Exception as ex:
+                log.error("Bulk translate failed for %s %s: %s", kind, doc.get("handle"), ex)
+                failed.append(f"{kind}:{doc.get('handle')}")
+            done += 1
+            await db.translate_jobs.update_one(
+                {"id": job_id},
+                {"$set": {"done": done, "failed": failed, "current": doc.get("handle"), "updated_at": now_utc()}},
+            )
+    await db.translate_jobs.update_one(
+        {"id": job_id}, {"$set": {"status": "finished", "current": "", "updated_at": now_utc()}}
+    )
+
+
+@api.post("/admin/translate/bulk")
+async def admin_bulk_translate(payload: BulkTranslateIn, user=Depends(require_admin)):
+    targets = [normalize_locale(l) for l in (payload.locales or LOCALES) if normalize_locale(l) != "bg"]
+    running = await db.translate_jobs.find_one({"status": {"$in": ["queued", "running"]}}, {"_id": 0})
+    if running:
+        return {"job": running, "message": "Вече има активен превод"}
+    job_id = str(uuid.uuid4())
+    await db.translate_jobs.insert_one({
+        "id": job_id, "status": "queued", "resource": payload.resource, "locales": targets,
+        "total": 0, "done": 0, "failed": [], "current": "", "created_at": now_utc(), "updated_at": now_utc(),
+        "actor": user["email"],
+    })
+    asyncio.create_task(_run_bulk_translate(job_id, payload.resource, targets, payload.overwrite))
+    return {"job_id": job_id, "status": "queued", "locales": targets}
+
+
+@api.get("/admin/translate/bulk")
+async def admin_bulk_translate_status(user=Depends(require_admin)):
+    job = await db.translate_jobs.find_one({}, {"_id": 0}, sort=[("created_at", -1)])
+    return {"job": job}
+
+
+# ---------- SEO: sitemap + robots ----------
+def _loc_url(locale: str, path: str, routes: Dict[str, Any] = None) -> str:
+    cfg = (routes or {}).get(locale) or SITE_ORIGINS[locale]
+    return f"{cfg['origin']}{cfg.get('prefix', '')}{path}"
+
+
+@api.get("/sitemap.xml")
+async def sitemap():
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
+    active = [l for l in LOCALES if (routes.get(l) or {}).get("enabled", True)]
+    cols = await db.collections_cat.find({}, {"_id": 0}).to_list(200)
+    prods = await db.products.find({}, {"_id": 0}).to_list(500)
+    arts = await db.articles.find({}, {"_id": 0}).to_list(200)
+    static_pages = ["", "/collections/all-peptides", "/pages/what-are-peptides",
+                    "/pages/chemical-analysis", "/pages/faq", "/pages/contacts", "/pages/partners"]
+
+    def handle_for(doc, loc):
+        return ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc.get("handle")
+
+    entries: List[tuple] = []  # (path_per_locale dict, priority)
+    for path in static_pages:
+        entries.append(({loc: path for loc in active}, "0.9" if path == "" else "0.7"))
+    for c in cols:
+        entries.append(({loc: f"/collections/{handle_for(c, loc)}" for loc in active}, "0.8"))
+    for p in prods:
+        entries.append(({loc: f"/products/{handle_for(p, loc)}" for loc in active}, "0.9"))
+    for a in arts:
+        entries.append(({loc: f"/articles/{handle_for(a, loc)}" for loc in active}, "0.6"))
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+        'xmlns:xhtml="http://www.w3.org/1999/xhtml">',
+    ]
+    for paths, prio in entries:
+        alternates = "".join(
+            f'<xhtml:link rel="alternate" hreflang="{LOCALE_META[l]["hreflang"]}" href="{_loc_url(l, paths[l], routes)}"/>'
+            for l in active
+        )
+        if "en" in paths:
+            alternates += f'<xhtml:link rel="alternate" hreflang="x-default" href="{_loc_url("en", paths["en"], routes)}"/>'
+        for loc in active:
+            parts.append(
+                f"<url><loc>{_loc_url(loc, paths[loc], routes)}</loc><lastmod>{today}</lastmod>"
+                f"<changefreq>weekly</changefreq><priority>{prio}</priority>{alternates}</url>"
+            )
+    parts.append("</urlset>")
+    return Response(content="".join(parts), media_type="application/xml")
+
+
+@api.get("/robots.txt", response_class=PlainTextResponse)
+async def robots():
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /admin",
+        "Disallow: /checkout",
+        "Disallow: /cart",
+        "Disallow: /account",
+        "",
+        "User-agent: GPTBot",
+        "Allow: /",
+        "",
+        "User-agent: ClaudeBot",
+        "Allow: /",
+        "",
+        "User-agent: PerplexityBot",
+        "Allow: /",
+        "",
+        "User-agent: Google-Extended",
+        "Allow: /",
+        "",
+    ]
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
+    for origin in dict.fromkeys((routes.get(loc) or SITE_ORIGINS[loc])["origin"] for loc in LOCALES):
+        lines.append(f"Sitemap: {origin}/sitemap.xml")
+    return "\n".join(lines)
 
 
 # ---------- Mount + CORS ----------

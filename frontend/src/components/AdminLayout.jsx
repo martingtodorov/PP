@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Package, ShoppingBag, Users, Upload, Settings, LogOut, FolderTree } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Users, Upload, Settings, LogOut, Globe, Link2Off } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const NAV = [
@@ -9,6 +9,8 @@ const NAV = [
   { to: "/admin/products", label: "Продукти", icon: Package },
   { to: "/admin/customers", label: "Клиенти", icon: Users },
   { to: "/admin/import", label: "Импорт", icon: Upload },
+  { to: "/admin/locales", label: "Езици и URL", icon: Globe },
+  { to: "/admin/delisted-links", label: "Изтеглени линкове", icon: Link2Off },
   { to: "/admin/settings", label: "Настройки", icon: Settings },
 ];
 

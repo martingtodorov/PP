@@ -7,6 +7,11 @@ module.exports = {
   ],
   theme: {
         extend: {
+                fontFamily: {
+                    sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                    serif: ['system-ui', '-apple-system', 'Segoe UI', 'Arial', 'sans-serif'],
+                    mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+                },
                 borderRadius: {
                         lg: 'var(--radius)',
                         md: 'calc(var(--radius) - 2px)',

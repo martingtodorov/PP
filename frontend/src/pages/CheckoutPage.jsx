@@ -10,20 +10,24 @@ import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { api, fmtEUR, fmtBGN, formatErr } from "../lib/api";
+import { useLocaleCtx } from "../i18n/LocaleContext";
 
 export default function CheckoutPage() {
-  const { items, subtotal, clear } = useCart();
+  const { items, subtotal, clear, note, setNote, discount, discountAmount } = useCart();
   const { user } = useAuth();
   const nav = useNavigate();
-  const [shippingMethod, setShippingMethod] = useState("econt_office");
+  const { lp } = useLocaleCtx();
+  const [shippingMethod, setShippingMethod] = useState("speedy");
+  const [terms, setTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [placed, setPlaced] = useState(false);
   const [form, setForm] = useState({
     full_name: "", email: "", phone: "",
     line1: "", city: "", postal_code: "", country: "BG", note: "",
   });
 
   useEffect(() => {
-    if (items.length === 0) nav("/cart");
+    if (items.length === 0 && !placed) nav(lp("/cart"));
   }, [items.length, nav]);
 
   useEffect(() => {
@@ -32,7 +36,7 @@ export default function CheckoutPage() {
 
   const shipping = shippingMethod === "speedy" ? 7.49 : 5.99;
   const finalShipping = subtotal >= 100 ? 0 : shipping;
-  const total = subtotal + finalShipping;
+  const total = Math.max(subtotal - discountAmount, 0) + finalShipping;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -48,12 +52,15 @@ export default function CheckoutPage() {
         customer_name: form.full_name,
         customer_phone: form.phone,
         shipping_method: shippingMethod,
-        notes: form.note,
+        notes: note || form.note,
+        discount_code: discount?.code || "",
+        terms_accepted: terms,
       };
       const { data } = await api.post("/checkout", payload);
       clear();
       sessionStorage.setItem(`pp_order_${data.order.id}`, JSON.stringify(data));
-      nav(`/checkout/success/${data.order.id}`);
+      setPlaced(true);
+      nav(lp(`/checkout/success/${data.order.id}`));
     } catch (e) {
       toast.error(formatErr(e));
     } finally {
@@ -76,7 +83,7 @@ export default function CheckoutPage() {
               </div>
               {!user && (
                 <p className="text-xs text-slate-500 mt-4">
-                  Имате профил? <Link to="/account" className="text-coral-600 font-medium">Влезте</Link>, за да следите поръчките си.
+                  Имате профил? <Link to={lp("/account")} className="text-coral-600 font-medium">Влезте</Link>, за да следите поръчките си.
                 </p>
               )}
             </section>
@@ -87,7 +94,7 @@ export default function CheckoutPage() {
                 <div className="sm:col-span-2"><Label>Адрес</Label><Input required value={form.line1} onChange={(e) => setForm({...form, line1: e.target.value})} data-testid="checkout-address" /></div>
                 <div><Label>Град</Label><Input required value={form.city} onChange={(e) => setForm({...form, city: e.target.value})} data-testid="checkout-city" /></div>
                 <div><Label>Пощенски код</Label><Input required value={form.postal_code} onChange={(e) => setForm({...form, postal_code: e.target.value})} data-testid="checkout-postal" /></div>
-                <div className="sm:col-span-2"><Label>Бележка (по желание)</Label><Textarea value={form.note} onChange={(e) => setForm({...form, note: e.target.value})} data-testid="checkout-note" /></div>
+                <div className="sm:col-span-2"><Label>Специални инструкции (по желание)</Label><Textarea value={note} onChange={(e) => setNote(e.target.value)} data-testid="checkout-note" /></div>
               </div>
             </section>
 
@@ -95,9 +102,9 @@ export default function CheckoutPage() {
               <h2 className="font-display font-bold text-lg text-slate-900 mb-5">Метод за доставка</h2>
               <RadioGroup value={shippingMethod} onValueChange={setShippingMethod} className="space-y-3" data-testid="shipping-method">
                 {[
+                  { v: "speedy", t: "Спиди – до офис", d: "Доставка до избран офис на Спиди", p: "5.99" },
+                  { v: "econt_address", t: "Спиди – до адрес", d: "Куриер до посочения адрес", p: "5.99" },
                   { v: "econt_office", t: "Еконт – до офис", d: "Доставка до избран офис на Еконт", p: "5.99" },
-                  { v: "econt_address", t: "Еконт – до адрес", d: "Куриер до посочения адрес", p: "5.99" },
-                  { v: "speedy", t: "Speedy – до адрес", d: "Куриер Speedy до посочения адрес", p: "7.49" },
                 ].map((s) => (
                   <label key={s.v} className={`flex items-center gap-4 border rounded-lg p-4 cursor-pointer ${shippingMethod === s.v ? "border-coral-600 bg-coral-50/40" : "border-slate-200"}`}>
                     <RadioGroupItem value={s.v} id={s.v} />
@@ -137,6 +144,11 @@ export default function CheckoutPage() {
               </div>
               <div className="border-t border-slate-200 pt-4 space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-slate-600">Междинна сума</span><span className="font-semibold">{fmtEUR(subtotal)}</span></div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-coral-700" data-testid="checkout-discount-row">
+                    <span>Отстъпка ({discount?.code})</span><span className="font-semibold">− {fmtEUR(discountAmount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between"><span className="text-slate-600">Доставка</span><span className="font-semibold">{finalShipping === 0 ? "Безплатна" : fmtEUR(finalShipping)}</span></div>
                 <div className="border-t border-slate-200 pt-2 flex justify-between">
                   <span className="font-display font-bold">Общо</span>
@@ -146,7 +158,11 @@ export default function CheckoutPage() {
                   </div>
                 </div>
               </div>
-              <Button type="submit" disabled={submitting} className="w-full bg-coral-600 hover:bg-coral-700" data-testid="place-order-btn">
+              <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
+                <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} className="mt-0.5 accent-coral-600" data-testid="checkout-terms-checkbox" />
+                <span>Съгласявам се с <Link to={lp("/pages/terms-of-service")} className="underline hover:text-coral-600">общите условия</Link> и потвърждавам, че поръчвам за научноизследователски цели.</span>
+              </label>
+              <Button type="submit" disabled={submitting || !terms} className="w-full bg-coral-600 hover:bg-coral-700" data-testid="place-order-btn">
                 {submitting ? "Обработка…" : "Завърши поръчката"}
               </Button>
             </div>

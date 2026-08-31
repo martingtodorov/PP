@@ -5,7 +5,6 @@ import Layout from "../components/Layout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Badge } from "../components/ui/badge";
 import { useAuth } from "../context/AuthContext";
 import { api, fmtEUR, formatErr } from "../lib/api";
@@ -20,10 +19,9 @@ const STATUS_BG = {
 };
 
 export default function AccountPage() {
-  const { user, login, register, logout } = useAuth();
+  const { user, login, logout } = useAuth();
   const [orders, setOrders] = useState([]);
   const [li, setLi] = useState({ email: "", password: "" });
-  const [reg, setReg] = useState({ email: "", password: "", name: "", phone: "" });
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
 
@@ -40,42 +38,20 @@ export default function AccountPage() {
       if (u.role === "admin") nav("/admin");
     } catch (e) { toast.error(formatErr(e)); } finally { setBusy(false); }
   };
-  const doRegister = async (e) => {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      await register(reg);
-      toast.success("Регистрацията е успешна");
-    } catch (e) { toast.error(formatErr(e)); } finally { setBusy(false); }
-  };
 
   if (!user) {
     return (
       <Layout>
         <div className="max-w-md mx-auto px-4 py-16">
           <h1 className="font-display text-3xl font-extrabold text-slate-900 mb-8 text-center">Моят профил</h1>
-          <Tabs defaultValue="login">
-            <TabsList className="grid grid-cols-2 w-full">
-              <TabsTrigger value="login" data-testid="tab-login">Вход</TabsTrigger>
-              <TabsTrigger value="register" data-testid="tab-register">Регистрация</TabsTrigger>
-            </TabsList>
-            <TabsContent value="login">
-              <form onSubmit={doLogin} className="bg-white border border-slate-200 rounded-xl p-6 space-y-4 mt-4">
-                <div><Label>Имейл</Label><Input type="email" required value={li.email} onChange={(e) => setLi({...li, email: e.target.value})} data-testid="login-email" /></div>
-                <div><Label>Парола</Label><Input type="password" required value={li.password} onChange={(e) => setLi({...li, password: e.target.value})} data-testid="login-password" /></div>
-                <Button type="submit" disabled={busy} className="w-full bg-coral-600 hover:bg-coral-700" data-testid="login-submit">{busy ? "…" : "Вход"}</Button>
-              </form>
-            </TabsContent>
-            <TabsContent value="register">
-              <form onSubmit={doRegister} className="bg-white border border-slate-200 rounded-xl p-6 space-y-4 mt-4">
-                <div><Label>Имена</Label><Input value={reg.name} onChange={(e) => setReg({...reg, name: e.target.value})} data-testid="register-name" /></div>
-                <div><Label>Имейл</Label><Input type="email" required value={reg.email} onChange={(e) => setReg({...reg, email: e.target.value})} data-testid="register-email" /></div>
-                <div><Label>Телефон</Label><Input value={reg.phone} onChange={(e) => setReg({...reg, phone: e.target.value})} data-testid="register-phone" /></div>
-                <div><Label>Парола</Label><Input type="password" required minLength={6} value={reg.password} onChange={(e) => setReg({...reg, password: e.target.value})} data-testid="register-password" /></div>
-                <Button type="submit" disabled={busy} className="w-full bg-coral-600 hover:bg-coral-700" data-testid="register-submit">{busy ? "…" : "Създай профил"}</Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+          <form onSubmit={doLogin} className="bg-white border border-slate-200 rounded-xl p-6 space-y-4 mt-4" data-testid="login-form">
+            <div><Label>Имейл</Label><Input type="email" required value={li.email} onChange={(e) => setLi({...li, email: e.target.value})} data-testid="login-email" /></div>
+            <div><Label>Парола</Label><Input type="password" required value={li.password} onChange={(e) => setLi({...li, password: e.target.value})} data-testid="login-password" /></div>
+            <Button type="submit" disabled={busy} className="w-full bg-coral-600 hover:bg-coral-700" data-testid="login-submit">{busy ? "…" : "Вход"}</Button>
+            <p className="text-xs text-slate-500 text-center leading-relaxed">
+              Профилите се създават от нас. За достъп до история на поръчките ни пишете на info@purepeptide.bg.
+            </p>
+          </form>
         </div>
       </Layout>
     );

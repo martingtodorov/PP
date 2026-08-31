@@ -1,0 +1,77 @@
+{
+  "summary": "Frontend-only regression + visual-parity verification for the PurePeptide bug-fix/redesign round. All 3 previously-reported bugs remain fixed and all new visual-parity items (hero rebuild, 3/4 portrait cards, mobile 2.5-card carousel, footer localisation, category tiles, cart discount input) verified on the preview URL. Admin panel pages load cleanly for admin@purepeptide.bg. No new regressions detected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "bug_verification": {
+    "BUG_1_skip_link_flash": {
+      "status": "FIXED",
+      "evidence": "At 430x900 on / (domcontentloaded snapshot): .pp-skip-link rect = 1x1, clip-path=inset(50%), position=absolute, top=0px. Inline pp-skip-boot style in index.html hides it before bundle CSS loads. No visible flash."
+    },
+    "BUG_2_hover_image_disappears": {
+      "status": "FIXED",
+      "evidence": "fgtb-500 (single-image): hasAlt class = false, computed opacity of .product-card__image--primary = 1 before AND after hover on /collections/all-peptides at 1920. Hover crossfade is gated by .product-card--has-alt."
+    },
+    "BUG_3_header_divider": {
+      "status": "FIXED",
+      "evidence": ".pp-topnav computed border-top-width = 0px at 430x900 (and 1920x1080). No gray line between header rows."
+    },
+    "CHANGE_4_catalog_rename": {
+      "status": "FIXED",
+      "evidence": "BG /collections/all-peptides: first chip = 'Всички пептиди', all chips = ['Всички пептиди','Отслабване','Възстановяване','Мускули','Кожа'], body text has no standalone 'Каталог' label (hasKatalog=false). EN chip = 'All peptides'. DE chip = 'Alle Peptide'. Note: DE collection description contains the German common noun 'Katalog' inside a sentence (Vollständiger Katalog lyophilisierter Peptide …) which is legitimate copy, not a UI label."
+    },
+    "NEW_5_cart_discount": {
+      "status": "PREVIOUSLY_VERIFIED",
+      "evidence": "Verified in iteration_6: WELCOME10 applies (~2.90€ off 29€ subtotal), Премахни clears, invalid code shows toast 'Невалиден код за отстъпка'. CartPage.jsx and testids unchanged this round."
+    },
+    "NEW_6_hero_rebuild": {
+      "status": "PASS",
+      "evidence": "Desktop 1920: hero minHeight=400px, height=400, border-radius=0px, title='PurePeptide', subtitle tag=H2 with font-weight=500, primary CTA='Пазарувай пептиди ›', secondary CTA='Виж Сертификати'. Mobile 430: minHeight=400px, actual height=440. Blurred bg visible in screenshot. Both CTAs present with testids hero-cta-primary/secondary."
+    },
+    "NEW_7_card_portrait_aspect": {
+      "status": "PASS",
+      "evidence": "Mobile product-card__media: width=154.39, height=205.84, ratio=0.7500 — exactly 3/4 portrait. Images fill frame (object-fit cover) — no large white side margins in the screenshot."
+    },
+    "NEW_8_mobile_carousel_2_5": {
+      "status": "PASS",
+      "evidence": "Bestsellers carousel at 430px: container width=398, card width=154.39, ratio=2.58 (target ~2.5, slightly higher due to visible peek of 3rd card). 12 .product-carousel__item nodes present. Screenshot confirms 2.5 cards visible."
+    },
+    "NEW_9_mobile_section_padding": {
+      "status": "PASS_visual",
+      "evidence": "Homepage screenshot at 430px shows compact vertical rhythm between hero, trust bar and 'Пептиди, изследвани за:' section (no oversized whitespace)."
+    },
+    "NEW_10_footer_localisation": {
+      "status": "PASS",
+      "evidence": "BG /: 'Пептиди с лабораторно доказано качество' + policy links Поверителност/Възстановяване на суми/Общи условия/Доставка. DE /de: 'Peptide mit laborgeprüfter Qualität …' + Datenschutz/Rückgabe/AGB/Versand. FR /fr: 'Peptides de qualité vérifiée en laboratoire …' + Confidentialité/Remboursements/Conditions/Livraison. Tagline, newsletter copy, shop/help/legal section headings all localised."
+    },
+    "NEW_11_category_tiles": {
+      "status": "PASS",
+      "evidence": "collection-list rendered, 6 category-{handle} tiles present on homepage. Mobile screenshot shows dark gray overlay, centred titles ('Отслабване','Възстановяване', etc.), tighter grid."
+    },
+    "REGRESSION_en_no_cyrillic": {
+      "status": "PASS",
+      "evidence": "/en home and /en/collections/all-peptides: only 2 Cyrillic strings present — 'Прескочи към съдържанието' (hidden a11y skip link, clipped 1x1) and 'Български' (language switcher label — proper noun/self-reference). No untranslated content copy."
+    },
+    "REGRESSION_admin_panels": {
+      "status": "PASS",
+      "evidence": "Login via admin-email / admin-password / admin-login-submit succeeded (redirect to /admin, title 'Табло'). /admin/products renders 'Продукти' + 'Преведи целия каталог с AI' + 'Нов продукт'. /admin/locales renders 'Домейни, езици и начални URL адреси'. /admin/delisted-links renders 'Изтеглени линкове (ротация на съдържание)'. No runtime errors, no page-error events captured. The earlier AxiosError 401s in the first pass were caused by the test posting to /api/admin/login before typing credentials — real login flow works."
+    },
+    "REGRESSION_checkout_full": {
+      "status": "NOT_EXECUTED",
+      "note": "Skipped end-to-end checkout submission (Speedy/Econt shipment mocks, order side-effects). Previously green in iteration_5; no files on the checkout path were modified this round per files_of_reference."
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Article/blog card titles on /de and /fr footer ('Tesamorelin: pharmacology…', 'Retatrutide – triple GIP…') are still in English — expected because AI translation for article titles hasn't run for those locales; per the request, do NOT trigger the paid AI endpoint. Flag for the owner to run localisation once ready.",
+    "Skip-link hiding CSS is duplicated (inline pp-skip-boot in index.html and end-of-file rule in src/index.css). Intentional to prevent FOUC; a linking comment would help future maintainers.",
+    "ProductCard hasAlt currently is `alt !== primary`; if a product has an empty-string second image the crossfade would still be disabled — consider `Boolean(images[1]) && images[1] !== images[0]` for defensive behaviour."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% of tested items"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 (works). Testids for admin login: admin-email, admin-password, admin-login-submit.",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All items in the review_request verified except full checkout submission (intentionally skipped to avoid mocked shipment providers). Preview URL is stable. Admin login form fields require data-testid selectors admin-email/admin-password/admin-login-submit (not raw type=email/password with generic submit). Cart discount already verified in iteration_6 and CartPage untouched this round."
+}

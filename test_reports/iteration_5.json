@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 5 backend + frontend regression suite. Backend: 50/50 pytest passing (43 existing + 7 new: bulk-translate auth guard, email-test auth guard, POST /api/admin/translate for product with fr [live Anthropic claude-sonnet-5 call → verified persistence via public GET by fr handle], POST /api/admin/translate for collection with de, POST /api/admin/translate/bulk starts job + second call returns running one + progress advances within 60s, POST /api/admin/email/test with delivered@resend.dev returns sent:true, /settings exposes announcements_i18n). Both iteration_4 REGRESSIONS confirmed fixed. Frontend: (a) Calculator on / — defaults mg=5/mL=2/mcg=250 → 0.1 mL; toggle Units → 10 units and active class flips; mcg=500 → 20 units / 0.2 mL — PASS. (b) Announcement bar localised: BG shows Cyrillic, /en → 'Verified purity >99% by Janoshik laboratory', /de → 'Geprüfte Reinheit >99 % durch Janoshik Labor' — PASS. (c) /admin/locales route-prefix-de changed to /de-test, saved, reloaded → value persisted; restored to /de — PASS. (d) Admin editor DE locale tab renders AI-translated German description ('Was ist BPC-157?…Pentadecapeptid…') for the product — PASS. (e) /admin/products bulk-translate-btn present with status line 'AI превод: finished · 16/16', clicking it starts a new job → button label switches to 'Превежда… 0/23' — PASS. (f) Mobile 430 homepage: hero visible (no flask icon), category links, calculator present, nav-drawer-trigger visible — PASS. (g) Desktop 1920 header: desktop-header, logo-link-desktop, nav-shop, search-trigger-desktop, cart-button-desktop all visible; shop-dropdown opens on hover — PASS. (h) Full checkout with terms → /checkout/success/{orderId} with PP-1012 and bank-transfer panel — PASS. ONE CRITICAL BUG FOUND AND FIXED: AdminProductsPage rendered '<Sparkles>' icon without importing it → 'Sparkles is not defined' ReferenceError crashed the /admin/products page entirely. Fixed by adding Sparkles to lucide-react import.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AdminProductsPage",
+        "issue": "ReferenceError: Sparkles is not defined — bulk-translate button used <Sparkles/> icon that wasn't imported from lucide-react. /admin/products crashed with uncaught runtime error. Fixed in this iteration by adding Sparkles to the lucide-react import statement.",
+        "selector": "[data-testid=\"bulk-translate-btn\"]",
+        "priority": "CRITICAL (fixed)"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/checkout",
+        "issues": [
+          "No visible discount-code input on the checkout page. The backend supports discount_code on POST /api/checkout (validated in backend tests) but the customer-facing checkout UI does not surface a discount field. If discount usage is expected end-to-end via UI, add a discount-code input on /cart or /checkout."
+        ]
+      }
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Verify Sparkles-import fix in /app/frontend/src/pages/AdminProductsPage.jsx (already applied by test agent — main agent can self-verify).",
+    "Optional: expose a discount-code input on the checkout UI (backend already supports it and it's in the test matrix)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 1257 lines — still monolithic; consider splitting admin/translate & bulk-translate + email into a dedicated router (backend/routers/admin_ai.py).",
+    "AdminProductsPage imported Languages but not Sparkles before the icon usage — a lint step (eslint no-undef / react/jsx-no-undef) would have caught this at build. Consider enabling ESLint no-undef for JSX identifiers in CI.",
+    "_run_bulk_translate iterates docs sequentially and updates translate_jobs after each doc — good, but there is no cancel endpoint. Consider POST /api/admin/translate/bulk/cancel to abort a runaway job (paid Anthropic call).",
+    "ai_translate errors during bulk are only logged & appended to failed[] — no retry, no back-off. For flaky provider issues consider tenacity retry (2×) with exponential back-off.",
+    "GET /api/settings intentionally exposes announcements_i18n so the frontend can localise the announcement bar — correct. Confirm no PII/secret ever leaks through this shape as new keys get added.",
+    "AdminLocalesPage.save() now correctly wraps the payload — LGTM."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/frontend/src/pages/AdminProductsPage.jsx",
+    "/app/test_reports/iteration_5.json"
+  ],
+  "success_rate": {"backend": "100% (50/50)", "frontend": "~95% (1 critical crash found & fixed in this run; all listed flows now pass)"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 and customer@example.com / Customer123! — both work; login sets pp_token cookie.",
+  "seed_data_creation": "TestAITranslationAndEmail wrote fr/de translations to product[0] and collection[0]. TestAdminProductCRUD creates & deletes a test product. TestDelistedLinks creates & deletes a delisted link. A live Anthropic bulk-translate job (product/de) was started once; it advanced within 60s. No residual test data left besides the freshly written translations (which are the intended state).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 12 items in this review request now pass. Only fix applied by testing agent: added `Sparkles` to lucide-react import in AdminProductsPage.jsx. New backend tests live under class TestAITranslationAndEmail and TestAnnouncementsI18n in backend_test.py (50 tests total). New/relevant testids used from frontend: calc-mg / calc-ml / calc-mcg / calc-unit-ml / calc-unit-units / calc-result / calc-result-unit / announcement-text / bulk-translate-btn / bulk-translate-status / translate-all-btn / route-prefix-{loc} / save-routes-btn / checkout-name / checkout-email / checkout-phone / checkout-address / checkout-city / checkout-postal / checkout-terms-checkbox / place-order-btn. IMPORTANT for future runs: the bulk translate endpoint costs money (Anthropic) — the test class starts at most ONE job and only waits 60s for progress; it does not wait for completion.",
+  "rca_of_the_issue": "AdminProductsPage.jsx imported {Plus, Pencil, Trash2, Languages} from lucide-react but the JSX at line 66 used <Sparkles className='h-4 w-4' /> without an import. React resolved `Sparkles` as an undefined identifier in the closure → ReferenceError at first render of /admin/products. The whole page (product list, bulk-translate button, status line) unmounted behind CRA's runtime error overlay. Fix: `import { Plus, Pencil, Trash2, Languages, Sparkles } from 'lucide-react';`. Verified post-fix by reloading /admin/products — button and status line render, click starts a new bulk job (label flips to 'Превежда… 0/23'). Prevention: enable eslint `no-undef`/`react/jsx-no-undef` and run lint in CI on every PR."
+}

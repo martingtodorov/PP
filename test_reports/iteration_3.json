@@ -1,0 +1,36 @@
+{
+  "summary": "Ran 36 pytest backend tests (all passed) and executed Playwright UI flows on mobile viewport (390x844). Backend fully verified: locale query on collections/products with base_handle+handles map + bg fallback, all-peptides returns all 16 products, discount validation (WELCOME10 ok, PEPTIDE20 min_subtotal, invalid rejected), checkout terms enforcement + notes + discount totals, register disabled (403), admin CRUD (create/update/delete) with per-locale handle resolution (de handle resolved for locale=de while bg still resolves for locale=bg), admin image upload + /api/files/{path} serves image content-type, public /settings hides resend_api_key + discount_codes, admin /settings exposes them, sitemap.xml has 11 hreflang alternates, robots.txt allows crawling and lists sitemap. Frontend verified: announcement rotates via next arrow, sliding nav highlights ONLY 'Начало' (`is-active`), search drawer + BPC search returns product, cart drawer add-to-cart flow with note + WELCOME10 discount applied + terms checkbox toggling enables the checkout button + navigates to /checkout, /de locale shows 'Start/Shop' UI and EUR-only prices (no BGN), /gr also EUR-only, / (bg) shows both EUR + BGN, admin login → 16 edit buttons, product editor has save/upload/add-variant/11 locale-tabs/translate-all, admin settings page shows Resend key and discount code rows, AccountPage has no register form. Two frontend bugs found: (A) drawer 'Пазарувай' toggle does NOT expand submenu — after clicking `drawer-shop-toggle`, `drawer-shop-submenu` never becomes visible (submenu remains closed with '+' icon), so users cannot access the 6 collection links from the drawer; (B) placing an order via /checkout redirects back to /cart instead of /checkout/success/{id} — the CheckoutPage's `useEffect(items.length===0 → nav('/cart'))` fires after `clear()` in the same render cycle and overrides the success navigation.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "NavDrawer (Layout.jsx)", "issue": "Clicking 'Пазарувай' (drawer-shop-toggle) does not open drawer-shop-submenu; the +/- icon stays as '+' and the 6 collection links never render. Users cannot reach collections from the hamburger drawer.", "selector": "[data-testid=\\\"drawer-shop-toggle\\\"] / [data-testid=\\\"drawer-shop-submenu\\\"]", "priority": "HIGH"},
+      {"component": "CheckoutPage", "issue": "After a successful checkout, the page redirects to /cart instead of /checkout/success/{id}. The useEffect that redirects when items.length===0 fires immediately after clear() and overrides the nav() to the success route. Users complete the payment flow but never see the bank-transfer confirmation screen.", "selector": "/checkout submit → place-order-btn", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Shadcn Sheet (nav-drawer, search-drawer, cart-drawer)", "issues": ["Missing `aria-describedby` on Radix DialogContent triggers Warning in console for all Sheet drawers (accessibility)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Fix CheckoutPage: gate the empty-cart redirect so it does not fire during the successful-submit render, e.g. set a `submitted` flag when receiving order, or navigate to success before calling clear(). Currently users are bounced to /cart and never see success page.",
+    "Fix NavDrawer shop toggle: clicking `drawer-shop-toggle` should expand `drawer-shop-submenu`. Verify that setShopOpen actually toggles state (button initial state is `useState(true)` yet UI shows '+' meaning false, suggesting an ordering bug or that the component is being remounted). Also consider hiding the toggle until `collections` has loaded so users don't click into an empty ul.",
+    "Add `SheetDescription` (or `aria-describedby`) to Sheet drawers to remove Radix a11y warnings."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1109 lines — should be split into routers (auth, catalog, checkout, admin_products, admin_settings, seo).",
+    "CheckoutPage useEffect(items.length===0) races with clear() + nav() on submit — classic redirect trap; must be guarded by a submission flag.",
+    "NavDrawer initializes `shopOpen=true` but the sign icon shows '+' (false) on mount; state may be reset by re-render when `collections` prop populates. Consider deriving initial from collections length or leaving open when non-empty.",
+    "public /settings correctly strips resend_api_key/discount_codes (verified). Good.",
+    "Public register endpoint returns 403 (verified) but keeps EmailStr validation — payload with invalid email returns 422 before the 403, which may leak that the endpoint exists. Consider unifying to 403 for any body.",
+    "sitemap.xml uses <xhtml:link> inside each <url>, which is fine, but generates N × 11 duplication (all locale-URLs contain full alternates block × 11). File will be large; consider a sitemap index."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (36/36)", "frontend": "~80% (2 critical UI bugs)"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 and customer@example.com / Customer123! — both work (login sets pp_token cookie).",
+  "seed_data_creation": "TestAdminProductCRUD creates a temp product 'test-prod-{uuid}' then deletes it; no residual seed data left.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend 100% covered by /app/backend/tests/backend_test.py (36 tests). Two frontend bugs are outstanding: (1) drawer 'Пазарувай' toggle not expanding submenu, (2) /checkout success flow redirects to /cart. AI-translate endpoint intentionally not tested (LLM budget exhausted per E1). Locale routing (bg/de/gr), sitemap, robots, discount, terms, cart drawer, admin product CRUD and image upload are all confirmed working end-to-end.",
+  "rca_of_the_issue": "CheckoutPage.jsx lines 28-30: `useEffect(() => { if (items.length === 0) nav(lp('/cart')); }, [items.length, nav]);` fires when clear() empties the cart in submit(). Even though nav('/checkout/success/…') is called immediately after clear(), React batches state updates; on the very next render items.length===0 triggers the empty-cart redirect which overrides the success navigation. Fix: introduce `const [orderPlaced, setOrderPlaced] = useState(false)` set before clear(), and skip the redirect when orderPlaced is true; or call nav(success) first, then clear() after."
+}

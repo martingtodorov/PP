@@ -1,0 +1,48 @@
+{
+  "summary": "Ran 43 pytest backend tests (all passed, +7 new: locales endpoint prefix, SK/FR locale UI, BG cyrillic preserved, delisted-links CRUD auth+guards, /admin/settings locale_routes persistence + sitemap reflection). Frontend: (a) REGRESSION verified — /checkout submit now lands on /checkout/success/{orderId} with bank transfer panel (was bouncing to /cart in iter3); (b) REGRESSION verified — mobile drawer 'Пазарувай' toggle expands/collapses submenu with the 6 collection links; (c) Desktop 1920: single-row header, logo LEFT, desktop-nav present, search+cart on right, NO hamburger, NO account/person link inside header (confirmed via DOM query); (d) hover 'Пазарувай' opens shop-dropdown with 6 category + 1 all-peptides + 'Виж всички' entry (7 dropdown-collection- testids); (e) hero .pp-hero--bleed bbox width=1920 (full-bleed) and bestsellers section computed backgroundColor = rgb(255,255,255) white; (f) BG homepage tiles all Cyrillic; (g) Mobile 430: no hamburger label needed but 'nav-drawer-trigger' + search on left, 8 mobile sliding nav items, no /account link in header; (h) /en/products/2-tesamorelin renders 'Tesamorelin 10mg', body has no BGN лв; (i) /fr/products/2-tesamorelin renders French chrome + English pivot title (falls back to en, not bg); (j) skip link (.pp-skip-link) + <main id='main-content'> both present; (k) No Radix 'Missing Description' console warnings after opening search-drawer or cart-drawer; (l) /admin/delisted-links full CRUD works via UI (add → mark rotated → delete row disappears); (m) /admin/locales renders 11 locale-route rows and en prefix is /en; (n) /admin/products list still renders (17 edit links). One frontend bug found: /admin/locales SAVE is broken — payload schema mismatch — after clicking save and reloading, home_path reverted to '/'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AdminLocalesPage (save-routes-btn)",
+        "issue": "The save button sends `api.put('/admin/settings', { locale_routes: routes })` but backend `SettingsIn` requires `{ value: {...} }`. The PUT is rejected with 422 so changes never persist (verified by editing route-home-en, saving, reloading — value reverts). Additionally, even if wrapped correctly, sending only `{ value: { locale_routes } }` would OVERWRITE the entire site settings object (announcements, discount_codes, resend_api_key, hero copy) — the save must merge locale_routes into the existing settings.",
+        "selector": "[data-testid=\"save-routes-btn\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Admin → Locales → Save",
+        "issue": "Frontend/backend contract mismatch (locale_routes vs value:{}). Fix: `const cur = (await api.get('/admin/settings')).data.settings; await api.put('/admin/settings', { value: { ...cur, locale_routes: routes } });`",
+        "affected_selectors": ["[data-testid=\"save-routes-btn\"]", "[data-testid=\"route-home-{loc}\"]", "[data-testid=\"route-prefix-{loc}\"]"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Announcement bar (all locales)",
+        "issues": ["Announcement text is stored as a single string list in site settings and rendered as-is; on /en, /fr, /gr etc. it still shows Bulgarian '✅ Потвърдено качество…'. Consider making announcements per-locale (or at minimum admin-visible warning) — not blocking but visible on every localised page."]
+      }
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Fix AdminLocalesPage.save() to (1) wrap payload in `{ value: {...} }` and (2) merge locale_routes into the current settings object so other keys (announcements, discount_codes, resend_api_key, etc.) are preserved.",
+    "Optional: localise announcement bar per locale, or at least document that BG announcement is intentional across locales."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1172 lines — still monolithic. Split into routers (auth, catalog, checkout, admin_*, seo).",
+    "AdminLocalesPage: save() sends `{ locale_routes }` instead of `{ value: {...settings, locale_routes} }` — silent 422 and would clobber all other settings if the schema were relaxed. Critical.",
+    "sitemap.xml grows as N_urls × N_locales entries with N_locales alternates each — O(N × 11²). For a full catalog this file will be large; consider a sitemap index and one file per locale.",
+    "Announcement bar text is not translated. Since /en, /fr etc. are supposed to be fully localised, hard-coded BG announcements leak Cyrillic on every non-BG page (visible from very first paint).",
+    "DelistedLinkIn permits arbitrary `status` strings — no enum validation; consider Literal['pending','rotated','redirected','ignored'].",
+    "AdminLocalesPage sends the entire routes map on save; if two admins edit concurrently, last write wins with no diff/merge."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py", "/app/test_reports/iteration_4.json"],
+  "success_rate": {"backend": "100% (43/43)", "frontend": "~93% (1 admin-save integration bug)"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 and customer@example.com / Customer123! — both work; login sets pp_token cookie.",
+  "seed_data_creation": "TestDelistedLinks creates & deletes a delisted link. TestLocaleRoutesPersistence temporarily overrides settings.locale_routes then restores. TestAdminProductCRUD creates & deletes a test product. No residual test data left.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend covered end-to-end by /app/backend/tests/backend_test.py (43 tests, all pass). Iteration 3 regressions BOTH fixed: (1) /checkout success flow now redirects to /checkout/success/{orderId} with bank details, (2) mobile drawer 'Пазарувай' toggle expands and shows 6 collection links. New bug in iteration 4: AdminLocalesPage save is broken due to wrong payload schema — the row values are read from `/admin/settings` (backend correctly stores `locale_routes` inside settings.value), but the PUT sends `{ locale_routes: ... }` at top level, missing required `value` field. Delisted-links CRUD works from both API and UI. Testids used: locale-route-{loc}, route-origin-{loc}, route-prefix-{loc}, route-home-{loc}, route-enabled-{loc}, save-routes-btn, delisted-form/url/locale/reason/add/row/status/replacement/mark-rotated/delete-{id}, filter-{status}, desktop-header, logo-link-desktop, desktop-nav, nav-shop, shop-dropdown, dropdown-collection-{handle}/all, search-trigger-desktop, cart-button-desktop, nav-drawer-trigger (mobile hamburger — no separate 'mobile-hamburger' testid), drawer-shop-toggle, drawer-shop-submenu. AI-translate endpoint intentionally only auth-guarded (LLM budget exhausted).",
+  "rca_of_the_issue": "AdminLocalesPage.jsx line 21: `await api.put('/admin/settings', { locale_routes: routes })`. Backend `SettingsIn` model (server.py:863) requires field `value: Dict[str, Any]`. FastAPI rejects the payload with 422 (unprocessable entity), the toast catches the error but the pattern `try { … toast.success } catch { toast.error }` shows only the caught error — user thinks save failed for other reasons. Fix in AdminLocalesPage.save(): fetch current settings, spread them, place locale_routes inside `value` and PUT the whole object. Reference implementation exists in AdminSettingsPage.jsx line 26 (`api.put('/admin/settings', { value: s })`)."
+}

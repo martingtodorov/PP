@@ -1,0 +1,26 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /checkout
+Disallow: /cart
+Disallow: /account
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+Sitemap: https://purepeptide.bg/api/sitemap.xml
+Sitemap: https://purepeptide.eu/api/sitemap.xml
+Sitemap: https://purepeptide.gr/api/sitemap.xml
+Sitemap: https://purepeptide.ro/api/sitemap.xml
