@@ -188,8 +188,32 @@
       notify: restart mongod
       tags: [mongo]
 
+    - name: mongod drop-in directory
+      file: { path: /etc/systemd/system/mongod.service.d, state: directory, mode: "0755" }
+      tags: [mongo]
+
+    # MongoDB 8.x refuses to start on Linux >= 6.19: its vendored TCMalloc is incompatible with the
+    # new restartable-sequences behaviour (SERVER-121912) and no patched release exists. The upstream
+    # workaround is glibc.pthread.rseq=1 — setting it to 0 causes memory corruption instead.
+    - name: Kernel workaround for MongoDB 8.x (SERVER-121912)
+      copy:
+        dest: /etc/systemd/system/mongod.service.d/10-pp-rseq.conf
+        mode: "0644"
+        content: |
+          # Managed by Ansible ({{ app_name }}). Kernel {{ ansible_kernel }}.
+          # MongoDB 8.x + Linux >= 6.19: TCMalloc/rseq incompatibility (SERVER-121912).
+          [Service]
+          Environment=GLIBC_TUNABLES=glibc.pthread.rseq=1
+      register: mongo_rseq
+      tags: [mongo]
+
     - name: Enable mongod
-      systemd: { name: mongod, enabled: true, state: started }
+      systemd: { name: mongod, enabled: true, state: started, daemon_reload: true }
+      tags: [mongo]
+
+    - name: Restart mongod when the kernel workaround changed
+      systemd: { name: mongod, state: restarted, daemon_reload: true }
+      when: mongo_rseq is changed
       tags: [mongo]
 
     - name: Flush handlers so a pending mongod restart happens before we verify
