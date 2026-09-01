@@ -380,3 +380,16 @@ def test_deploy_adapts_to_the_repository_layout():
     assert "{{ src_dir }}/frontend" not in front
     defaults = (TASKS / "infra_defaults.yml").read_text()
     assert "backend_rel_path: \"{{ backend_rel_path | default('backend', true) }}\"" in defaults
+
+
+def test_release_directories_are_frozen_with_set_fact():
+    """A lookup() inside vars: is re-evaluated per reference — git cloned into one directory while the
+    next task looked at another (which is why the checkout looked '(empty)')."""
+    for name, key in (("deploy_backend.yml", "release_dir"), ("deploy_frontend.yml", "src_dir")):
+        doc = yaml.safe_load((PLAYBOOKS / name).read_text())
+        play = doc[0]
+        play_vars = yaml.dump(play.get("vars") or {})
+        assert "lookup('pipe'" not in play_vars, f"{name}: {key} must not use lookup() in vars:"
+        assert key not in play_vars, f"{name}: {key} must be set with set_fact, not vars:"
+        pre = yaml.dump(play.get("pre_tasks") or [])
+        assert key in pre and "set_fact" in pre, f"{name}: {key} must be frozen in pre_tasks"

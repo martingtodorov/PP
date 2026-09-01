@@ -4,12 +4,18 @@
 - name: PurePeptide frontend build on pp-front
   hosts: frontend
   become: true
-  vars:
-    build_stamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
-    src_dir: "/opt/{{ app_name }}-src/{{ ref }}-{{ build_stamp }}"
 
   pre_tasks:
     - import_tasks: ../tasks/infra_defaults.yml
+    # a lookup() in vars: is re-evaluated per reference — freeze the build directory once
+    - name: Freeze the build directory for this run
+      set_fact:
+        src_dir: "/opt/{{ app_name }}-src/{{ ref }}-{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+      tags: [always]
+
+    - name: Build directory
+      debug: { msg: "building {{ ref }} in {{ src_dir }}" }
+      tags: [always]
 
   tasks:
     - name: Build toolchain must already be installed (bootstrap_frontend_base.yml installs it)

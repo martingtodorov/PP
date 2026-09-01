@@ -443,3 +443,16 @@ previous step caught it). Since the app cannot be deployed from a ref that does 
   checkout** (two levels) so the cause is obvious instead of "Unknown error".
 - Verified locally with ansible-playbook for: standard layout → `backend`, nested → `app/backend`,
   empty repo → clear failure listing the files. 55 deploy tests + full dryrun green.
+
+### 2026-06 — ROOT CAUSE of the "(empty) checkout": lookup() in play vars
+`deploy_backend.yml` had `release_stamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"` inside `vars:`.
+Ansible re-evaluates a lookup on **every reference**, so `release_dir` differed per task: git cloned
+into `main-…230942` while the following tasks inspected `main-…230943` → empty listing, "no
+requirements file", "no backend/server.py". Same bug for `build_stamp`/`src_dir` in
+`deploy_frontend.yml`.
+Fix: both directories are frozen once with `set_fact` in `pre_tasks` (and printed). Proven locally
+(vars lookup returns two different values, set_fact one) and e2e: cloning the real
+`https://github.com/martingtodorov/PP.git` main into a temp release and running the detection block
+finds `backend` layout + `deploy/requirements-prod.txt` (133 pins, correct header, corrected
+`nextcart_base_url`). GitHub main is complete — the repo was never the problem.
+Guard: `test_release_directories_are_frozen_with_set_fact`. 56 deploy tests + dryrun green.
