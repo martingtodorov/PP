@@ -88,7 +88,7 @@ export default function StaticPage() {
         <Breadcrumbs items={[{ label: title }]} />
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-4">{title}</h1>
 
-        {isFaq && (
+        {isFaq && (remote?.faq_items?.length > 0 || !remote?.html) && (
           <Accordion type="single" collapsible className="space-y-3 mt-8" data-testid="static-faq">
             {faqItems.map((f, i) => (
               <AccordionItem key={i} value={`q${i}`} className="bg-white border border-slate-200 rounded-2xl px-5">

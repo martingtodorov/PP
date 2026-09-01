@@ -272,9 +272,12 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .product-card__image--alt {
     opacity: 0;
 }
-.product-card--has-alt:hover .product-card__image--primary { opacity: 0; }
-.product-card--has-alt:hover .product-card__image--alt { opacity: 1; }
-.product-card:hover .product-card__image { transform: scale(1.04); }
+/* Hover-only effects: guarded so a touch device does not need a first "hover" tap before the link opens */
+@media (hover: hover) and (pointer: fine) {
+    .product-card--has-alt:hover .product-card__image--primary { opacity: 0; }
+    .product-card--has-alt:hover .product-card__image--alt { opacity: 1; }
+    .product-card:hover .product-card__image { transform: scale(1.04); }
+}
 
 /* Quick add overlay (disabled by default to match _product-card.liquid which has no quick-add block by default) */
 .product-card__quick-add {
@@ -548,9 +551,7 @@ h1, h2, h3, h4, h5, h6, .font-display {
     }
     .collection-carousel__media { border-radius: 14px; }
 }
-@media (min-width: 1440px) {
-    .collection-carousel__item { flex: 0 0 calc((100% - 84px) / 7); }
-}
+
 .collection-carousel__media {
     aspect-ratio: 1 / 1;
     overflow: hidden;
@@ -577,7 +578,9 @@ h1, h2, h3, h4, h5, h6, .font-display {
     pointer-events: none;
     transition: background-color 0.3s ease;
 }
-.collection-carousel__item:hover .collection-carousel__media::before { background: rgba(71, 85, 105, 0.24); }
+@media (hover: hover) and (pointer: fine) {
+    .collection-carousel__item:hover .collection-carousel__media::before { background: rgba(71, 85, 105, 0.24); }
+}
 .collection-carousel__title {
     /* placement: on_image, alignment bottom-left, white */
     position: absolute;
@@ -603,7 +606,9 @@ h1, h2, h3, h4, h5, h6, .font-display {
     object-fit: cover;
     transition: transform .5s ease;
 }
-.collection-carousel__item:hover .collection-carousel__media img { transform: scale(1.04); }
+@media (hover: hover) and (pointer: fine) {
+    .collection-carousel__item:hover .collection-carousel__media img { transform: scale(1.04); }
+}
 
 .collection-carousel__title {
     /* placement: on_image, alignment bottom-left, white (set above) */
@@ -1035,7 +1040,8 @@ img { max-width: 100%; height: auto; }
 .product-card__image { object-fit: cover; object-position: center; }
 .product-carousel__track { gap: 6px; }
 @media (min-width: 1024px) {
-    .product-carousel__item { flex: 0 0 calc((100% - 18px) / 4); }
+    /* 5 full cards + a sliver of the 6th, matching purepeptide.bg */
+    .product-carousel__item { flex: 0 0 calc((100% - 32px) / 5.35); }
 }
 
 .article-card { text-align: center; }
@@ -1166,6 +1172,15 @@ img { max-width: 100%; height: auto; }
         word-break: break-word;
     }
 }
+
+/* Wide page container — homepage sections run nearly full-bleed like purepeptide.bg */
+.pp-wide {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: 16px;
+}
+@media (min-width: 640px) { .pp-wide { padding-inline: 24px; } }
+@media (min-width: 1024px) { .pp-wide { padding-inline: clamp(24px, 2.8vw, 72px); } }
 
 /* Hero: ~20px of air above and below the PurePeptide title, almost none below the CTAs */
 .pp-hero { min-height: 0; }

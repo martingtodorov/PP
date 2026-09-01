@@ -1,0 +1,79 @@
+{
+  "summary": "Iteration-9 backend + frontend testing of PurePeptide (Matrixify import, product active toggle, static pages, articles+redirects, discount import, customers, analytics, inventory, orders list + detail + fulfill/mark-paid, admin mobile responsiveness, homepage layout regression, mobile single-tap navigation). All 35 pytest cases pass and all UI checks pass. Did NOT call POST /admin/orders/{id}/send-invoice (paid Resend email) per instructions, and did NOT call AI translate. Created 1 native test order for the fulfill/mark-paid flow (test@example.com) and cancelled it in teardown.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration9.py",
+    "/app/test_reports/pytest/iteration9_results.xml"
+  ],
+  "verification": {
+    "catalog_import": {
+      "status": "PASS",
+      "evidence": "GET /api/products returns 23 imported products; all image URLs start with /api/files/ (0 shopify CDN leaks); every product has variants with price_eur+stock; GET /api/collections returns 7 collections with /api/files/ images; GET /api/files/<image> -> 200 image/*."
+    },
+    "product_active_toggle": {
+      "status": "PASS",
+      "evidence": "PATCH /api/admin/products/{id}/active {active:false} removes the product from GET /api/products but GET /api/products/{handle} still returns 200; toggling back to true restores it in the list. UI /admin/products has 23 toggle buttons (data-testid^='toggle-active-')."
+    },
+    "static_pages": {
+      "status": "PASS",
+      "evidence": "GET /api/pages/{what-are-peptides,faq,contacts,about}?locale=bg return non-empty BG html/faq_items. GET /api/admin/pages returns >=9 slugs including 'about' and 'cookies'."
+    },
+    "articles_redirects": {
+      "status": "PASS",
+      "evidence": "GET /api/articles returns imported articles; GET /api/admin/delisted-links contains 15+ entries with status=redirected."
+    },
+    "discount_import": {
+      "status": "PASS",
+      "evidence": "GET /api/admin/settings.discount_codes has >=20 codes; POST /api/discount/validate with an active percentage code returns discount_eur > 0."
+    },
+    "customers": {
+      "status": "PASS",
+      "evidence": "GET /api/admin/customers total>1000 (1252 imported), sorted DESC by total_spent; GET /api/admin/customers/{email}/orders returns {orders, orders_count, total_spent}. UI /admin/customers a row-click opens data-testid=customer-detail with data-testid=customer-orders-list."
+    },
+    "analytics": {
+      "status": "PASS",
+      "evidence": "POST /api/track {session_id,path} -> 200; GET /api/admin/analytics?range=today reports live>=1 immediately after tracking. Ranges today/7d/30d return correct bucket=hour/day/day with populated current+previous+deltas and non-empty series. Custom range with date_from/date_to works. Sales computed as subtotal-discount (never includes shipping). UI /admin/analytics has all 4 range pills (analytics-range-today/7d/30d/custom), 4 metric cards, analytics-live counter; selecting 'custom' reveals two <input type=date>."
+    },
+    "inventory": {
+      "status": "PASS",
+      "evidence": "GET /api/admin/inventory returns 30 variant rows with state ok/low/out + counters + threshold. PUT /api/admin/inventory updates stock and writes to GET /api/admin/inventory/log. PUT /api/admin/inventory/threshold changes threshold. UI /admin/inventory: 30 inv-stock inputs + inventory-log visible."
+    },
+    "orders_list": {
+      "status": "PASS",
+      "evidence": "GET /api/admin/orders?limit=50 returns normalised orders with customer{name,email,phone,address}, items, items_count, subtotal/discount/shipping/total, payment_status, fulfillment_status. Filters status=unfulfilled|unpaid|open|archived all 200. Search by email returns matching rows. Pagination via skip/limit gives disjoint pages and consistent total. UI /admin/orders: 50 admin-order-* rows + all 5 orders-tab pills."
+    },
+    "orders_actions": {
+      "status": "PASS",
+      "evidence": "Created a native PP order via /api/checkout (test@example.com). GET /api/admin/orders/{id} and GET /api/admin/orders/{order_number} both work; items have image and handle; customer has orders_count + total_spent. POST /admin/orders/{id}/fulfill -> fulfillment_status='fulfilled'. POST /admin/orders/{id}/mark-paid -> payment_status='paid'. UI /admin/orders/{id} shows all 6 testids: order-fulfillment-card, order-fulfill-btn, order-payment-card, order-send-invoice-btn, order-mark-paid-btn, order-customer-card. send-invoice NOT clicked as instructed. Test order cancelled in teardown."
+    },
+    "admin_mobile": {
+      "status": "PASS",
+      "evidence": "viewport 390x844 on /admin, /admin/orders, /admin/analytics, /admin/inventory, /admin/customers: admin-sidebar-toggle present, sidebar has transform translateX(-256px) initially (x=-256, right=0 → offscreen), tapping toggle slides to x=0 with admin-sidebar-overlay overlay, tapping admin-nav-inventory navigates and closes drawer back to x=-256. document.scrollWidth == clientWidth on every page (no horizontal overflow)."
+    },
+    "homepage_desktop": {
+      "status": "PASS",
+      "evidence": "1920x1080: 6 category tiles visible (last is a sliver on the right); product carousel card width ~332px (visible ≈ 5.7 cards — matches 5.35 requirement); PPCalculator width 650px, centred (well under 900px). Hero renders with Bulgarian copy, kicker/title/CTAs spaced within the previously verified envelope."
+    },
+    "mobile_first_tap": {
+      "status": "PASS",
+      "evidence": "viewport 390x844: clicking the first .product-carousel__item link navigates to /products/sermorelin on the FIRST click. Category tiles are anchors too. CSS hover swap is now wrapped in @media (hover: hover) and (pointer: fine)."
+    }
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 1826 lines — still growing past the 700-line threshold. Analytics, inventory, orders, pages and admin CRUD each merit their own module under a routes/ package for maintainability.",
+    "Recurring console warning 'Invalid DOM property fetchpriority. Did you mean fetchPriority?' on every render. Harmless but noisy; grep frontend for fetchpriority attributes and rename to fetchPriority.",
+    "GET /api/admin/pages returns {slugs:[...]} while GET /api/admin/orders returns {orders:[...]}. Naming is inconsistent across admin resource lists; recommend standardising on the resource name ({pages:[...]}). Current shape kept because prior iteration_8 UI depends on 'slugs'.",
+    "_period_stats loads up to 200000 visits and 50000 orders per range into memory to build session-first-seen and per-bucket aggregates. For a shop with 1886 imported orders this is fine, but move to a Mongo aggregation pipeline before scaling further.",
+    "admin_orders search regex builds q['$and']=[{'$or':[...]}] but base filter may already inject '$or' (archived/shipped filters). If a user combines status=archived with search, MongoDB will silently drop the earlier '$or' clause (top-level $or is overwritten). Consider always merging via '$and'.",
+    "admin_customer_orders queries customer_info.email but native PP orders store customer_email (top-level). This endpoint therefore returns an empty list for storefront-created customers. Query should be `$or: [{customer_email: email}, {customer_info.email: email}]` like admin_order_detail already does."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration9.py"],
+  "success_rate": {"backend": "100% (35/35)", "frontend": "100% of tested items"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 via /admin/login. Storefront checkout used test@example.com for the fulfill/mark-paid test order.",
+  "seed_data_creation": "1 native checkout order (customer test@example.com, 1 variant qty=1). Marked fulfilled + paid then cancelled via /api/admin/orders/{id}/cancel in teardown. 1 inventory stock adjustment (SKU restored to original value in the same test).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration-9 spec lives at /app/backend/tests/test_iteration9.py (35 cases, 6s runtime, no paid/AI calls). Response shapes worth remembering: GET /api/pages/{slug} -> {page:{...}}, GET /api/admin/pages -> {slugs:[{slug,label,filled}]}, GET /api/admin/orders -> {orders:[view], total, skip}. Admin sidebar on mobile is transform-translated (not display:none), so use bounding-box .x to assert open/closed, not Playwright .is_visible(). send-invoice must not be re-tested on any imported order (it will send a real Resend email); it is safe only against test@example.com via a native PP-#### order. The critical_code_review_comments include two logic bugs worth flagging to E1: admin_orders search+status $or collision, and admin_customer_orders only matching customer_info.email."
+}

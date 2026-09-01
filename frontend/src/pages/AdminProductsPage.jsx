@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Pencil, Trash2, Languages, Sparkles } from "lucide-react";
+import { Plus, Pencil, Trash2, Languages, Sparkles, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import AdminLayout from "../components/AdminLayout";
 import { api, fmtEUR, formatErr } from "../lib/api";
@@ -35,8 +35,19 @@ export default function AdminProductsPage() {
     } catch (e) { toast.error(formatErr(e)); }
   };
 
-  const remove = async (p) => {
-    if (!window.confirm(`Да изтрия ли „${p.title}"?`)) return;
+  const toggleActive = async (p) => {
+    const next = p.active === false;
+    setProducts((cur) => cur.map((x) => (x.id === p.id ? { ...x, active: next } : x)));
+    try {
+      await api.patch(`/admin/products/${p.id}/active`, { active: next });
+      toast.success(next ? "Продуктът е активен" : "Продуктът е скрит от магазина");
+    } catch (e) {
+      toast.error(formatErr(e));
+      load();
+    }
+  };
+
+  const remove = async (p) => {    if (!window.confirm(`Да изтрия ли „${p.title}"?`)) return;
     try {
       await api.delete(`/admin/products/${p.id}`);
       toast.success("Продуктът е изтрит");
@@ -92,6 +103,7 @@ export default function AdminProductsPage() {
               <th className="text-left px-4 py-3">Варианти</th>
               <th className="text-left px-4 py-3">Цена от</th>
               <th className="text-left px-4 py-3">Наличност</th>
+              <th className="text-left px-4 py-3">Активен</th>
               <th className="text-left px-4 py-3">Преводи</th>
               <th className="text-right px-4 py-3">Действия</th>
             </tr>
@@ -106,13 +118,31 @@ export default function AdminProductsPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <img src={p.image} alt="" className="w-10 h-10 object-contain bg-white border border-slate-200 rounded" />
-                      <span className="font-medium">{p.title}</span>
+                      <span className="font-medium">
+                        {p.title}
+                        {(p.variants || []).some((v) => v.sku) && (
+                          <span className="block text-[11px] font-mono text-slate-400" data-testid={`admin-product-skus-${p.handle}`}>
+                            {(p.variants || []).map((v) => v.sku).filter(Boolean).join(" · ")}
+                          </span>
+                        )}
+                      </span>
                     </div>
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-500">{p.handle}</td>
                   <td className="px-4 py-3">{p.variants?.length || 0}</td>
                   <td className="px-4 py-3 font-semibold">{fmtEUR(minPrice)}</td>
                   <td className="px-4 py-3">{stock <= 0 ? <span className="text-red-600 font-medium">Изчерпан</span> : stock}</td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => toggleActive(p)}
+                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+                        p.active === false
+                          ? "bg-slate-100 text-slate-500 border-slate-200 hover:border-slate-400"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-400"
+                      }`}
+                      data-testid={`toggle-active-${p.handle}`}>
+                      {p.active === false ? <><EyeOff className="h-3.5 w-3.5" /> Скрит</> : <><Eye className="h-3.5 w-3.5" /> Активен</>}
+                    </button>
+                  </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-1 text-xs text-slate-600">
                       <Languages className="h-3.5 w-3.5" /> {trCount}/{LOCALES.length - 1}

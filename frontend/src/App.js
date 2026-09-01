@@ -24,6 +24,9 @@ import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AdminDelistedLinksPage from "./pages/AdminDelistedLinksPage";
 import AdminLocalesPage from "./pages/AdminLocalesPage";
 import AdminPagesPage from "./pages/AdminPagesPage";
+import AdminAnalyticsPage from "./pages/AdminAnalyticsPage";
+import AdminInventoryPage from "./pages/AdminInventoryPage";
+import AdminOrderDetailPage from "./pages/AdminOrderDetailPage";
 import StaticPage from "./pages/StaticPage";
 
 const STOREFRONT = [
@@ -61,6 +64,9 @@ function App() {
                 <Route path="/admin/products/new" element={<AdminProductEditPage />} />
                 <Route path="/admin/products/:id" element={<AdminProductEditPage />} />
                 <Route path="/admin/orders" element={<AdminOrdersPage />} />
+                <Route path="/admin/orders/:id" element={<AdminOrderDetailPage />} />
+                <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
+                <Route path="/admin/inventory" element={<AdminInventoryPage />} />
                 <Route path="/admin/customers" element={<AdminCustomersPage />} />
                 <Route path="/admin/import" element={<AdminImportPage />} />
                 <Route path="/admin/settings" element={<AdminSettingsPage />} />

@@ -42,7 +42,7 @@ export default function AdminDashboardPage() {
           <Link to="/admin/orders" className="text-sm font-semibold text-coral-600">Виж всички →</Link>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[720px]">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="text-left px-6 py-3">№</th>

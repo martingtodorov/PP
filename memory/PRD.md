@@ -72,9 +72,53 @@ Domains & languages
 - Storefront `StaticPage.jsx` reads from the API with fallback to the previous hardcoded copy.
 - Tests: `/app/backend/tests/test_pages.py` (26 cases, all pass).
 
+## 2026-06 (Sept-preview session) — Real data + admin ops
+### Matrixify import (real purepeptide.bg data — replaces the demo catalog)
+- `/app/backend/matrixify_import.py` reads the Matrixify **.xlsx** export and imports:
+  23 products (variants + real SKUs + prices in EUR + stock), 7 collections, 10 static pages (bg),
+  19 blog posts, 15 Shopify redirects, 22 discount codes, 1252 customers, 1886 orders (+ spend backfill).
+  All Shopify CDN images (products, collections, articles and images inside body HTML) are downloaded into
+  Emergent object storage; nothing points at cdn.shopify.com any more. `settings.catalog_imported` blocks re-seeding.
+- Admin → **Импорт**: upload any Matrixify .xlsx, tick which sheets to import, optional "don't download images";
+  runs as a background job with a live log (`POST /api/admin/import/matrixify`, `GET /api/admin/import/jobs/{id}`).
+- Products are all active; each row in Admin → Продукти has an Активен/Скрит toggle
+  (`PATCH /api/admin/products/{id}/active`). Hidden products disappear from listings but their page still works.
+
+### Admin analytics (Shopify-style)
+- Storefront sends `POST /api/track` on every route change (session id in sessionStorage).
+- `GET /api/admin/analytics?range=today|7d|30d|custom` → live visitors (5 min), sessions, sales
+  **excluding shipping**, orders, conversion, hourly/daily series + previous-period comparison + deltas.
+- Page `/admin/analytics`: dark panel, range pills + custom date range, metric switcher, dashed comparison line.
+
+### Inventory tracking
+- `/admin/inventory`: all variants with stock, low/out badges, inline editing, editable low-stock threshold,
+  and a movement log. Checkout decrements stock and writes to `inventory_log`.
+
+### Orders (Shopify-app style)
+- List `/admin/orders`: search, filters (all / unfulfilled / unpaid / open / archived), rows with total,
+  customer • items • time, fulfillment + payment badges, shipping method, pagination.
+- Detail `/admin/orders/:id`: fulfillment card (items + "Маркирай като изпратена"), payment card
+  (subtotal / shipping / total / paid / balance, "Изпрати фактура по имейл", "Маркирай като платена"),
+  customer card where name / email / phone / shipping address are **click-to-copy** (no mailto/tel links).
+- Native and Shopify-imported orders are normalised by `_order_view`.
+- Order numbers are now random 5-char codes: 3 letters + 2 digits (e.g. `CVY72`).
+
+### Other
+- Customers page: imported customers sorted by spend, click a row for the spending history drawer.
+- Admin panel is mobile-first: off-canvas sidebar with hamburger + overlay, horizontally scrollable tables.
+- Homepage desktop layout matches purepeptide.bg: near full-bleed `.pp-wide` sections, 6 category tiles,
+  5.35 product cards visible, 5 articles per row, calculator capped at 860px.
+- Hero: ~34px of air above/below the "PurePeptide" title, ~10px under the CTAs.
+- Mobile first-tap bug fixed: all hover effects wrapped in `@media (hover: hover) and (pointer: fine)`.
+- Product page shows the SKU of the selected variant; admin product list shows all SKUs.
+- `/api/files/{path}` now disk-caches images (fast repeat loads).
+- Tested: `/app/backend/tests/test_iteration9.py` (35 cases) + iteration_9.json — all pass.
+
 ## Backlog
-- P0: real Matrixify import of the full catalog (user will supply export + theme)
+- ~~P0: real Matrixify import~~ **DONE (this session)**
 - P1: Speedy API integration with real credentials; admin payment verification workflow
+- P1: import Shopify menus into the storefront navigation (not done — current nav already matches the live site)
+- P2: split `server.py` into route modules; move analytics aggregation into a Mongo pipeline
 - P2: abandoned cart recovery, customer accounts created by admin, reviews
 
 ## Key endpoints
