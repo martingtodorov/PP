@@ -1296,6 +1296,52 @@ button.bg-coral-600:disabled { box-shadow: none; }
   .pp-variant { padding: 12px 14px; font-size: 14px; }
 }
 
+/* Product gallery thumbnails — horizontal scroll-snap carousel, never wider than the viewport */
+.pp-thumbs {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 2px;
+  max-width: 100%;
+}
+.pp-thumbs::-webkit-scrollbar { display: none; }
+.pp-thumb {
+  flex: 0 0 72px;
+  width: 72px;
+  height: 72px;
+  scroll-snap-align: start;
+  background: #fff;
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+.pp-thumb--active { border-color: #fe6f61; }
+@media (hover: hover) and (pointer: fine) {
+  .pp-thumb:hover { transform: translateY(-2px); }
+}
+@media (min-width: 640px) {
+  .pp-thumb { flex-basis: 80px; width: 80px; height: 80px; }
+}
+
+/* Package pills must never overflow on small screens */
+.pp-variants { flex-wrap: wrap; }
+@media (max-width: 480px) {
+  .pp-variant {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 11px 6px;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+  .pp-variants { gap: 8px; }
+}
+
 /* Wide page container — homepage sections run nearly full-bleed like purepeptide.bg */
 .pp-wide {
   width: 100%;
