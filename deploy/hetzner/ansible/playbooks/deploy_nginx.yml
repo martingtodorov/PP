@@ -1,0 +1,106 @@
+---
+- name: nginx + TLS + firewall on pp-front
+  hosts: frontend
+  become: true
+
+  tasks:
+    - name: Install nginx and ufw
+      apt: { name: [nginx, ufw], update_cache: true, state: present }
+      tags: [base]
+
+    - name: TLS directory
+      file: { path: "{{ ssl_dir }}", state: directory, owner: root, group: root, mode: "0700" }
+      tags: [base, config]
+
+    - name: Cloudflare Origin certificate must be uploaded manually
+      stat: { path: "{{ ssl_dir }}/{{ item }}" }
+      register: certs
+      failed_when: not certs.stat.exists
+      loop: [cert.pem, key.pem]
+      tags: [config]
+
+    - name: Lock down the key permissions
+      file: { path: "{{ ssl_dir }}/{{ item }}", owner: root, group: root, mode: "0600" }
+      loop: [cert.pem, key.pem]
+      tags: [config]
+
+    - name: Read the nginx version
+      shell: nginx -v 2>&1 | sed 's#.*/##'
+      register: nginx_version
+      changed_when: false
+      tags: [config]
+
+    # nginx >= 1.25.1 deprecates "listen ... http2"; older versions do not know "http2 on;"
+    - name: Choose the HTTP/2 syntax
+      set_fact:
+        nginx_http2_directive: "{{ 'http2on' if (nginx_version.stdout | trim is version('1.25.1', '>=')) else 'listen' }}"
+      tags: [config]
+
+    - name: Render the site config
+      template:
+        src: ../templates/nginx-purepeptide.conf.j2
+        dest: "/etc/nginx/sites-available/{{ app_name }}.conf"
+        mode: "0644"
+      notify: reload nginx
+      tags: [config]
+
+    - name: Enable the site
+      file:
+        src: "/etc/nginx/sites-available/{{ app_name }}.conf"
+        dest: "/etc/nginx/sites-enabled/{{ app_name }}.conf"
+        state: link
+        force: true
+      notify: reload nginx
+      tags: [config]
+
+    - name: Remove the default site
+      file: { path: /etc/nginx/sites-enabled/default, state: absent }
+      notify: reload nginx
+      tags: [config]
+
+    - name: Validate the configuration
+      command: nginx -t
+      changed_when: false
+      tags: [config, verify]
+
+    - name: Enable nginx
+      systemd: { name: nginx, enabled: true, state: started }
+      tags: [service]
+
+    # ---------------- firewall ----------------
+    - name: Allow SSH, HTTP, HTTPS and WireGuard
+      ufw: { rule: allow, port: "{{ item.port }}", proto: "{{ item.proto }}" }
+      loop:
+        - { port: "{{ ssh_port }}", proto: tcp }
+        - { port: "80", proto: tcp }
+        - { port: "443", proto: tcp }
+        - { port: "{{ wg_port }}", proto: udp }
+      tags: [firewall]
+
+    - name: Allow the private network
+      ufw: { rule: allow, src: "{{ private_cidr }}" }
+      tags: [firewall]
+
+    - name: Default deny incoming
+      ufw: { direction: incoming, policy: deny }
+      tags: [firewall]
+
+    - name: Enable ufw
+      ufw: { state: enabled }
+      tags: [firewall]
+
+    # ---------------- verify ----------------
+    - name: Public API smoke test
+      uri:
+        url: "https://{{ site_domains[0] }}/api/nextcart/countries"
+        status_code: 200
+        validate_certs: true
+      register: api_check
+      retries: 5
+      delay: 5
+      until: api_check.status == 200
+      tags: [verify]
+
+  handlers:
+    - name: reload nginx
+      systemd: { name: nginx, state: reloaded }

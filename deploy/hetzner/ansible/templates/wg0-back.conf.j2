@@ -1,0 +1,19 @@
+[Interface]
+Address = {{ wg_back_ip }}/24
+PrivateKey = {{ wg_back_private }}
+MTU = {{ wg_mtu }}
+# keep the private-network route intact, send everything else through the tunnel
+Table = off
+PostUp   = ip route add default dev %i table {{ nat_table }}
+PostUp   = ip rule add from all lookup {{ nat_table }} priority {{ nat_rule_priority }}
+PostUp   = ip rule add to {{ private_cidr }} lookup main priority {{ nat_rule_priority | int - 10 }}
+PostDown = ip rule del to {{ private_cidr }} lookup main priority {{ nat_rule_priority | int - 10 }} || true
+PostDown = ip rule del from all lookup {{ nat_table }} priority {{ nat_rule_priority }} || true
+PostDown = ip route del default dev %i table {{ nat_table }} || true
+
+[Peer]
+# pp-front gateway
+PublicKey = {{ wg_front_public }}
+Endpoint = {{ front_public_ip }}:{{ wg_port }}
+AllowedIPs = 0.0.0.0/0
+PersistentKeepalive = 25

@@ -1,0 +1,18 @@
+[Interface]
+Address = {{ wg_front_ip }}/24
+ListenPort = {{ wg_port }}
+PrivateKey = {{ wg_front_private }}
+MTU = {{ wg_mtu }}
+
+# NAT for the tunnel subnet
+PostUp   = iptables -t nat -A POSTROUTING -s {{ wg_front_ip | regex_replace('\.[0-9]+$', '.0') }}/24 -o {{ public_iface }} -j MASQUERADE
+PostUp   = iptables -A FORWARD -i %i -o {{ public_iface }} -j ACCEPT
+PostUp   = iptables -A FORWARD -i {{ public_iface }} -o %i -m state --state RELATED,ESTABLISHED -j ACCEPT
+PostDown = iptables -t nat -D POSTROUTING -s {{ wg_front_ip | regex_replace('\.[0-9]+$', '.0') }}/24 -o {{ public_iface }} -j MASQUERADE
+PostDown = iptables -D FORWARD -i %i -o {{ public_iface }} -j ACCEPT
+PostDown = iptables -D FORWARD -i {{ public_iface }} -o %i -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+[Peer]
+# pp-back
+PublicKey = {{ wg_back_public }}
+AllowedIPs = {{ wg_back_ip }}/32
