@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import Layout from "../components/Layout";
+import { useSeo } from "../lib/seo";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -9,10 +10,12 @@ import { Textarea } from "../components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { api, fmtEUR, fmtBGN, formatErr } from "../lib/api";
+import { api, fmtEUR, fmtBGN, formatErr, img } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 
 export default function CheckoutPage() {
+  useSeo({ title: "Плащане | PurePeptide", description: "Завършване на поръчка.", path: "/checkout", robots: "noindex,nofollow" });
+
   const { items, subtotal, clear, note, setNote, discount, discountAmount } = useCart();
   const { user } = useAuth();
   const nav = useNavigate();
@@ -133,7 +136,7 @@ export default function CheckoutPage() {
               <div className="space-y-3 max-h-72 overflow-y-auto">
                 {items.map((it) => (
                   <div key={it.variant_sku} className="flex gap-3 text-sm">
-                    <img src={it.image} alt={it.title} className="w-14 h-14 object-contain bg-white border border-slate-200 rounded" />
+                    <img src={img(it.image, 160)} alt={it.title} className="w-14 h-14 object-contain bg-white border border-slate-200 rounded" />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-slate-900 truncate">{it.title}</p>
                       <p className="text-xs text-slate-500">{it.variant_name} × {it.quantity}</p>

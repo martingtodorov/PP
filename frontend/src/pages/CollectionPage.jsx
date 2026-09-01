@@ -48,27 +48,57 @@ export default function CollectionPage() {
   });
 
   const sorted = data.products;
+  const loading = !c;
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5" data-testid="collection-skeleton">
+          <div className="h-3 w-40 bg-slate-100 rounded animate-pulse" />
+          <div className="h-9 w-72 bg-slate-100 rounded mt-5 animate-pulse" />
+          <div className="h-4 w-full max-w-2xl bg-slate-100 rounded mt-4 animate-pulse" />
+          <div className="flex gap-2 mt-8">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-9 w-28 bg-slate-100 rounded-full animate-pulse" />
+            ))}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-6 mt-10">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i}>
+                <div className="aspect-square bg-slate-100 rounded-xl animate-pulse" />
+                <div className="h-4 w-3/4 bg-slate-100 rounded mt-3 animate-pulse" />
+                <div className="h-4 w-1/3 bg-slate-100 rounded mt-2 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  const isAll = handle === "2all-the-peptides-1";
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
         <Breadcrumbs
-          items={[{ label: t("catalog"), to: lp("/collections/2all-the-peptides-1") }, { label: c?.title || handle }]}
+          items={isAll
+            ? [{ label: t("catalog") }]
+            : [{ label: t("catalog"), to: lp("/collections/2all-the-peptides-1") }, { label: c.title }]}
         />
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-4" data-testid="collection-title">
-          {c?.title || handle}
-        </h1>
-        {c?.description && (
-          <div className="pp-rte text-slate-600 mt-3 max-w-3xl leading-relaxed"
+        {/* SEO-only H1 — the visible heading is the longer one inside the description */}
+        <h1 className="pp-seo-h1" data-testid="collection-title">{c.title}</h1>
+        {c.description && (
+          <div className="pp-rte pp-rte--tight text-slate-600 mt-2 max-w-3xl leading-relaxed"
             dangerouslySetInnerHTML={{ __html: c.description }} data-testid="collection-description" />
         )}
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-wrap gap-2 mb-7 overflow-x-auto no-scrollbar" data-testid="collection-tabs">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-8">
+        <div className="flex flex-wrap gap-2 mb-4 overflow-x-auto no-scrollbar" data-testid="collection-tabs">
           <Link to={lp("/collections/2all-the-peptides-1")}
             className={`px-4 py-2 rounded-full text-sm font-medium border whitespace-nowrap transition-colors ${
-              handle === "2all-the-peptides-1" ? "bg-coral-600 text-white border-coral-600" : "bg-white text-slate-700 border-slate-200 hover:border-coral-400"
+              isAll ? "bg-coral-600 text-white border-coral-600" : "bg-white text-slate-700 border-slate-200 hover:border-coral-400"
             }`}>
             {t("catalog")}
           </Link>
@@ -81,7 +111,7 @@ export default function CollectionPage() {
           ))}
         </div>
 
-        <div className="flex justify-between items-center mb-6 text-sm">
+        <div className="flex justify-between items-center mb-4 text-sm">
           <span className="text-slate-500" data-testid="collection-count">{sorted.length} {t("productsCount")}</span>
         </div>
 

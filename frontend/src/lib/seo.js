@@ -27,15 +27,19 @@ const setLink = (rel, href, hreflang) => {
  * SEO head manager: title, description, canonical, hreflang alternates and JSON-LD.
  * `alternates` maps locale -> path (localised handles), falling back to `path`.
  */
-export function useSeo({ title, description, locale = DEFAULT_LOCALE, path = "/", alternates = {}, jsonLd, image }) {
+export function useSeo({ title, description, locale = DEFAULT_LOCALE, path = "/", alternates = {}, jsonLd, image, ogType = "website", robots = "index,follow,max-image-preview:large,max-snippet:-1" }) {
   useEffect(() => {
     const full = title ? `${title}` : "PurePeptide";
     document.title = full;
     document.documentElement.lang = LOCALE_META[locale]?.hreflang || locale;
     setMeta("name", "description", description);
+    setMeta("name", "robots", robots);
     setMeta("property", "og:title", full);
     setMeta("property", "og:description", description);
-    setMeta("property", "og:type", "website");
+    setMeta("property", "og:type", ogType);
+    setMeta("property", "og:locale", (LOCALE_META[locale]?.hreflang || locale).replace("-", "_"));
+    setMeta("name", "twitter:title", full);
+    setMeta("name", "twitter:description", description);
     const origin = window.location.origin;
     const ogImage = image
       ? (image.startsWith("http") ? image : `${origin}${image}`)
@@ -54,6 +58,7 @@ export function useSeo({ title, description, locale = DEFAULT_LOCALE, path = "/"
     };
 
     setLink("canonical", abs(locale, alternates[locale] || path));
+    setMeta("property", "og:url", abs(locale, alternates[locale] || path));
     document.head.querySelectorAll('link[rel="alternate"][hreflang]').forEach((el) => el.remove());
     LOCALES.forEach((loc) => {
       const el = document.createElement("link");
@@ -76,5 +81,5 @@ export function useSeo({ title, description, locale = DEFAULT_LOCALE, path = "/"
       s.text = JSON.stringify(jsonLd);
       document.head.appendChild(s);
     }
-  }, [title, description, locale, path, JSON.stringify(alternates), JSON.stringify(jsonLd), image]);
+  }, [title, description, locale, path, ogType, robots, JSON.stringify(alternates), JSON.stringify(jsonLd), image]);
 }

@@ -1,0 +1,75 @@
+{
+  "summary": "Iteration-15 verified all iteration-15 features: per-variant product galleries, restored long product HTML with single h1, tight product-page spacing, cart drawer with left gap, scroll-to-top on navigation, skeleton loaders (no handle flash), SEO-only 1px h1 on collections with merged breadcrumbs, technical SEO on every storefront page, WebP image variants, slim list payloads, and bolder homepage category tiles. 11/11 backend pytest cases pass. All 8 frontend flows pass at 390px mobile and 1920px desktop.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verification": {
+    "product_variants_retatrutide": {
+      "status": "PASS",
+      "evidence": "Clicking [data-testid=variant-PP-RETATRUTIDE-5MG/-10MG/-30MG] swaps [data-testid=product-main-image] to b9cb37…-retatrutide_5mg…png / 11c73636…-Retatrutide_10mg…png / 659e0969…-Retatrutide_30mg…png respectively. Thumbs contain exactly 5 items (variant image + 4 shared lab/COA) with 0 other-size offenders on all 3 sizes."
+    },
+    "product_variants_bpc157": {
+      "status": "PASS",
+      "evidence": "PP-BPC157-5MG main → 2a97fbf5…-bpc-157br5mg10mg-5909782…png; PP-BPC157-10MG main → f4518bc8…-bpc-157br5mg10mg-1385419…png (distinct DB variant images). Thumbs count=2 per variant (variant + shared)."
+    },
+    "restored_html_h2": {
+      "status": "PASS",
+      "evidence": "Retatrutide desc contains <h2>Какво е Ретатрутид?</h2>, no <h1> in description. Product page has exactly 1 h1 (product title). BPC-157 desc has <h2 class=\"p1\">Какво представлява BPC-157?</h2>."
+    },
+    "product_layout_390": {
+      "status": "PASS",
+      "evidence": "document.documentElement.scrollWidth == clientWidth (390 == 390). Thumbs have overflow-x:auto and render as horizontal carousel with data-testid=product-thumbs."
+    },
+    "cart_drawer_390": {
+      "status": "PASS",
+      "evidence": "After add-to-cart, [data-testid=cart-drawer] is present with boundingBox {x:46.8, y:0, width:343.2, height:844} — leaves ~47px gap on the left; close button exists; qty/remove/checkout controls visible in screenshot."
+    },
+    "scroll_to_top": {
+      "status": "PASS",
+      "evidence": "Scrolled home to Y=800, clicked category tile, new page window.scrollY === 0."
+    },
+    "skeletons": {
+      "status": "PASS",
+      "evidence": "At DOM-ready (before networkidle), [data-testid=collection-skeleton] present on /collections/metabolic-studies and [data-testid=page-skeleton] present on /pages/contact-1 — no raw slug flash."
+    },
+    "collection_h1_and_breadcrumbs": {
+      "status": "PASS",
+      "evidence": "/collections/metabolic-studies: [data-testid=collection-title] text='Отслабване', bounding height=1px. Visible h2 = 'Пептиди, изследвани за отслабване и метаболизъм'. Breadcrumb='Начало > Всички пептиди > Отслабване'. /collections/2all-the-peptides-1 breadcrumb='Начало > Всички пептиди' (no duplicate 'Всички')."
+    },
+    "seo_meta": {
+      "status": "PASS",
+      "evidence": "Home: og:type=website, 12 hreflangs (11 langs + x-default), 1 JSON-LD, robots='index,follow,max-image-preview:large,max-snippet:-1', canonical present. Product /products/21-retatrutide-5: og:type=product, 12 hreflangs, 1 JSON-LD, correct canonical. /cart robots='noindex,follow'."
+    },
+    "performance": {
+      "status": "PASS",
+      "evidence": "Homepage total content-length sum ≈ 635 KB across 75 responses (down from old 4.8MB baseline and even below ~1.5MB dev target). Product images served as image/webp when ?w= is in ALLOWED_WIDTHS {160,300,480,600,900,1200}. /api/products, /api/articles, /api/collections list responses contain no description/body_html/translations fields."
+    },
+    "regression_admin_login": {
+      "status": "PASS",
+      "evidence": "POST /api/auth/login with admin@purepeptide.bg returns 200 with token."
+    },
+    "homepage_category_tiles": {
+      "status": "PASS",
+      "evidence": "Desktop 1920: .collection-carousel__title computed font-weight=800 (bolder as requested)."
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration15.py",
+    "/app/test_reports/pytest/iteration15.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py serve_file (line 1509) only produces WebP for w in ALLOWED_WIDTHS={160,300,480,600,900,1200}. Requesting ?w=800 (not in set) silently returns the original PNG (verified: 435 KB PNG vs 20 KB WebP at w=600). If the frontend ever emits a non-allowed width, users get the fat original. Consider snapping to the nearest allowed width or expanding the set.",
+    "HEAD /api/files/... returns 405. Cloudflare/browser preflight checks that use HEAD will fail. Add HEAD support or accept GET-only.",
+    "Iteration-14 finding (React Router v6 pattern '/pages/html-sitemap-:kind' silently falling through to StaticPage) was not part of iteration-15 scope but remains open — no retest done here per agent-to-agent note (bulk-translate job running, no backend edits)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration15.py (new)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (12/12 checks across mobile 390 & desktop 1920)"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 (verified /api/auth/login 200)",
+  "seed_data_creation": "None — read-only verification. Did not restart backend (bulk-translate job protected per agent-to-agent note).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration-15 all-green. Backend WebP variants only work for widths in ALLOWED_WIDTHS={160,300,480,600,900,1200}; observed frontend uses ?w=900 which is fine. Cart drawer at 390px is 343.2px wide with left offset 46.8px. Collection SEO h1 is 1px tall via .pp-seo-h1. Skeleton testids: collection-skeleton, page-skeleton. Long-running AI bulk-translate job still running in background — do not restart backend or call /api/admin/translate*.",
+  "rca of the issue": "N/A — no bugs found this iteration. All 10 requested features and the regression checks pass on both mobile 390x844 and desktop 1920x900."
+}

@@ -4,7 +4,7 @@ import Layout, { USPRow } from "../components/Layout";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PPCalculator from "../components/PPCalculator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion";
-import { api } from "../lib/api";
+import { api, img } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { FAQ_ITEMS, pick } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
@@ -52,6 +52,21 @@ const BODY = {
   },
 };
 
+const PAGE_TITLES = {
+  "какво-са-пептиди": "Какво са пептидите",
+  faq: "Често задавани въпроси",
+  "contact-1": "Контакти",
+  "chemical-analysis": "Химичен анализ",
+  "become-a-distributor": "Партньори",
+  "about-1": "За нас",
+  cookies: "Бисквитки",
+  "scientific-literature": "Научни изследвания",
+  "privacy-policy": "Политика за поверителност",
+  "refund-policy": "Възстановяване на суми",
+  "terms-conditions": "Общи условия",
+  "delivery-and-payment": "Доставка и плащане",
+};
+
 export default function StaticPage() {
   const { slug } = useParams();
   const { lp, t, locale } = useLocaleCtx();
@@ -75,7 +90,8 @@ export default function StaticPage() {
   const isFaq = slug === "faq";
   const isArticles = slug === "articles";
   const faqItems = remote?.faq_items?.length ? remote.faq_items : pick(FAQ_ITEMS, locale);
-  const title = isArticles ? t("articles") : remote?.title || (isFaq ? t("faq") : page?.title) || slug;
+  const loading = remote === null && !fallback && !isArticles;
+  const title = isArticles ? t("articles") : remote?.title || (isFaq ? t("faq") : page?.title) || (loading ? "" : PAGE_TITLES[slug] || slug);
 
   useSeo({
     title: remote?.seo_title || `${title} | PurePeptide`,
@@ -99,6 +115,22 @@ export default function StaticPage() {
     ),
   });
 
+  if (loading) {
+    return (
+      <Layout>
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-14" data-testid="page-skeleton">
+          <div className="h-3 w-40 bg-slate-100 rounded animate-pulse" />
+          <div className="h-9 w-2/3 bg-slate-100 rounded mt-5 animate-pulse" />
+          <div className="space-y-3 mt-8">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-4 bg-slate-100 rounded animate-pulse" style={{ width: `${90 - (i % 3) * 12}%` }} />
+            ))}
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-14">
@@ -121,7 +153,7 @@ export default function StaticPage() {
             {articles.map((a) => (
               <li key={a.handle} className="flex gap-4">
                 <Link to={lp(`/articles/${a.handle}`)} className="w-28 h-20 flex-shrink-0 bg-white border border-slate-200 rounded-lg overflow-hidden">
-                  <img src={a.image} alt={a.title} className="w-full h-full object-contain" />
+                  <img src={img(a.image, 480)} alt={a.title} className="w-full h-full object-contain" loading="lazy" decoding="async" />
                 </Link>
                 <div>
                   <Link to={lp(`/articles/${a.handle}`)} className="font-semibold text-slate-900 hover:text-coral-600">

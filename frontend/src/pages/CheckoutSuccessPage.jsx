@@ -3,10 +3,13 @@ import { useParams, Link } from "react-router-dom";
 import { CheckCircle2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import Layout from "../components/Layout";
+import { useSeo } from "../lib/seo";
 import { Button } from "../components/ui/button";
 import { api, fmtEUR, fmtBGN } from "../lib/api";
 
 export default function CheckoutSuccessPage() {
+  useSeo({ title: "Благодарим за поръчката | PurePeptide", description: "Поръчката е получена.", path: "/checkout/success", robots: "noindex,nofollow" });
+
   const { orderId } = useParams();
   const [data, setData] = useState(null);
 

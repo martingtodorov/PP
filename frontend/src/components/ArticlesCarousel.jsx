@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ArrowRight } from "lucide-react";
+import { img } from "../lib/api";
 
 /** Scrollable articles carousel — one row only, arrows on desktop, swipe on mobile. */
 export default function ArticlesCarousel({ articles, lp }) {
@@ -62,7 +63,7 @@ export default function ArticlesCarousel({ articles, lp }) {
         {articles.map((a) => (
           <div key={a.handle} className="article-carousel__item">
             <Link to={lp(`/articles/${a.handle}`)} className="article-card" data-testid={`article-${a.handle}`}>
-              <div className="article-card__media"><img src={a.image} alt={a.title} loading="lazy" /></div>
+              <div className="article-card__media"><img src={img(a.image, 480)} alt={a.title} loading="lazy" decoding="async" /></div>
               <h3 className="article-card__title">{a.title}</h3>
             </Link>
           </div>

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import Layout, { USPRow } from "../components/Layout";
 import ProductsCarousel from "../components/ProductsCarousel";
 import Breadcrumbs from "../components/Breadcrumbs";
-import { api, fmtEUR, fmtBGN, showsBGN } from "../lib/api";
+import { api, fmtEUR, fmtBGN, showsBGN, img } from "../lib/api";
 import { useCart } from "../context/CartContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { PRODUCT_BLOCKS, pick, LOCALES } from "../i18n/locales";
@@ -79,6 +79,7 @@ export default function ProductPage() {
     description: p
       ? p.seo_description || (p.description || "").replace(/<[^>]+>/g, "").slice(0, 155)
       : "",
+    ogType: "product",
     locale,
     path: `/products/${handle}`,
     alternates,
@@ -117,7 +118,7 @@ export default function ProductPage() {
           {/* Gallery */}
           <div className="min-w-0">
             <div className="aspect-square w-full max-w-full bg-white rounded-xl overflow-hidden">
-              <img src={images[imgIdx]} alt={p.title} className="w-full h-full object-contain px-2 sm:px-4 py-0" data-testid="product-main-image" />
+              <img src={img(images[imgIdx], 900)} alt={p.title} className="w-full h-full object-contain px-2 sm:px-4 py-0" data-testid="product-main-image" />
             </div>
             {images.length > 1 && (
               <div className="pp-thumbs -mx-4 px-4 sm:mx-0 sm:px-0 mt-1 sm:mt-1.5" data-testid="product-thumbs">
@@ -125,7 +126,7 @@ export default function ProductPage() {
                   <button key={i} onClick={() => setImgIdx(i)}
                     className={`pp-thumb${i === imgIdx ? " pp-thumb--active" : ""}`}
                     aria-label={`Image ${i + 1}`} data-testid={`product-thumb-${i}`}>
-                    <img src={src} alt="" className="w-full h-full object-contain px-1.5 py-0" />
+                    <img src={img(src, 160)} alt="" className="w-full h-full object-contain px-1.5 py-0" loading="lazy" decoding="async" />
                   </button>
                 ))}
               </div>
@@ -134,7 +135,7 @@ export default function ProductPage() {
 
           {/* Purchase panel */}
           <div className="space-y-5">
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight" data-testid="product-title">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight py-1.5" data-testid="product-title">
               {p.title}
             </h1>
             {p.subtitle && <p className="text-sm text-slate-500 -mt-3">{p.subtitle}</p>}
@@ -170,7 +171,7 @@ export default function ProductPage() {
               </p>
             )}
 
-            <div className="flex items-stretch gap-3">
+            <div className="flex items-stretch gap-3 pt-1.5 pb-1">
               <div className="flex items-center border border-slate-300 rounded-md">
                 <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 py-2.5 text-slate-600" aria-label="-"><Minus className="h-4 w-4" /></button>
                 <span className="w-10 text-center text-sm font-medium" data-testid="qty-value">{qty}</span>

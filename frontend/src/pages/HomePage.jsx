@@ -6,13 +6,13 @@ import ProductsCarousel from "../components/ProductsCarousel";
 import ArticlesCarousel from "../components/ArticlesCarousel";
 import PPCalculator from "../components/PPCalculator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion";
-import { api } from "../lib/api";
+import { api, img } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { TRUST_CARDS, FAQ_ITEMS, pick } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
 import { graph, organizationLd, websiteLd } from "../lib/schema";
 
-const HERO_BG = "/hero-home.png";
+const HERO_BG = "/hero-home.webp";
 
 const CollectionsCarousel = ({ collections }) => {
   const trackRef = useRef(null);
@@ -62,7 +62,7 @@ const CollectionsCarousel = ({ collections }) => {
           <Link key={c.handle} to={lp(`/collections/${c.handle}`)} className="collection-carousel__item"
             data-testid={`category-${c.handle}`} title={c.title}>
             <div className="collection-carousel__media">
-              <img src={c.image} alt={c.title} loading="lazy" />
+              <img src={img(c.image, 480)} alt={c.title} loading="lazy" decoding="async" />
               <h3 className="collection-carousel__title">{c.title}</h3>
             </div>
           </Link>
@@ -150,12 +150,12 @@ export default function HomePage() {
             <div className="pp-track">
               <div className="pp-set">
                 {logos.map((src, i) => (
-                  <div key={`a-${i}`} className="pp-slide"><img src={src} alt={`Logo ${i + 1}`} loading="eager" /></div>
+                  <div key={`a-${i}`} className="pp-slide"><img src={src} alt={`Logo ${i + 1}`} loading="lazy" decoding="async" width="120" height="40" /></div>
                 ))}
               </div>
               <div className="pp-set" aria-hidden="true">
                 {logos.map((src, i) => (
-                  <div key={`b-${i}`} className="pp-slide"><img src={src} alt="" loading="eager" /></div>
+                  <div key={`b-${i}`} className="pp-slide"><img src={src} alt="" loading="lazy" decoding="async" aria-hidden="true" width="120" height="40" /></div>
                 ))}
               </div>
             </div>

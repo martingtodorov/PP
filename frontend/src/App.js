@@ -1,5 +1,6 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
@@ -54,6 +55,15 @@ const STOREFRONT = [
 
 const PREFIXES = ["", ...LOCALES.filter((l) => l !== DEFAULT_LOCALE).map((l) => `/${l}`)];
 
+/** Every navigation starts at the top of the page. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 function App() {
   return (
     <div className="App">
@@ -61,6 +71,7 @@ function App() {
         <CartProvider>
           <BrowserRouter>
             <LocaleProvider>
+              <ScrollToTop />
               <Toaster position="top-right" richColors />
               <Routes>
                 {PREFIXES.map((prefix) =>

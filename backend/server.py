@@ -413,11 +413,17 @@ def clean_doc(d: Dict[str, Any]) -> Dict[str, Any]:
     return d
 
 
+def slim(docs: List[Dict[str, Any]], *fields: str) -> List[Dict[str, Any]]:
+    """Drop heavy fields (long HTML, raw translations) from list payloads."""
+    drop = set(fields) | {"translations"}
+    return [{k: v for k, v in d.items() if k not in drop} for d in docs]
+
+
 @api.get("/collections")
 async def list_collections(locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
     docs = await db.collections_cat.find({}, {"_id": 0}).sort("sort_order", 1).to_list(100)
-    return {"collections": localize_list(docs, loc)}
+    return {"collections": slim(localize_list(docs, loc), "product_order")}
 
 
 def _apply_manual_order(prods: List[Dict[str, Any]], order: Optional[List[str]]) -> List[Dict[str, Any]]:
@@ -448,9 +454,9 @@ async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     ).sort("sort_order", 1).to_list(50)
     prods = _apply_manual_order(prods, col.get("product_order"))
     return {
-        "collection": localize_doc(col, loc),
-        "products": localize_list(prods, loc),
-        "siblings": localize_list(siblings, loc),
+        "collection": slim([localize_doc(col, loc)], "product_order")[0],
+        "products": slim(localize_list(prods, loc), "description"),
+        "siblings": slim(localize_list(siblings, loc), "description", "product_order"),
     }
 
 
@@ -474,7 +480,7 @@ async def list_products(
     if not search:
         all_col = await db.collections_cat.find_one({"handle": ALL_COLLECTION}, {"_id": 0, "product_order": 1})
         docs = _apply_manual_order(docs, (all_col or {}).get("product_order"))
-    return {"products": localize_list(docs[:limit], loc)}
+    return {"products": slim(localize_list(docs[:limit], loc), "description")}
 
 
 @api.get("/products/{handle}")
@@ -518,7 +524,7 @@ async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
 async def list_articles(locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
     docs = await db.articles.find({}, {"_id": 0}).to_list(50)
-    return {"articles": localize_list(docs, loc)}
+    return {"articles": slim(localize_list(docs, loc), "body")}
 
 
 @api.get("/locales")
@@ -1461,8 +1467,30 @@ IMAGE_CACHE = Path(__file__).parent / ".image_cache"
 IMAGE_CACHE.mkdir(exist_ok=True)
 
 
+ALLOWED_WIDTHS = {160, 300, 480, 600, 900, 1200}
+
+
+def _webp_variant(data: bytes, width: int, cache_file: Path) -> bytes:
+    """Resize + convert to WebP once, then serve from disk cache."""
+    if cache_file.exists():
+        return cache_file.read_bytes()
+    from io import BytesIO
+
+    from PIL import Image
+
+    im = Image.open(BytesIO(data))
+    im = im.convert("RGBA" if im.mode in ("RGBA", "LA", "P") else "RGB")
+    if im.width > width:
+        im.thumbnail((width, width * 4), Image.LANCZOS)
+    buf = BytesIO()
+    im.save(buf, "WEBP", quality=82, method=5)
+    out = buf.getvalue()
+    cache_file.write_bytes(out)
+    return out
+
+
 @api.get("/files/{path:path}")
-async def serve_file(path: str):
+async def serve_file(path: str, w: int = 0):
     record = await db.files.find_one({"storage_path": path, "is_deleted": False})
     if not record:
         raise HTTPException(404, "Файлът не е намерен")
@@ -1477,6 +1505,15 @@ async def serve_file(path: str):
             cache_file.write_bytes(data)
         except Exception:
             raise HTTPException(404, "Файлът не е намерен")
+
+    if w in ALLOWED_WIDTHS and content_type.startswith("image/") and "svg" not in content_type:
+        try:
+            variant = IMAGE_CACHE / f"{cache_file.name}-w{w}.webp"
+            data = _webp_variant(data, w, variant)
+            content_type = "image/webp"
+        except Exception as ex:
+            log.warning("WebP variant failed for %s: %s", path, ex)
+
     return Response(
         content=data,
         media_type=content_type,
@@ -2215,7 +2252,11 @@ async def admin_bulk_translate(payload: BulkTranslateIn, user=Depends(require_ad
     targets = [normalize_locale(l) for l in (payload.locales or LOCALES) if normalize_locale(l) != "bg"]
     running = await db.translate_jobs.find_one({"status": {"$in": ["queued", "running"]}}, {"_id": 0})
     if running:
-        return {"job": running, "message": "Вече има активен превод"}
+        stale = (datetime.now(timezone.utc) - datetime.fromisoformat(running["updated_at"])).total_seconds() > 180
+        if stale:
+            await db.translate_jobs.update_one({"id": running["id"]}, {"$set": {"status": "stopped"}})
+        else:
+            return {"job": running, "message": "Вече има активен превод"}
     job_id = str(uuid.uuid4())
     await db.translate_jobs.insert_one({
         "id": job_id, "status": "queued", "resource": payload.resource, "locales": targets,

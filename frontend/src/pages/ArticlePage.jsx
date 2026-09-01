@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import Layout, { USPRow } from "../components/Layout";
 import Breadcrumbs from "../components/Breadcrumbs";
 import ProductCard from "../components/ProductCard";
-import { api } from "../lib/api";
+import { api, img } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { useSeo } from "../lib/seo";
 import { graph, articleLd, breadcrumbLd, organizationLd } from "../lib/schema";
@@ -29,6 +29,7 @@ export default function ArticlePage() {
   useSeo({
     title: article ? (article.seo_title || `${article.title} | PurePeptide`) : "PurePeptide",
     description: article?.seo_description || article?.excerpt || "",
+    ogType: "article",
     locale,
     path: `/articles/${handle}`,
     image: article?.image,
@@ -55,7 +56,7 @@ export default function ArticlePage() {
           {article.title}
         </h1>
         <div className="aspect-[16/9] bg-white border border-slate-200 rounded-xl overflow-hidden mt-6">
-          <img src={article.image} alt={article.title} className="w-full h-full object-contain" />
+          <img src={img(article.image, 900)} alt={article.title} className="w-full h-full object-contain" decoding="async" />
         </div>
         <div className="pp-rte mt-8" data-testid="article-body">
           <p className="text-lg text-slate-700">{article.excerpt}</p>

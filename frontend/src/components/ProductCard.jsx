@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { fmtEUR, fmtBGN, showsBGN } from "../lib/api";
+import { fmtEUR, fmtBGN, showsBGN, img } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { useCart } from "../context/CartContext";
 
@@ -35,9 +35,9 @@ export default function ProductCard({ product, showAddToCart = false }) {
     >
       <Link to={lp(`/products/${product.handle}`)} className="product-card__link" title={product.title}>
         <div className="product-card__media">
-          <img src={primary} alt={product.title} className="product-card__image product-card__image--primary" loading="lazy" />
+          <img src={img(primary, 480)} alt={product.title} className="product-card__image product-card__image--primary" loading="lazy" decoding="async" />
           {hasAlt && (
-            <img src={alt} alt="" className="product-card__image product-card__image--alt" loading="lazy" aria-hidden="true" />
+            <img src={img(alt, 480)} alt="" className="product-card__image product-card__image--alt" loading="lazy" decoding="async" aria-hidden="true" />
           )}
           <div className="product-badges product-badges--top-left">
             {hasCompare && !out && (
