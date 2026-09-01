@@ -113,7 +113,7 @@ export default function ProductPage() {
           ]}
         />
 
-        <div className="grid lg:grid-cols-2 gap-10 lg:gap-14 mt-5">
+        <div className="grid lg:grid-cols-2 gap-0 lg:gap-14 mt-0">
           {/* Gallery */}
           <div className="min-w-0">
             <div className="aspect-square w-full max-w-full bg-white rounded-xl overflow-hidden">
