@@ -73,15 +73,15 @@ export default function ProductPage() {
 
         <div className="grid lg:grid-cols-2 gap-10 lg:gap-14 mt-5">
           {/* Gallery */}
-          <div>
-            <div className="aspect-square bg-white border border-slate-200 rounded-xl overflow-hidden">
-              <img src={images[imgIdx]} alt={p.title} className="w-full h-full object-contain p-6" data-testid="product-main-image" />
+          <div className="min-w-0">
+            <div className="aspect-square w-full max-w-full bg-white rounded-xl overflow-hidden">
+              <img src={images[imgIdx]} alt={p.title} className="w-full h-full object-contain p-2 sm:p-4" data-testid="product-main-image" />
             </div>
             {images.length > 1 && (
-              <div className="flex gap-3 mt-4 overflow-x-auto no-scrollbar">
+              <div className="pp-thumbs -mx-4 px-4 sm:mx-0 sm:px-0 mt-4" data-testid="product-thumbs">
                 {images.map((src, i) => (
                   <button key={i} onClick={() => setImgIdx(i)}
-                    className={`w-20 h-20 flex-shrink-0 bg-white border rounded-lg overflow-hidden transition-colors ${i === imgIdx ? "border-coral-600" : "border-slate-200"}`}
+                    className={`pp-thumb${i === imgIdx ? " pp-thumb--active" : ""}`}
                     aria-label={`Image ${i + 1}`} data-testid={`product-thumb-${i}`}>
                     <img src={src} alt="" className="w-full h-full object-contain p-1.5" />
                   </button>
