@@ -29,20 +29,27 @@ const tokensInUrl = (url, tokens) => {
  * (lab tests / COA / photos that mention every size), never the other variants' designs.
  */
 export const variantGallery = (images, variants, index) => {
+  if (!variants || variants.length < 2) return images;
+  const own = variants[index]?.image;
+  if (own) {
+    const others = variants.filter((_, i) => i !== index).map((v) => v.image).filter(Boolean);
+    const rest = images.filter((u) => u !== own && !others.includes(u));
+    return [own, ...rest];
+  }
   const tokens = variants.map((v) => sizeToken(v.name)).filter(Boolean);
   const current = tokens[index];
   if (!current || tokens.length < 2) return images;
-  const own = [];
+  const mine = [];
   const shared = [];
   images.forEach((url) => {
     const hits = tokensInUrl(url, tokens);
     if (hits.length === 1) {
-      if (hits[0] === current) own.push(url);
+      if (hits[0] === current) mine.push(url);
     } else {
       shared.push(url);
     }
   });
-  const gallery = [...own, ...shared];
+  const gallery = [...mine, ...shared];
   return gallery.length ? gallery : images;
 };
 
@@ -110,7 +117,7 @@ export default function ProductPage() {
           {/* Gallery */}
           <div className="min-w-0">
             <div className="aspect-square w-full max-w-full bg-white rounded-xl overflow-hidden">
-              <img src={images[imgIdx]} alt={p.title} className="w-full h-full object-contain p-2 sm:p-4" data-testid="product-main-image" />
+              <img src={images[imgIdx]} alt={p.title} className="w-full h-full object-contain px-2 sm:px-4 py-0" data-testid="product-main-image" />
             </div>
             {images.length > 1 && (
               <div className="pp-thumbs -mx-4 px-4 sm:mx-0 sm:px-0 mt-1 sm:mt-1.5" data-testid="product-thumbs">
@@ -118,7 +125,7 @@ export default function ProductPage() {
                   <button key={i} onClick={() => setImgIdx(i)}
                     className={`pp-thumb${i === imgIdx ? " pp-thumb--active" : ""}`}
                     aria-label={`Image ${i + 1}`} data-testid={`product-thumb-${i}`}>
-                    <img src={src} alt="" className="w-full h-full object-contain p-1.5" />
+                    <img src={src} alt="" className="w-full h-full object-contain px-1.5 py-0" />
                   </button>
                 ))}
               </div>
