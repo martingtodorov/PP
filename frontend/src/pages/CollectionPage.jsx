@@ -90,8 +90,8 @@ export default function CollectionPage() {
           </select>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-          {sorted.map((p) => <ProductCard key={p.id} product={p} />)}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-2 sm:gap-x-3 gap-y-6">
+          {sorted.map((p) => <ProductCard key={p.id} product={p} showAddToCart />)}
         </div>
         {sorted.length === 0 && <p className="text-center text-slate-500 py-20">{t("emptyCollection")}</p>}
       </div>
