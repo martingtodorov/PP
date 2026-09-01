@@ -14,6 +14,7 @@ import { api, fmtEUR, fmtBGN, showsBGN, formatErr, img } from "../lib/api";
 import { toast } from "sonner";
 import PreCheckoutModal from "./PreCheckoutModal";
 import CookieConsent from "./CookieConsent";
+import { setSiteMedia, siteMedia } from "../lib/media";
 import { prefetchCheckout } from "../lib/checkoutPrefetch";
 
 const Price = ({ eur, className = "" }) => (
@@ -499,7 +500,7 @@ const Header = ({ collections, settings }) => {
             aria-label="PurePeptide"
           >
             <img
-              src="/logo-header.png"
+              src={siteMedia("logo", "/logo-header.png")}
               alt="PurePeptide"
               width="220"
               height="44"
@@ -527,7 +528,7 @@ const Header = ({ collections, settings }) => {
         {/* ---------- desktop: one row, logo left of the nav, search next to cart ---------- */}
         <div className="hidden lg:flex max-w-7xl mx-auto px-6 xl:px-8 h-20 items-center gap-8" data-testid="desktop-header">
           <Link to={lp("/")} className="flex-shrink-0" aria-label="PurePeptide" data-testid="logo-link-desktop">
-            <img src="/logo-header.png" alt="PurePeptide" width="240" height="48" className="h-10 w-auto" fetchPriority="high" decoding="async" />
+            <img src={siteMedia("logo", "/logo-header.png")} alt="PurePeptide" width="240" height="48" className="h-10 w-auto" fetchPriority="high" decoding="async" />
           </Link>
 
           <nav className="flex items-center gap-7" aria-label="Primary" data-testid="desktop-nav">
@@ -621,7 +622,7 @@ const Footer = ({ collections, articles, settings }) => {
     <footer className="bg-slate-900 text-white mt-20" data-testid="footer">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 grid grid-cols-1 md:grid-cols-4 gap-10">
         <div>
-          <img src="/logo-white.svg" alt="PurePeptide" className="h-8 w-auto" />
+          <img src={siteMedia("logo_light", "/logo-white.svg")} alt="PurePeptide" className="h-8 w-auto" />
           <p className="text-slate-300 text-sm mt-3 leading-relaxed">{locale === "bg" ? (settings.tagline || t("tagline")) : t("tagline")}</p>
           <p className="text-sm font-semibold mt-5">{t("newsletter")}</p>
           <p className="text-xs text-slate-400 mt-1">{t("newsletterSub")}</p>
@@ -735,6 +736,7 @@ export default function Layout({ children }) {
         setCollections(c.data.collections.filter((x) => (x.base_handle || x.handle) !== "2all-the-peptides-1" && !x.nav_hidden));
         setArticles(a.data.articles);
         setSettings(s.data);
+        setSiteMedia(s.data.media);
       }
     );
   }, [locale]);

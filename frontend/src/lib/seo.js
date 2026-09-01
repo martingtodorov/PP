@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { LOCALES, LOCALE_META, DEFAULT_LOCALE } from "../i18n/locales";
+import { LOCALES, LOCALE_META, DEFAULT_LOCALE, isProdHost } from "../i18n/locales";
+import { siteMedia } from "./media";
 
 const setMeta = (attr, key, content) => {
   let el = document.head.querySelector(`meta[${attr}="${key}"]`);
@@ -41,15 +42,14 @@ export function useSeo({ title, description, locale = DEFAULT_LOCALE, path = "/"
     setMeta("name", "twitter:title", full);
     setMeta("name", "twitter:description", description);
     const origin = window.location.origin;
-    const ogImage = image
-      ? (image.startsWith("http") ? image : `${origin}${image}`)
-      : `${origin}/og-image.jpg`;
+    const rawImage = image || siteMedia("og", "/og-image.jpg");
+    const ogImage = rawImage.startsWith("http") ? rawImage : `${origin}${rawImage}`;
     setMeta("property", "og:image", ogImage);
     setMeta("property", "og:site_name", "PurePeptide");
     setMeta("name", "twitter:image", ogImage);
     setMeta("name", "twitter:card", "summary_large_image");
 
-    const onProd = window.location.host.includes("purepeptide.");
+    const onProd = isProdHost(window.location.host);
     const abs = (loc, p) => {
       const meta = LOCALE_META[loc];
       if (onProd) return `${meta.origin}${meta.prefix}${p === "/" ? "" : p}`;

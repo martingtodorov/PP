@@ -29,6 +29,7 @@ SITE_MEDIA = {
     "logo": "logo-header.png",
     "logo_light": "logo-white.svg",
     "og": "og-image.jpg",
+    "icon": "favicon-512.png",
 }
 EXT_URL = re.compile(r'https?://[^\s"\'<>)]+?\.(?:png|jpe?g|webp|gif|avif)(?:\?[^\s"\'<>)]*)?', re.I)
 CONTENT_COLLECTIONS = ["products", "collections", "articles", "pages", "settings"]

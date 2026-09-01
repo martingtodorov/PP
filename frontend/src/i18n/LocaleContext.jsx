@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LOCALES, DEFAULT_LOCALE, LOCALE_META, translate, applyLocaleRoutes } from "./locales";
+import { LOCALES, DEFAULT_LOCALE, LOCALE_META, translate, applyLocaleRoutes, isProdHost } from "./locales";
 import { api } from "../lib/api";
 
 const LocaleContext = createContext({ locale: DEFAULT_LOCALE });
@@ -44,7 +44,7 @@ export function LocaleProvider({ children }) {
     const localeUrl = (target, path = "/") => {
       const meta = LOCALE_META[target];
       const host = typeof window !== "undefined" ? window.location.host : "";
-      const onProdDomain = host.includes("purepeptide.");
+      const onProdDomain = isProdHost(host);
       const p = path.startsWith("/") ? path : `/${path}`;
       if (onProdDomain) return `${meta.origin}${meta.prefix}${p === "/" ? "" : p}`;
       const localPrefix = target === DEFAULT_LOCALE ? "" : `/${target}`;

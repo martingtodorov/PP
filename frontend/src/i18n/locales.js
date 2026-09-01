@@ -1,9 +1,14 @@
 /* PurePeptide localisation registry.
-   bg = purepeptide.bg · en = purepeptide.eu · gr = purepeptide.gr · ro = purepeptide.ro
+   bg = purepeptide.bg (alias: purepeptide-labs.bg) · en = purepeptide.eu
+   gr = purepeptide.gr · ro = purepeptide.ro
    fr/de/cz/hu/pl/sk/si live under purepeptide.eu/<prefix> */
 
 export const LOCALES = ["bg", "en", "fr", "de", "cz", "hu", "pl", "sk", "si", "gr", "ro"];
 export const DEFAULT_LOCALE = "bg";
+
+/** Live storefront hosts, including the Bulgarian alias — canonical URLs stay on purepeptide.bg. */
+export const PROD_HOST_RE = /(^|\.)purepeptide(-labs)?\.(bg|eu|ro|gr)$/i;
+export const isProdHost = (host = "") => PROD_HOST_RE.test((host || "").split(":")[0]);
 
 export const LOCALE_META = {
   bg: { label: "Български", hreflang: "bg-BG", origin: "https://purepeptide.bg", prefix: "" },

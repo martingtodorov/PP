@@ -1,6 +1,12 @@
 /** Shared JSON-LD builders (schema.org) — Organization, WebSite, Breadcrumbs, Product, Article, FAQ. */
 
+import { siteMedia } from "./media";
+
 const ORIGIN = () => (typeof window !== "undefined" ? window.location.origin : "https://purepeptide.bg");
+const asset = (key, fallback) => {
+  const url = siteMedia(key, fallback);
+  return url.startsWith("http") ? url : `${ORIGIN()}${url}`;
+};
 
 export const ORG_ID = () => `${ORIGIN()}/#organization`;
 export const SITE_ID = () => `${ORIGIN()}/#website`;
@@ -10,8 +16,8 @@ export const organizationLd = (settings = {}) => ({
   "@id": ORG_ID(),
   name: settings.site_name || "PurePeptide",
   url: `${ORIGIN()}/`,
-  logo: { "@type": "ImageObject", url: `${ORIGIN()}/favicon-512.png`, width: 512, height: 512 },
-  image: `${ORIGIN()}/og-image.jpg`,
+  logo: { "@type": "ImageObject", url: asset("icon", "/favicon-512.png"), width: 512, height: 512 },
+  image: asset("og", "/og-image.jpg"),
   email: settings.contact_email || "contact@purepeptide.bg",
   description:
     settings.tagline ||
