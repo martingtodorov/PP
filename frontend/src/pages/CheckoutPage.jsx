@@ -33,11 +33,34 @@ export default function CheckoutPage() {
     if (items.length === 0 && !placed) nav(lp("/cart"));
   }, [items.length, nav]);
 
+  const [pre, setPre] = useState(null);
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem("pp_precheckout");
+    if (!raw) return;
+    try {
+      const p = JSON.parse(raw);
+      setPre(p);
+      setShippingMethod(p.delivery.method_key);
+      const a = p.delivery.address;
+      const o = p.delivery.office;
+      setForm((f) => ({
+        ...f,
+        full_name: `${p.contact.first_name} ${p.contact.last_name}`.trim() || f.full_name,
+        email: p.contact.email || f.email,
+        phone: p.contact.phone || f.phone,
+        line1: o ? `${o.name}${o.address ? `, ${o.address}` : ""}` : [a?.street, a?.number].filter(Boolean).join(" "),
+        city: o?.city || a?.city || "",
+        postal_code: o?.postal_code || a?.postal_code || f.postal_code,
+      }));
+    } catch { /* ignore corrupted state */ }
+  }, []);
+
   useEffect(() => {
     if (user) setForm((f) => ({ ...f, full_name: user.name || f.full_name, email: user.email || f.email, phone: user.phone || f.phone }));
   }, [user]);
 
-  const shipping = shippingMethod === "speedy" ? 7.49 : 5.99;
+  const shipping = pre ? pre.delivery.price_amount : (shippingMethod === "speedy" ? 7.49 : 5.99);
   const finalShipping = subtotal >= 100 ? 0 : shipping;
   const total = Math.max(subtotal - discountAmount, 0) + finalShipping;
 
@@ -55,12 +78,14 @@ export default function CheckoutPage() {
         customer_name: form.full_name,
         customer_phone: form.phone,
         shipping_method: shippingMethod,
+        delivery: pre ? pre.delivery : null,
         notes: note || form.note,
         discount_code: discount?.code || "",
         terms_accepted: terms,
       };
       const { data } = await api.post("/checkout", payload);
       clear();
+      sessionStorage.removeItem("pp_precheckout");
       sessionStorage.setItem(`pp_order_${data.order.id}`, JSON.stringify(data));
       setPlaced(true);
       nav(lp(`/checkout/success/${data.order.id}`));
@@ -101,6 +126,27 @@ export default function CheckoutPage() {
               </div>
             </section>
 
+            {pre ? (
+              <section className="bg-white border border-slate-200 rounded-xl p-6" data-testid="checkout-chosen-delivery">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-display font-bold text-lg text-slate-900">Метод за доставка</h2>
+                  <button type="button" className="text-sm font-semibold text-coral-700 hover:underline"
+                    onClick={() => { sessionStorage.removeItem("pp_precheckout"); nav(lp("/cart")); }}
+                    data-testid="checkout-change-delivery">Промени</button>
+                </div>
+                <div className="flex items-center gap-4 border-2 border-coral-600 bg-coral-50/40 rounded-lg p-4">
+                  <div className="flex-1">
+                    <p className="font-medium text-slate-900">{pre.delivery.provider_name} · {pre.delivery.label}</p>
+                    <p className="text-xs text-slate-500">
+                      {pre.delivery.office
+                        ? `${pre.delivery.office.name}, ${pre.delivery.office.city}`
+                        : `${form.city} ${form.line1}`}
+                    </p>
+                  </div>
+                  <span className="font-display font-bold text-slate-900">{fmtEUR(pre.delivery.price_amount)}</span>
+                </div>
+              </section>
+            ) : (
             <section className="bg-white border border-slate-200 rounded-xl p-6">
               <h2 className="font-display font-bold text-lg text-slate-900 mb-5">Метод за доставка</h2>
               <RadioGroup value={shippingMethod} onValueChange={setShippingMethod} className="space-y-3" data-testid="shipping-method">
@@ -120,6 +166,7 @@ export default function CheckoutPage() {
                 ))}
               </RadioGroup>
             </section>
+            )}
 
             <section className="bg-white border border-slate-200 rounded-xl p-6">
               <h2 className="font-display font-bold text-lg text-slate-900 mb-3">Метод за плащане</h2>

@@ -167,7 +167,7 @@ export default function HomePage() {
       <section className="bg-white section--page-width section-resource-list py-4 sm:py-6 lg:py-7">
         <div className="pp-wide">
           <div className="mb-3">
-            <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight">{t("researchedFor")}</h2>
+            <h2 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">{t("researchedFor")}</h2>
           </div>
           <CollectionsCarousel collections={collections} />
         </div>

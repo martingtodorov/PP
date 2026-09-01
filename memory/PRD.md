@@ -200,3 +200,61 @@ Domains & languages
 - iteration_13.json (currency + carousel + category text + schema) — all pass.
 - iteration_14.json (URL alignment, link-index, sitemaps, agents.md, admin editor) — backend 22/22;
   the html-sitemap sub-route bug it found was fixed (explicit routes) and re-verified manually.
+
+## 2026-09-01 (session 2) — Per-country couriers, checkout fixes, multilingual emails, 90-day memory
+### Delivery / couriers (`backend/nextcart.py`)
+- `/api/nextcart/config?country=XX` now forces the couriers the merchant ships with, per country:
+  **BG** Econt + BoxNow + Pigeon · **RO** FAN Courier · **GR** Speedex ·
+  **HU/PL/SK/CZ/SI/HR/IT/DE** GLS (SI/IT/DE synthesized via `COURIER_FALLBACK`, probing real pickup points;
+  CZ + IT have no GLS points upstream → "до адрес" only).
+- All courier prices normalised to **EUR** (`_to_eur_method` + `currency.py` rates); local amount kept in
+  `price_local_amount` / `price_local_currency`.
+- **COD first and default everywhere** (`payment_methods[0] = cod`).
+- New `/api/nextcart/countries` — the 11 shippable countries with Bulgarian names + dial codes (default BG).
+- `country` param added to `/pickups`, `/offices`, `/address-suggestions`.
+
+### Checkout (`frontend/src/components/PreCheckoutModal.jsx`)
+- **BUG FIXED (was blocking every order)**: the payload omitted `shipping.full_name` and `shipping.phone`,
+  so FastAPI answered 422 and the customer saw "Field required • Field required".
+- First + last name merged into **one required field** (`pc-name`, needs 2 words, `autocomplete="name"` for
+  Apple autofill) + `onBlur` state sync.
+- **Relevance ranking** (`matchScore`): exact city hits beat name/address hits (typing "София" no longer
+  surfaces a village), IP city gets a small boost, `dedupeCity` removes "София — София".
+- **Fragmented search**: "София Иван Вазов" in the street field resolves the city first, then the street.
+- IP city pre-fills the address form only on an exact match; typing in the city clears the stale `place_id`.
+- Sub-labels **до офис / до кутия / до адрес** always visible under each courier logo.
+- **90-day memory**: `pp_checkout_v1` in localStorage (contact, courier, method, office, address, payment).
+- Abandoned-cart capture: debounced `POST /api/cart/track` once the email is valid.
+- `locale` sent with the order.
+- `formatErr` maps 422 field errors to Bulgarian ("Моля, попълнете: …").
+
+### Emails (`backend/email_templates.py`, `email_service.py`, `abandoned.py`)
+- Shopify-style responsive templates: **order confirmation** + **abandoned cart**, translated into all
+  **11 locales** (bg, en, fr, de, cz, hu, pl, sk, si, gr, ro) — logo header, order number, line items with
+  images, subtotal/shipping/total, bank block (only for bank transfer), customer info, footer.
+- **Admin notifications redesigned**: `render_admin_order` (new order — badge, total, customer, courier,
+  office, items, "Отвори в админ панела") and `render_admin_contact` (site enquiry), plus
+  `render_admin_note` for the admin test email.
+- Abandoned carts: `POST /api/cart/track` (one open record per email), background sweeper every
+  `ABANDONED_SWEEP_SEC` sending one reminder after `ABANDONED_DELAY_MIN` (60), `mark_recovered` on checkout,
+  admin endpoints `/api/admin/abandoned-carts` (+ `/{id}/send`, `/sweep`) and `/api/admin/emails/test`
+  (kind=order|abandoned, any locale).
+- `PUBLIC_SITE_URL` in backend/.env drives email links/images (leave empty in production to use the
+  per-locale domains).
+
+### Other
+- Bank details corrected everywhere: **DSK Bank · BG61STSA93000032400775 · STSABGSF · Purepeptide LTD**.
+- Homepage heading "Пептиди, изследвани за:" reduced to `text-lg sm:text-xl`.
+- RevOrder: `gen_revorder_keys.py` generated an api_key + secret_key + inbound webhook URL per domain
+  (purepeptide.bg / .eu / .ro / .gr) — stored in `settings.integrations.revorder`, disabled until enabled.
+
+### Verified
+- iteration_19.json — backend 45/45 pytest, frontend e2e (order placement, 90-day memory, country switch,
+  sub-labels, bank details, ranking, fragmented search) 100%.
+- Admin email templates rendered + delivered via Resend (checked visually).
+
+### Open / next
+- Resend is still on the sandbox sender `onboarding@resend.dev` → only the account owner's address receives
+  mail. The owner must verify a domain in Resend and set `SENDER_EMAIL`.
+- RevOrder outbound push stays **disabled** until the merchant confirms endpoint + enables the domain.
+- P2: abandoned-cart second reminder / discount incentive, Speedy API (if still needed).

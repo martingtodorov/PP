@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional
 
 import resend
 
+import email_templates
+
 log = logging.getLogger("purepeptide.email")
 
 BRAND = "#FE6F61"
@@ -56,22 +58,17 @@ async def send_email(to: str, subject: str, html: str, settings: Optional[Dict[s
 
 
 async def send_order_confirmation(order: Dict[str, Any], bank: Dict[str, Any], settings: Dict[str, Any]):
-    body = (
-        f"<p>Здравейте, {order['customer_name']},</p>"
-        f"<p>Получихме поръчка <strong>{order['order_number']}</strong>.</p>"
-        f"{_items_table(order['items'])}"
-        f"<p style='margin-top:14px'>Междинна сума: €{order['subtotal_eur']:.2f}<br>"
-        f"Доставка: €{order['shipping_eur']:.2f}<br>"
-        f"<strong>Общо: €{order['total_eur']:.2f}</strong></p>"
-        f"<p style='background:#f8fafc;padding:12px;border-radius:8px'>"
-        f"<strong>Банков превод</strong><br>Получател: {bank['holder']}<br>IBAN: {bank['iban']}<br>"
-        f"BIC: {bank['bic']}<br>Основание: {bank['reference']}</p>"
-    )
-    return await send_email(
-        order["customer_email"], f"Поръчка {order['order_number']} — PurePeptide",
-        _wrap("Благодарим за поръчката", body, "PurePeptide · Продуктите са за научноизследователски цели."),
-        settings,
-    )
+    locale = order.get("locale") or "bg"
+    contact = (settings.get("contact_email") or os.environ.get("CONTACT_EMAIL") or "info@purepeptide.bg").strip()
+    subject, html = email_templates.render_order(order, bank, locale, contact)
+    return await send_email(order["customer_email"], subject, html, settings)
+
+
+async def send_abandoned_cart(cart: Dict[str, Any], settings: Dict[str, Any], discount_code: str = ""):
+    locale = cart.get("locale") or "bg"
+    contact = (settings.get("contact_email") or os.environ.get("CONTACT_EMAIL") or "info@purepeptide.bg").strip()
+    subject, html = email_templates.render_abandoned(cart, locale, contact, discount_code)
+    return await send_email(cart["email"], subject, html, settings)
 
 
 async def send_payment_received(order: Dict[str, Any], settings: Dict[str, Any]):

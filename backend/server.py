@@ -15,6 +15,7 @@ import secrets
 import sys
 import tempfile
 import asyncio
+from urllib.parse import urlparse
 import hashlib
 import logging
 import uuid
@@ -38,6 +39,7 @@ from i18n import (
 from pages_seed import PAGE_SLUGS, PAGE_LABELS, DEFAULT_PAGES
 import storage
 import email_service
+import email_templates
 import push_service
 
 # ---------- App + DB ----------
@@ -173,6 +175,19 @@ class CartLine(BaseModel):
     quantity: int = Field(gt=0)
 
 
+class DeliverySelection(BaseModel):
+    """Pre-checkout selection coming from the NextCart modal (courier, office/locker or address)."""
+    provider_key: str = ""
+    provider_name: str = ""
+    method_key: str = ""
+    destination_type: str = ""
+    label: str = ""
+    price_amount: float = 0.0
+    currency: str = "EUR"
+    office: Optional[Dict[str, Any]] = None
+    address: Optional[Dict[str, Any]] = None
+
+
 class CheckoutIn(BaseModel):
     items: List[CartLine]
     shipping: Address
@@ -180,9 +195,12 @@ class CheckoutIn(BaseModel):
     customer_name: str
     customer_phone: str
     shipping_method: str = "econt_office"  # econt_office | econt_address | speedy
+    payment_method: str = "bank_transfer"  # bank_transfer | cod
+    delivery: Optional[DeliverySelection] = None
     notes: Optional[str] = ""
     discount_code: Optional[str] = ""
     terms_accepted: bool = False
+    locale: str = "bg"
 
 
 class ProductIn(BaseModel):
@@ -364,6 +382,8 @@ async def on_startup():
         log.info("Object storage initialized")
     except Exception as ex:
         log.error("Storage init failed: %s", ex)
+    import abandoned as _abandoned
+    asyncio.create_task(_abandoned.sweeper_loop())
 
 
 @app.on_event("shutdown")
@@ -590,6 +610,17 @@ async def get_settings():
     return value
 
 
+@api.get("/bank-details")
+async def bank_details():
+    """Public bank transfer details shown in the checkout when that method is selected."""
+    return {
+        "name": os.environ.get("BANK_NAME", "DSK Bank"),
+        "iban": os.environ.get("BANK_IBAN", "BG61STSA93000032400775"),
+        "bic": os.environ.get("BANK_BIC", "STSABGSF"),
+        "holder": os.environ.get("BANK_HOLDER", "Purepeptide LTD"),
+    }
+
+
 # ---------- Checkout / Orders ----------
 ORDER_CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"
 ORDER_CODE_DIGITS = "0123456789"
@@ -634,9 +665,13 @@ async def validate_discount(payload: DiscountIn):
     return await _resolve_discount(payload.code, payload.subtotal_eur)
 
 
-def _calc_totals(line_items: List[Dict[str, Any]], shipping_method: str, discount_eur: float = 0.0) -> Dict[str, float]:
+def _calc_totals(line_items: List[Dict[str, Any]], shipping_method: str, discount_eur: float = 0.0,
+                 shipping_override: Optional[float] = None) -> Dict[str, float]:
     subtotal = sum(li["price_eur"] * li["quantity"] for li in line_items)
-    shipping_cost = 0.0 if subtotal >= 100 else (5.99 if shipping_method != "speedy" else 7.49)
+    if shipping_override is not None:
+        shipping_cost = round(float(shipping_override), 2)  # courier price chosen at checkout wins
+    else:
+        shipping_cost = 0.0 if subtotal >= 100 else (5.99 if shipping_method != "speedy" else 7.49)
     total = subtotal - discount_eur + shipping_cost
     return {
         "subtotal_eur": round(subtotal, 2),
@@ -676,7 +711,8 @@ async def checkout(payload: CheckoutIn, request: Request):
 
     subtotal_raw = sum(li["price_eur"] * li["quantity"] for li in line_items)
     discount = await _resolve_discount(payload.discount_code or "", subtotal_raw)
-    totals = _calc_totals(line_items, payload.shipping_method, discount.get("discount_eur", 0.0))
+    totals = _calc_totals(line_items, payload.shipping_method, discount.get("discount_eur", 0.0),
+                          payload.delivery.price_amount if payload.delivery else None)
     user = await get_user_from_request(request)
 
     order = {
@@ -689,14 +725,16 @@ async def checkout(payload: CheckoutIn, request: Request):
         "items": line_items,
         "shipping": payload.shipping.model_dump(),
         "shipping_method": payload.shipping_method,
+        "delivery": payload.delivery.model_dump() if payload.delivery else None,
         "notes": payload.notes,
         "discount": discount,
         "terms_accepted": payload.terms_accepted,
+        "locale": (payload.locale or "bg").lower(),
         **totals,
         "currency": "EUR",
         "payment_status": "awaiting_payment",
         "fulfillment_status": "unfulfilled",
-        "payment_method": "bank_transfer",
+        "payment_method": payload.payment_method if payload.payment_method in ("bank_transfer", "cod") else "bank_transfer",
         "tracking": None,
         "created_at": now_utc(),
         "updated_at": now_utc(),
@@ -718,10 +756,10 @@ async def checkout(payload: CheckoutIn, request: Request):
 
     # bank instructions
     bank = {
-        "name": os.environ.get("BANK_NAME", "UniCredit Bulbank"),
-        "iban": os.environ.get("BANK_IBAN", "BG18UNCR70001523456789"),
-        "bic": os.environ.get("BANK_BIC", "UNCRBGSF"),
-        "holder": os.environ.get("BANK_HOLDER", "PurePeptide EOOD"),
+        "name": os.environ.get("BANK_NAME", "DSK Bank"),
+        "iban": os.environ.get("BANK_IBAN", "BG61STSA93000032400775"),
+        "bic": os.environ.get("BANK_BIC", "STSABGSF"),
+        "holder": os.environ.get("BANK_HOLDER", "Purepeptide LTD"),
         "reference": order["order_number"],
         "amount_eur": totals["total_eur"],
     }
@@ -751,18 +789,19 @@ async def checkout(payload: CheckoutIn, request: Request):
         log.exception("Order push notification failed")
     try:
         admin_to = os.environ.get("CONTACT_EMAIL") or os.environ["ADMIN_EMAIL"]
-        await email_service.send_email(
-            admin_to,
-            f"Нова поръчка {order['order_number']} — {totals['total_eur']:.2f} €",
-            f"<h2 style='font-family:system-ui'>Нова поръчка {order['order_number']}</h2>"
-            f"<p style='font-family:system-ui'>{order.get('customer_name') or ''} · {order.get('customer_email') or ''} · "
-            f"{order.get('customer_phone') or ''}</p>"
-            f"<p style='font-family:system-ui'>Сума: <strong>{totals['total_eur']:.2f} €</strong><br>"
-            f"Артикули: {items_summary}</p>",
-            site_settings,
-        )
+        admin_subject, admin_html = email_templates.render_admin_order(order_clean)
+        await email_service.send_email(admin_to, admin_subject, admin_html, site_settings)
     except Exception:
         log.exception("Admin order email failed")
+    origin = request.headers.get("origin") or ""
+    domain = urlparse(origin).hostname or (request.headers.get("host") or "").split(":")[0]
+    if domain and await revorder.domain_config(domain):
+        asyncio.create_task(revorder.push_order(order_clean, domain))
+    try:
+        await abandoned.mark_recovered(order["customer_email"])
+    except Exception:
+        log.exception("Abandoned cart cleanup failed")
+
     return {"order": order_clean, "bank_transfer": bank}
 
 
@@ -868,6 +907,8 @@ def _order_view(o: Dict[str, Any]) -> Dict[str, Any]:
         "note": o.get("notes") or o.get("note") or "",
         "source": o.get("source") or "storefront",
         "currency": cur,
+        "delivery": o.get("delivery"),
+        "discount_code": o.get("discount_code") or "",
     }
 
 
@@ -959,10 +1000,10 @@ async def admin_send_invoice(order_id: str, user=Depends(require_admin)):
         raise HTTPException(400, "Поръчката няма имейл адрес")
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     bank = {
-        "name": os.environ.get("BANK_NAME", "UniCredit Bulbank"),
-        "iban": os.environ.get("BANK_IBAN", "BG18UNCR70001523456789"),
-        "bic": os.environ.get("BANK_BIC", "UNCRBGSF"),
-        "holder": os.environ.get("BANK_HOLDER", "PurePeptide EOOD"),
+        "name": os.environ.get("BANK_NAME", "DSK Bank"),
+        "iban": os.environ.get("BANK_IBAN", "BG61STSA93000032400775"),
+        "bic": os.environ.get("BANK_BIC", "STSABGSF"),
+        "holder": os.environ.get("BANK_HOLDER", "Purepeptide LTD"),
         "reference": view["order_number"],
         "amount_eur": view["total_eur"],
     }
@@ -1056,7 +1097,11 @@ async def admin_test_email(payload: TestEmailIn, user=Depends(require_admin)):
     res = await email_service.send_email(
         payload.to,
         "PurePeptide — тестов имейл",
-        "<p>Това е тестов имейл от вашия PurePeptide магазин. Resend работи коректно.</p>",
+        email_templates.render_admin_note(
+            "ТЕСТ", "Resend работи коректно",
+            "Това е тестов имейл от вашия PurePeptide магазин. Ако го виждате, транзакционните "
+            "имейли (потвърждение на поръчка, изоставена количка и известия към администратора) "
+            "ще се доставят коректно."),
         site_settings,
     )
     if not res.get("sent"):
@@ -1965,17 +2010,10 @@ async def contact_form(payload: ContactIn, request: Request):
     settings = await db.settings.find_one({"key": "site"}, {"_id": 0})
     to = os.environ.get("CONTACT_EMAIL") or os.environ["ADMIN_EMAIL"]
     safe = {k: html_lib.escape(str(v)) for k, v in doc.items()}
-    body_html = (
-        f"<h2 style='font-family:system-ui'>Ново запитване от сайта</h2>"
-        f"<p style='font-family:system-ui'><strong>Име:</strong> {safe['name']}<br>"
-        f"<strong>Имейл:</strong> {safe['email']}<br>"
-        f"<strong>Телефон:</strong> {safe['phone'] or '—'}<br>"
-        f"<strong>Език:</strong> {safe['locale']}</p>"
-        f"<p style='font-family:system-ui;white-space:pre-line;background:#f8fafc;padding:14px;border-radius:8px'>{safe['message']}</p>"
-    )
+    contact_subject, contact_html = email_templates.render_admin_contact(safe)
     email_ok = True
     try:
-        await email_service.send_email(to, f"Ново запитване от {safe['name']}", body_html,
+        await email_service.send_email(to, contact_subject, contact_html,
                                        (settings or {}).get("value", {}))
     except Exception as ex:
         email_ok = False
@@ -2450,6 +2488,15 @@ async def robots():
 
 
 # ---------- Mount + CORS ----------
+from nextcart import router as nextcart_router  # noqa: E402
+from geo import router as geo_router  # noqa: E402
+import revorder  # noqa: E402
+import abandoned  # noqa: E402
+
+api.include_router(nextcart_router)
+api.include_router(geo_router)
+api.include_router(revorder.init(db, require_admin))
+api.include_router(abandoned.init(db, require_admin))
 app.include_router(api)
 
 _origins_env = os.environ.get("CORS_ORIGINS", "*")

@@ -12,6 +12,7 @@ import { useLocaleCtx } from "../i18n/LocaleContext";
 import { LOCALES, LOCALE_META } from "../i18n/locales";
 import { api, fmtEUR, fmtBGN, showsBGN, formatErr, img } from "../lib/api";
 import { toast } from "sonner";
+import PreCheckoutModal from "./PreCheckoutModal";
 
 const Price = ({ eur, className = "" }) => (
   <span className={className}>
@@ -242,6 +243,7 @@ const CartDrawer = () => {
   const { lp, t, locale } = useLocaleCtx();
   const [code, setCode] = useState("");
   const [terms, setTerms] = useState(false);
+  const [preCheckout, setPreCheckout] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
@@ -264,10 +266,12 @@ const CartDrawer = () => {
       return;
     }
     setOpen(false);
-    nav(lp("/checkout"));
+    setPreCheckout(true);
   };
 
   return (
+    <>
+    <PreCheckoutModal open={preCheckout} onClose={() => setPreCheckout(false)} termsAccepted={terms} />
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent className="w-[88vw] sm:w-[400px] sm:max-w-none flex flex-col p-0" data-testid="cart-drawer">
         <div className="pp-drawer-right flex flex-col h-full min-h-0">
@@ -390,11 +394,12 @@ const CartDrawer = () => {
                 data-testid="cart-terms-checkbox"
               />
               <span>
-                {locale === "bg" ? "Съгласявам се с " : "I agree to the "}
-                <Link to={lp("/pages/terms-conditions")} className="underline hover:text-coral-600" onClick={() => setOpen(false)}>
-                  {locale === "bg" ? "общите условия" : "terms & conditions"}
+                {locale === "bg"
+                  ? "Аз съм на 18+, купувам за научно-изследователски цели и съм съгласен/а с "
+                  : "I am 18+, buying for research purposes and I agree with the "}
+                <Link to={lp("/pages/terms-conditions")} className="underline hover:text-coral-600" target="_blank">
+                  {locale === "bg" ? "Общите условия" : "Terms & conditions"}
                 </Link>
-                {locale === "bg" ? " и политиката за поверителност." : " and privacy policy."}
               </span>
             </label>
 
@@ -411,6 +416,8 @@ const CartDrawer = () => {
         </div>
       </SheetContent>
     </Sheet>
+    </>
+
   );
 };
 
