@@ -1320,6 +1320,70 @@ button.bg-coral-600:disabled { box-shadow: none; }
 }
 .pp-variant--active:hover { background: #f65f50; border-color: #f65f50; }
 .pp-variant--out { text-decoration: line-through; opacity: 0.55; }
+
+/* Sticky buy bar — only visible once the main CTA has scrolled out of view */
+.pp-buybar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 45;
+  background: #fff;
+  border-top: 1px solid #e6eaef;
+  box-shadow: 0 -8px 26px rgba(15, 23, 42, 0.09);
+  transform: translateY(110%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pp-buybar--in { transform: translateY(0); opacity: 1; pointer-events: auto; }
+.pp-buybar__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+.pp-buybar__img { width: 46px; height: 46px; object-fit: contain; flex: 0 0 46px; }
+.pp-buybar__meta { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.pp-buybar__title {
+  font-size: 15px;
+  color: #0f172a;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pp-buybar__variant { font-size: 13px; color: #64748b; }
+.pp-buybar__price { display: flex; align-items: baseline; gap: 7px; font-size: 16px; font-weight: 600; color: #0f172a; white-space: nowrap; }
+.pp-buybar__compare { color: #94a3b8; font-weight: 400; font-size: 14px; }
+.pp-buybar__bgn { color: #94a3b8; font-weight: 400; font-size: 12px; }
+.pp-buybar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  background: #fe6f61;
+  color: #fff;
+  border-radius: 10px;
+  padding: 13px 18px;
+  font-weight: 600;
+  font-size: 15px;
+  transition: background-color 0.18s ease, transform 0.18s ease;
+}
+.pp-buybar__btn:hover { background: #ed5b4d; }
+.pp-buybar__btn:active { transform: scale(0.97); }
+.pp-buybar__btn:disabled { background: #cbd5e1; }
+@media (max-width: 640px) {
+  .pp-buybar__inner { gap: 9px; padding: 9px 11px; }
+  .pp-buybar__bgn { display: none; }
+  .pp-buybar__btn-text { display: none; }
+  .pp-buybar__btn { padding: 14px 16px; }
+  .pp-buybar__price { font-size: 15px; }
+}
 @media (max-width: 480px) {
   .pp-variant { padding: 12px 14px; font-size: 14px; }
 }
