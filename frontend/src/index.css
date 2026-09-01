@@ -1174,10 +1174,10 @@ img { max-width: 100%; height: auto; }
   gap: 14px;
   align-content: start;
 }
-.pp-hero__title { margin-block: 10px; }
-.pp-hero__cta { margin-top: 6px; }
+.pp-hero__title { margin-block: 20px; }
+.pp-hero__cta { margin-top: 18px; }
 @media (max-width: 768px) {
   .pp-hero__inner { padding-block: 20px 10px; gap: 12px; }
-  .pp-hero__title { margin-block: 8px; }
-  .pp-hero__cta { margin-top: 4px; }
+  .pp-hero__title { margin-block: 16px; }
+  .pp-hero__cta { margin-top: 14px; }
 }
