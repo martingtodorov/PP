@@ -503,3 +503,11 @@ returns 200, fetches the matching `server-<major>.asc` key and prints the choice
 probe list if MongoDB publishes nothing usable.
 Verified live against repo.mongodb.org: Ubuntu resolute → **8.0 / resolute**, plucky → 8.0 / noble
 (7.0/noble correctly 404s). 61 deploy tests + dryrun green.
+
+### 2026-06 — stale mongodb-org.list removal
+The failed 7.0/noble repo stays in `/etc/apt/sources.list.d/mongodb-org.list` and poisons EVERY
+`apt update` on pp-back. `bootstrap_backend_base.yml` now deletes that file (and the .sources variant)
+before probing, refreshes the cache, adds the probed repo with `update_cache: false` and refreshes the
+cache in a separate retried task. 48 deploy-config tests green.
+NOTE: the owner ran an older checkout (error at line 80 with 7.0/noble) — the fixes only reach the
+server after "Save to GitHub" + `git pull` on the Mac.
