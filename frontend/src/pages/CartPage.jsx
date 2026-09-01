@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
+import PreCheckoutModal from "../components/PreCheckoutModal";
 import { useSeo } from "../lib/seo";
 import { Button } from "../components/ui/button";
 import { useCart } from "../context/CartContext";
@@ -14,6 +15,8 @@ export default function CartPage() {
 
   const { items, remove, updateQty, subtotal, discount, discountAmount, applyDiscount, removeDiscount } = useCart();
   const [code, setCode] = useState("");
+  const [preCheckout, setPreCheckout] = useState(false);
+  const [terms, setTerms] = useState(false);
   const [applying, setApplying] = useState(false);
   const { lp } = useLocaleCtx();
   const shipping = subtotal === 0 ? 0 : subtotal >= 100 ? 0 : 5.99;
@@ -101,17 +104,28 @@ export default function CartPage() {
                     </div>
                   )}
                 </div>
-                <Link to={lp("/checkout")}>
-                  <Button className="w-full bg-coral-600 hover:bg-coral-700" data-testid="cart-checkout-btn">
-                    Към плащане
-                  </Button>
-                </Link>
+                <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer mb-3">
+                  <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)}
+                    className="mt-0.5 accent-coral-600" data-testid="cart-terms-checkbox" />
+                  <span>
+                    Аз съм на 18+, купувам за научно-изследователски цели и съм съгласен/а с{" "}
+                    <Link to={lp("/pages/terms-conditions")} className="underline hover:text-coral-600" target="_blank">
+                      Общите условия
+                    </Link>
+                  </span>
+                </label>
+                <Button className="w-full h-14 text-base sm:text-lg font-semibold bg-coral-600 hover:bg-coral-700"
+                  disabled={!terms}
+                  onClick={() => setPreCheckout(true)} data-testid="cart-checkout-btn">
+                  Към плащане
+                </Button>
                 <p className="text-xs text-slate-500 text-center">Плащане с банков превод или наложен платеж.</p>
               </div>
             </div>
           </div>
         )}
       </div>
+      <PreCheckoutModal open={preCheckout} onClose={() => setPreCheckout(false)} termsAccepted={terms} />
     </Layout>
   );
 }

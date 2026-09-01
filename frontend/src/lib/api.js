@@ -38,10 +38,23 @@ export const fmtBGN = (eur) =>
 /* BGN is only shown on the Bulgarian storefront (dual-pricing requirement) */
 export const showsBGN = () => currentLocale() === "bg";
 
+const FIELD_BG = {
+  full_name: "име и фамилия", phone: "телефон", email: "имейл", line1: "адрес",
+  city: "град", postal_code: "пощенски код", country: "държава",
+  customer_email: "имейл", customer_name: "име и фамилия", customer_phone: "телефон",
+};
+
 export const formatErr = (e) => {
   const d = e?.response?.data?.detail;
   if (!d) return e?.message || "Възникна грешка";
   if (typeof d === "string") return d;
-  if (Array.isArray(d)) return d.map((x) => x?.msg || JSON.stringify(x)).join(" • ");
+  if (Array.isArray(d)) {
+    const fields = [...new Set(d.map((x) => {
+      const loc = Array.isArray(x?.loc) ? x.loc[x.loc.length - 1] : "";
+      return FIELD_BG[loc] || loc;
+    }).filter(Boolean))];
+    if (fields.length) return `Моля, попълнете: ${fields.join(", ")}`;
+    return d.map((x) => x?.msg || JSON.stringify(x)).join(" • ");
+  }
   return String(d);
 };

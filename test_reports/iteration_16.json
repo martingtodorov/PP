@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration-16 NextCart pre-checkout integration verified end-to-end. Backend proxy (12/12 pytest cases pass): /api/nextcart/config returns econt/boxnow/pigeon providers, delivery methods with correct prices (econt_office 3.89, boxnow_locker 2.99, pigeon_address 4.59) and 245 phone territories; /api/nextcart/offices returns live Econt offices in Пловдив and BoxNow lockers; /api/nextcart/address-suggestions returns Bulgarian city suggestions; invalid params (destination_type=foo, q<2, mode=xyz) return 422; POST /api/nextcart/event returns 200 and never breaks the flow; bogus provider_key does not crash proxy. Frontend full flow works on desktop 1920: add-to-cart -> cart drawer -> accept terms -> cart-checkout-btn -> precheckout-modal opens with all 3 courier logos; switching couriers changes methods and pc-total updates correctly (BoxNow 51.99, Pigeon 53.59, Econt 52.89 for a 49.00 item); office search returns 25 Econt offices for 'Пловдив'; Pigeon flow shows pc-city with suggestions + pc-street/pc-number; pc-continue disabled until name/last_name/email/phone/office(or city+street) supplied; invalid discount code shows Bulgarian toast 'Невалиден код за отстъпка'; continuing prefills /checkout with name/email/phone/address/city/postal_code, checkout-chosen-delivery card renders 'Еконт · До офис на Еконт / Пловдив Автогара Родопи, ПЛОВДИВ / 3,89 €', checkout-total = 52,89 €; placing the order navigates to /checkout/success/<id>. Admin GET /api/admin/orders shows the new order with shipping_eur=3.89 and total_eur=52.89. Direct MongoDB inspection confirms the full delivery object (provider_key='econt', method_key='econt_office', office{id,name,address,city,postal_code}) is persisted on the order. Mobile 390 regression: cart drawer bbox {x:46.8, y:0, w:343.2, h:844} preserved (same as iter-15). Admin login regression still 200.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/admin/orders", "issue": "_order_view() (server.py L834-891) does not surface the persisted 'delivery' object (provider/method/office) even though it is correctly saved on the order document. Admin listing/detail responses show delivery=null; admin UI will not see the chosen courier/office via this endpoint. shipping_eur is exposed correctly."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration16_nextcart.py",
+    "/app/test_reports/pytest/iteration16.xml"
+  ],
+  "action_items": [
+    "server.py _order_view(): include 'delivery' (provider_key, provider_name, method_key, destination_type, label, office{name,address,city,postal_code}, address) so admin UI/API surfaces the courier + pickup location chosen at pre-checkout."
+  ],
+  "critical_code_review_comments": [
+    "PreCheckoutModal.jsx L252: the outer `{true && ( ... )}` wrapper around the discount block is dead code — should be removed.",
+    "PreCheckoutModal.jsx L94-95: `contact.email.includes('@')` is a very weak email validation; consider a proper regex or defer to native type=email validity (input has type='email' only for the Field wrapper).",
+    "nextcart.py _cached()/_store() share the ttl parameter name but only _store() uses it — _cached's `ttl` argument is unused (dead parameter). Not a bug, just a small tidy-up.",
+    "CheckoutPage.jsx L63: when a NextCart pre-checkout selection exists, `finalShipping` still applies the >=100 free-shipping override (`subtotal>=100 ? 0 : shipping`). This can silently zero out the NextCart-paid price on large baskets — likely inconsistent with the merchant intent that the courier price is authoritative once selected in the pre-checkout modal.",
+    "server.py _order_view() omits `delivery`, `discount_code`, and any tracking of NextCart method/office in the admin response — see backend_issues.minor.",
+    "Iteration-15 open items still valid: /api/files/... HEAD returns 405; ALLOWED_WIDTHS gap; React-Router pattern '/pages/html-sitemap-:kind' regression not retested (per agent-to-agent note)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration16_nextcart.py (new)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% end-to-end order placed with NextCart delivery persisted"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 (verified via /api/auth/login and /api/admin/orders)",
+  "seed_data_creation": "Created one live test order (id=e3182833-e4d4-4c6d-9a97-ddaec1648d11) via full storefront flow with Econt office delivery; total 52.89 EUR. No admin data modified. Did not restart backend (bulk-translate job protected).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "NextCart proxy is live and cached; keep queries small (there's real upstream traffic). Full pre-checkout flow works end-to-end. Only backend cosmetic gap: admin /api/admin/orders response omits the persisted 'delivery' object (data is in Mongo). Frontend has one logic concern in CheckoutPage.jsx: subtotal>=100 free-shipping override applies even to NextCart-selected shipping. Test order BZG37 (id above) is a live DB row — leave or clean via admin as needed. Backend testids used: pc-courier-{econt|boxnow|pigeon}, pc-method-{econt_office|boxnow_locker|pigeon_address}, pc-office-search/results, pc-city/-results, pc-street, pc-number, pc-first-name, pc-last-name, pc-email, pc-phone, pc-dial, pc-continue, pc-total, pc-discount-code/-apply, precheckout-modal, precheckout-error, precheckout-close, checkout-chosen-delivery, checkout-change-delivery.",
+  "rca of the issue": "The delivery=null in admin orders API is an output serialization gap, not a persistence bug. server.py:711 correctly writes delivery=payload.delivery.model_dump() to Mongo (verified via pymongo). _order_view() at L834-891 just doesn't include it in the returned dict. Fix: add `\"delivery\": o.get(\"delivery\")` (and optionally `\"discount_code\": o.get(\"discount_code\")`) to the return dict of _order_view()."
+}

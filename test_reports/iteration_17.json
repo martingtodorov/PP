@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration-17 verified the accelerated (one-step) NextCart pre-checkout overlay + the new RevOrder per-domain integration. Backend: 9/9 pytest cases pass (test_iteration17_precheckout.py). /api/nextcart/pickups?provider_key=econt&destination_type=office returns 589 offices with id/name/city/postal_code/address; a second call is served from cache (0.28s vs 3.86s cold, cache TTL 6h). /api/nextcart/pickups?provider_key=boxnow&destination_type=locker returns 926 lockers. destination_type=foo -> 422. /api/geo/country returns a valid ISO2 (source ip/default). /api/nextcart/address-suggestions?mode=city&q=Плов returns suggestions with city+postal_code. One-step /api/checkout with delivery{provider_key:econt, method_key:econt_office, office{...}} and terms_accepted=true creates an order with shipping_eur==3.89 for BOTH payment_method=bank_transfer AND payment_method=cod. RevOrder admin lifecycle: GET without auth -> 401; admin GET returns {domains,events}; PUT saves keys, subsequent GET returns keys MASKED (api_key/secret_key contain '•'); POST /admin/integrations/revorder/test returns {sent,...} (no 500) even though upstream contract is not published; POST /webhooks/revorder/purepeptide.bg with bogus X-Signature -> 401, with correct HMAC-SHA256(secret,body) -> 200 with matched>=1 and duplicate=true on replay of the same event id; the referenced order gets tracking_number='TRK123' and fulfillment_status='shipped' persisted. Frontend: BUG re-test passed on 390x844, 390x700 and 1280x600 — .nc2-backdrop has scrollHeight > clientHeight (1217>844, 1217>700, 742>600), programmatic scrollTop and mouse-wheel both move the overlay (373/517/142 px), pc-terms + pc-continue + the closing 'Поръчката се обработва…' note are all in the viewport after scrolling to the bottom, document.body has overflow:hidden while the overlay is open and 'visible' after clicking data-testid precheckout-close. End-to-end order-placement flow (product page -> Към количка -> terms -> Към плащане -> precheckout-modal) works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/webhooks/revorder/{domain}", "issue": "The idempotency check on inbound webhook only guards on 'event_id'; a webhook without an 'id' field would be re-applied each call (minor: RevOrder is expected to always send id)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration17_precheckout.py",
+    "/app/test_reports/pytest/iteration17.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PreCheckoutModal.jsx L182-183: `shipping = method?.price_amount || 0` — when free-shipping methods legitimately have price 0 this works, but if `method.price_amount` is missing altogether the shipping silently becomes 0. Consider surfacing when the config is missing a price so the total does not quietly drop.",
+    "PreCheckoutModal.jsx L184-186: `EMAIL_RE = /^[^\\s@]+@[^\\s@]+\\.[a-z]{2,}$/i` is a decent-enough guard, but `contact.phone.replace(/\\D/g, '').length >= 6` accepts phones as short as 6 digits (spec says at least 6, so OK — flagging in case merchant wants 8/9).",
+    "PreCheckoutModal.jsx L133-137: body scroll lock uses document.body.style.overflow='hidden'. On iOS Safari this does NOT reliably lock the underlying page scroll (only overflow on the html element + touch-action can). Recommended: also add `document.documentElement.style.overflow='hidden'` (and restore on close) for parity with Shopify's checkout overlay.",
+    "revorder.py webhook idempotency (L186): keyed only on event_id; a payload without id would be applied repeatedly. Consider also hashing raw body for a fallback dedup key.",
+    "revorder.py L114-117: _mask() returns first4+dots+last4 for any secret >=8 chars but for shorter keys the fallback is 4 dots — fine for the current test-key values, keep for future.",
+    "geo.py cache is per-IP with no size cap; over months this grows unbounded. Consider an LRU or expiry sweep.",
+    "index.css L1598-1604 mobile media query for .nc2-dialog now has align-self:flex-start + min-height:100% — the fix for the reported bug. Backdrop is what actually scrolls (overflow-y:auto on .nc2-backdrop). Works, but note the header is inside .nc2-dialog so `position:sticky; top:0` on .nc2-hd is scoped to the dialog height, not the viewport — on very tall content the sticky header still stays as expected because .nc2-dialog now flows within the backdrop scroll container. Verified visually across all 3 viewports."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration17_precheckout.py (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (scroll fix verified on 390x844, 390x700 and 1280x600)"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 (verified via /api/auth/login and /api/admin/integrations/revorder).",
+  "seed_data_creation": "Created 2 live test orders via POST /api/checkout (payment_method=bank_transfer and payment_method=cod, both with econt_office delivery + shipping_eur=3.89). Wrote/removed a RevOrder domain config for purepeptide.bg (api_key=test-key, secret_key=test-secret) then disabled it (enabled=false) at end of the test. One inbound webhook event applied to the newest existing order id: it now has tracking_number=TRK123 and fulfillment_status=shipped. If the merchant wants those cleaned up, admin UI can revert them; no other data was mutated.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Bug fix for '.nc2-dialog не е scrollable' is fully verified — .nc2-backdrop is the actual scroll container (overflow-y:auto), .nc2-dialog uses align-self:flex-start and (on ≤860px) min-height:100%, and PreCheckoutModal.jsx locks document.body.style.overflow while mounted. Testids used: precheckout-modal, precheckout-close, pc-terms, pc-continue plus courier/method/office/city/street/postal/number/email/phone/first-name/last-name/country/dial/discount-code/discount-apply. Cart drawer has an in-line terms checkbox (no data-testid on the input itself) that must be checked before the 'Към плащане' button becomes clickable — worth adding data-testid='cart-terms' if not already there. Frontend URL routing: /bg/... locale prefix is NOT valid (the app logged 'No routes matched location /bg/products/...'); use unprefixed /products/{handle}. RevOrder domain purepeptide.bg is currently DISABLED in DB (enabled=false) with the test keys still stored — a subsequent test that expects 'not_configured' will get {sent:false, reason:'not_configured'}.",
+  "rca of the issue": "Original bug: .nc2-dialog was clamped to viewport height on mobile (align-items:center + max-height + overflow:auto on the dialog itself). Fix (already applied by main agent): .nc2-dialog now has overflow:visible + align-self:flex-start; the ≤860px media query switches .nc2-backdrop to align-items:flex-start and gives .nc2-dialog min-height:100%; .nc2-hd is position:sticky top:0 so the header stays visible while the backdrop scrolls; document.body.style.overflow='hidden' locks page-behind scroll and is restored on close. Verified programmatically: scrollHeight>clientHeight, programmatic + wheel scrolling both change scrollTop, pc-terms/pc-continue/closing note are all reachable, body overflow is hidden while open and visible after clicking precheckout-close."
+}
