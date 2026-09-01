@@ -9,7 +9,7 @@ const empty = { title: "", html: "", faq_items: [] };
 
 export default function AdminPagesPage() {
   const [meta, setMeta] = useState({ slugs: [], locales: [] });
-  const [slug, setSlug] = useState("what-are-peptides");
+  const [slug, setSlug] = useState("какво-са-пептиди");
   const [locale, setLocale] = useState("bg");
   const [page, setPage] = useState(empty);
   const [loading, setLoading] = useState(false);

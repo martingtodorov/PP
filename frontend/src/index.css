@@ -1196,13 +1196,39 @@ img { max-width: 100%; height: auto; }
 
 @media (min-width: 1024px) {
     .collection-carousel__title {
-        font-size: 12px;
-        line-height: 1.1;
-        left: 4px;
-        right: 4px;
-        bottom: 7px;
+        font-size: 16px;
+        line-height: 1.15;
+        left: 8px;
+        right: 8px;
+        bottom: 10px;
+        font-weight: 600;
         word-break: break-word;
     }
+}
+
+/* ───── Articles carousel — one row, scroll-snap, arrow nav (same as products) ───── */
+.article-carousel {
+    container-type: inline-size;
+    position: relative;
+}
+.article-carousel__track {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+}
+.article-carousel__track::-webkit-scrollbar { display: none; }
+.article-carousel__track { -ms-overflow-style: none; scrollbar-width: none; }
+.article-carousel__item {
+    flex: 0 0 calc((100cqw - 24px) / 2.28);
+    scroll-snap-align: start;
+}
+@media (min-width: 1024px) {
+    .article-carousel__track { gap: 20px; }
+    .article-carousel__item { flex: 0 0 calc((100% - 80px) / 5); }
 }
 
 /* Coral buttons: soft coral drop shadow + a light lift on hover (site-wide) */

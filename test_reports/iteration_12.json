@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration-12 verification pass for PurePeptide SEO package (favicons, OG images, Organization schema, meta coverage, internal linking, structured-data regression). 25/25 backend pytest cases pass (7 optional page slugs skipped because not seeded). Frontend head/JSON-LD verified on 8 pages (home, faq, 3 products, collection all-peptides, article tesamorelin, scientific-literature). Zero console errors on product pages. All three iteration-11 SEO polish items are now fixed: default site og-image serves at /og-image.jpg (200), product og:image is absolute, and article author is @type=Person. Only two minor cosmetic observations, no blockers.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/collections/all-peptides", "issues": ["Review request states 'GHK-Cu first' but the storefront and JSON-LD ItemList currently rank Retatrutide #1, GHK-Cu #2, BPC-157 #3. Not a functional bug — likely intentional sort by created_at/featured — but flag if the product-order requirement is strict."]}
+    ]
+  },
+  "verification": {
+    "static_assets": {"status": "PASS", "evidence": "GET /favicon.ico, /favicon-16x16.png, /favicon-32x32.png, /apple-touch-icon.png, /favicon-512.png, /logo192.png, /logo512.png, /og-image.jpg, /manifest.json → all 200 with real payloads (og-image.jpg ~200KB, favicon-512.png ~30KB)."},
+    "index_head_icons": {"status": "PASS", "evidence": "Rendered <head> on every route contains all 4 icon links (favicon.ico, 16x16, 32x32, apple-touch-icon 180x180) plus meta theme-color=#FE6F61 and og:site_name=PurePeptide."},
+    "og_image_default": {"status": "PASS", "evidence": "Home + /pages/faq + /collections/all-peptides + /pages/scientific-literature all emit og:image and twitter:image = https://<origin>/og-image.jpg (absolute)."},
+    "og_image_product": {"status": "PASS", "evidence": "bpc-157-5, 1-ghk-cu, 21-retatrutide-5 each emit an absolute og:image pointing to that product's own /api/files/import/...png URL."},
+    "organization_schema": {"status": "PASS", "evidence": "On every tested page the JSON-LD Organization node has logo.url ending /favicon-512.png (w/h 512), image ending /og-image.jpg, name PurePeptide, url origin/, email contact@purepeptide.bg."},
+    "meta_coverage": {"status": "PASS", "evidence": "Backend audit: GET /api/products → 21/21 seo_title+seo_description; GET /api/collections → 7/7; GET /api/articles ≥10 with ≤1 legacy fallback; GET /api/pages/{slug} for faq/about/cookies/contacts/scientific-literature → 5/5 have seo_title+seo_description. Frontend spot-checks: rendered <title> and meta[name=description] match backend copy (not the fallback 'PurePeptide' alone)."},
+    "internal_linking": {"status": "PASS", "evidence": "On /products/bpc-157-5, /products/1-ghk-cu, /products/21-retatrutide-5: [data-testid=breadcrumbs] shows 4-item trail Начало → Всички пептиди → collection → product; [data-testid=product-collection-links] renders one link per collection the product belongs to (bpc-157: 4 collections; ghk-cu: 1; retatrutide: 1); [data-testid=products-carousel] renders 8 unique related-product anchors with working /products/{handle} hrefs and prev/next controls; [data-testid=product-article-links] renders ≥1 matching article per product (bpc-157 → /articles/bpc-157-wolverine-stack, ghk-cu → /articles/регенеративни-...-ghk-cu-..., retatrutide → /articles/triumph3-study-on-retatrutide). Fallback article matching by peptide name is working."},
+    "structured_data_regression": {"status": "PASS", "evidence": "Product pages: Product+BreadcrumbList+Organization; multi-variant products emit AggregateOffer lowPrice/highPrice/priceCurrency=EUR/availability=InStock/sku/brand PurePeptide (BPC-157 29/49, Retatrutide 49/159); GHK-Cu single-variant correctly emits plain Offer (schema-valid). Collection page: CollectionPage with mainEntity=ItemList(numberOfItems=21, ListItems) + BreadcrumbList + Organization. /pages/faq: FAQPage(mainEntity=4) + BreadcrumbList + Organization. Article: BlogPosting with author @type=Person 'Georgi Mladenov' (fixed from iter-11) + publisher {@id:#organization} + BreadcrumbList + Organization. Home: Organization + WebSite(SearchAction) + WebPage. All JSON-LD parses cleanly; no null/undefined required fields."},
+    "storefront_regression": {"status": "PASS", "evidence": "Home + /collections/all-peptides (21 products, coral 'Към количка' quick-add buttons aligned across grid) + /products/bpc-157-5 render with 0 pageerror/console.error events. /pages/scientific-literature renders BG title 'Научни изследвания' with body content (PubMed/PubChem/ClinicalTrials.gov links, 'Как четем данните' section, category chips)."}
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration12_seo.py",
+    "/app/test_reports/pytest/iteration12_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: If GHK-Cu must be #1 on /collections/all-peptides per the SEO/UX brief, set an explicit sort_order or featured flag — current ranking is Retatrutide, GHK-Cu, BPC-157. Otherwise ignore."
+  ],
+  "critical_code_review_comments": [
+    "GHK-Cu (single-variant) product page emits plain Offer instead of AggregateOffer — schema-valid and semantically correct, but the review request wording implies AggregateOffer on every product. Consider always using AggregateOffer for consistency, or accept the current Offer for single-variant SKUs (recommended path).",
+    "server.py is now 2234 lines — same modularisation debt from iterations 10/11; SEO/schema code paths are clean but the file needs splitting soon.",
+    "Product page image URLs (og:image) are being served from the backend /api/files/import path. Works today but couples SEO cards to backend uptime; consider CDN-fronting these assets long-term.",
+    "articleLd author now correctly uses {@type:'Person', name} — no further action needed."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration12_seo.py"],
+  "success_rate": {"backend": "100% (25/25 executed, 7 skipped for non-seeded slugs)", "frontend": "100% of tested items"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 (not exercised this pass — verification only)",
+  "seed_data_creation": "None. Read-only verification pass.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration-12 pytest at /app/backend/tests/test_iteration12_seo.py — 32 collected (25 passed, 7 skipped), ~2.3s runtime. Covers static asset 200s, index.html head icons+theme-color, product/collection/article/page SEO coverage, product related-articles+collections+related-products, sitemap. Frontend head+JSON-LD checked on home/faq/3 products/all-peptides/tesamorelin/scientific-literature. All 3 outstanding SEO polish items from iter-11 are now confirmed fixed. Only cosmetic observation: all-peptides collection lists Retatrutide first (not GHK-Cu as review-request text implied) — verify with product owner whether an explicit sort is required.",
+  "rca of the issue": "Not applicable — no critical issue this round. SEO package (favicon set, OG image default, Organization schema logo/image, Person article author, product→article fallback linking) is fully implemented and rendering correctly on the live preview URL."
+}

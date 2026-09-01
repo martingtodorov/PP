@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
-import { api, fmtEUR } from "../lib/api";
+import { api, fmtEUR, fmtMoney } from "../lib/api";
 
 const TABS = [
   { key: "all", label: "Всички" },
@@ -86,7 +86,12 @@ export default function AdminOrdersPage() {
             data-testid={`admin-order-${o.order_number}`}>
             <div className="flex items-baseline justify-between gap-3">
               <span className="font-bold text-slate-900">{o.order_number}</span>
-              <span className="font-semibold text-slate-900">{fmtEUR(o.total_eur)}</span>
+              <span className="font-semibold text-slate-900" data-testid={`order-total-${o.order_number}`}>
+                {fmtMoney(o.total_display ?? o.total_eur, o.currency)}
+                {o.currency && o.currency !== "EUR" && (
+                  <span className="ml-1.5 text-xs font-normal text-slate-500">≈ {fmtEUR(o.total_eur)}</span>
+                )}
+              </span>
             </div>
             <p className="text-sm text-slate-600 mt-0.5">
               {o.customer.name || o.customer.email || "—"} • {o.items_count} {o.items_count === 1 ? "артикул" : "артикула"} • {fmtTime(o.created_at)}

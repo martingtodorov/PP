@@ -28,6 +28,7 @@ load_dotenv(ROOT / ".env")
 sys.path.insert(0, str(ROOT))
 
 import storage  # noqa: E402
+from currency import rate_for  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("import")
@@ -477,13 +478,23 @@ def import_orders() -> None:
             title = r.get("Line: Title") or r.get("Line: Name")
             if not title:
                 continue
+        cur = str(top.get("Currency") or "EUR").upper().strip()
+        fx = rate_for(cur)
+        for r in group:
+            if str(r.get("Line: Type") or "").lower() != "line item":
+                continue
+            title = r.get("Line: Title") or r.get("Line: Name")
+            if not title:
+                continue
+            price = round(num(r.get("Line: Price")), 2)
             line_items.append({
                 "product_handle": r.get("Line: Product Handle") or "",
                 "title": title,
                 "variant": r.get("Line: Variant Title") or "",
                 "sku": r.get("Line: SKU") or "",
                 "quantity": int(num(r.get("Line: Quantity"), 1)),
-                "price_eur": round(num(r.get("Line: Price")), 2),
+                "price_eur": round(price / fx, 2),
+                "price_orig": price,
             })
         total = round(num(top.get("Price: Total")), 2)
         payment = str(top.get("Payment: Status") or "").lower()
@@ -507,11 +518,17 @@ def import_orders() -> None:
                 "country": top.get("Shipping: Country") or "Bulgaria",
             },
             "line_items": line_items,
-            "subtotal_eur": round(num(top.get("Price: Subtotal")), 2),
-            "discount_eur": round(num(top.get("Price: Total Discount")), 2),
-            "shipping_eur": round(num(top.get("Price: Total Shipping")), 2),
-            "total_eur": total,
-            "currency": top.get("Currency") or "EUR",
+            "subtotal_eur": round(num(top.get("Price: Subtotal")) / fx, 2),
+            "discount_eur": round(num(top.get("Price: Total Discount")) / fx, 2),
+            "shipping_eur": round(num(top.get("Price: Total Shipping")) / fx, 2),
+            "total_eur": round(total / fx, 2),
+            "subtotal_orig": round(num(top.get("Price: Subtotal")), 2),
+            "discount_orig": round(num(top.get("Price: Total Discount")), 2),
+            "shipping_orig": round(num(top.get("Price: Total Shipping")), 2),
+            "total_orig": total,
+            "currency": cur,
+            "currency_rate": fx,
+            "currency_normalized": True,
             "payment_method": next((r.get("Transaction: Gateway") for r in group if r.get("Transaction: Gateway")), ""),
             "payment_status": "paid" if payment == "paid" else payment or "pending",
             "status": status,

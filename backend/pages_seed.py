@@ -1,37 +1,40 @@
-"""Default content for the editable static pages (Bulgarian source + English pivot)."""
+"""Default content for the editable static pages (Bulgarian source + English pivot).
+
+Slugs mirror the live purepeptide.bg URLs 1:1.
+"""
 
 PAGE_SLUGS = [
-    "what-are-peptides",
+    "какво-са-пептиди",
     "faq",
-    "contacts",
+    "contact-1",
     "chemical-analysis",
-    "partners",
-    "about",
+    "become-a-distributor",
+    "about-1",
     "cookies",
     "scientific-literature",
     "privacy-policy",
     "refund-policy",
-    "terms-of-service",
-    "shipping-policy",
+    "terms-conditions",
+    "delivery-and-payment",
 ]
 
 PAGE_LABELS = {
-    "what-are-peptides": "Какво са пептидите",
+    "какво-са-пептиди": "Какво са пептидите",
     "faq": "Често задавани въпроси (FAQ)",
-    "contacts": "Контакти",
+    "contact-1": "Контакти",
     "chemical-analysis": "Химичен анализ",
-    "partners": "Партньори",
-    "about": "За нас",
+    "become-a-distributor": "Партньори",
+    "about-1": "За нас",
     "cookies": "Бисквитки",
     "scientific-literature": "Научни изследвания",
     "privacy-policy": "Политика за поверителност",
     "refund-policy": "Възстановяване на суми",
-    "terms-of-service": "Общи условия",
-    "shipping-policy": "Условия за доставка",
+    "terms-conditions": "Общи условия",
+    "delivery-and-payment": "Доставка и плащане",
 }
 
 DEFAULT_PAGES = {
-    "what-are-peptides": {
+    "какво-са-пептиди": {
         "bg": {
             "title": "Какво са пептидите?",
             "html": "<p>Пептидите са къси вериги от аминокиселини, свързани чрез пептидни връзки. В организма те действат като сигнални молекули и участват в регулацията на метаболизъм, възстановяване на тъкани, имунен отговор и много други процеси.</p><h2>Лиофилизирана форма</h2><p>Всички наши пептиди се доставят в лиофилизирана (изсушена чрез замразяване) форма. Тя запазва структурата и биологичната активност значително по-дълго от готовите водни разтвори.</p><h2>Изследователска употреба</h2><p>Продуктите са предназначени изключително за лабораторни и научноизследователски цели.</p>",
@@ -51,7 +54,7 @@ DEFAULT_PAGES = {
             "html": "<p>Every batch undergoes HPLC and LC-MS analysis at the independent Czech laboratory <strong>Janoshik Analytical</strong>, confirming identity, purity (&gt;99%) and net peptide content.</p><h2>What the certificate contains</h2><ul><li>Batch number and analysis date</li><li>HPLC chromatogram with purity percentage</li><li>Mass-spectrometry confirmation of molecular weight</li><li>Net peptide content</li></ul>",
         },
     },
-    "contacts": {
+    "contact-1": {
         "bg": {
             "title": "Контакти",
             "html": "<p>Свържете се с нас за въпроси относно продукти, поръчки и доставки.</p><p>Имейл: <a href='mailto:info@purepeptide.bg'>info@purepeptide.bg</a><br>Работно време: понеделник – петък, 9:00 – 18:00</p><p>Доставки се извършват със Спиди в рамките на 1–3 работни дни.</p>",
@@ -61,7 +64,7 @@ DEFAULT_PAGES = {
             "html": "<p>Get in touch about products, orders and shipping.</p><p>Email: <a href='mailto:info@purepeptide.eu'>info@purepeptide.eu</a><br>Hours: Monday – Friday, 9:00 – 18:00 CET</p>",
         },
     },
-    "partners": {
+    "become-a-distributor": {
         "bg": {
             "title": "Партньори",
             "html": "<p>Работим с независими лаборатории и научни партньори, които подпомагат контрола на качеството и достоверността на публикуваната информация.</p><ul><li>Janoshik Analytical — HPLC / LC-MS анализи</li><li>Специализирани дистрибутори за научни консумативи</li></ul><p>За партньорски запитвания ни пишете на info@purepeptide.bg.</p>",
@@ -79,13 +82,13 @@ DEFAULT_PAGES = {
         "bg": {"title": "Правила за възстановяване на суми", "html": "<p>Приемаме връщане на неотворени продукти в оригинална опаковка в рамките на 14 дни от получаването. Възстановяването се извършва по същия начин на плащане.</p>"},
         "en": {"title": "Refund policy", "html": "<p>Unopened products in original packaging can be returned within 14 days of delivery. Refunds are issued via the original payment method.</p>"},
     },
-    "terms-of-service": {
+    "terms-conditions": {
         "bg": {"title": "Общи условия", "html": "<p>Използвайки този сайт, потвърждавате, че сте на възраст над 18 години и че поръчвате продуктите изключително за лабораторни и научноизследователски цели. Продуктите не са лекарствени средства.</p>"},
         "en": {"title": "Terms of service", "html": "<p>By using this site you confirm that you are over 18 and that you purchase the products strictly for laboratory and research purposes. The products are not medicinal products.</p>"},
     },
-    "shipping-policy": {
-        "bg": {"title": "Условия за доставка", "html": "<p>Поръчките се обработват в рамките на 1–3 работни дни и се изпращат със Спиди до офис или адрес. Получавате имейл с товарителница след изпращане.</p>"},
-        "en": {"title": "Shipping policy", "html": "<p>Orders are processed within 1–3 business days and shipped with a tracked courier. A tracking email is sent once the parcel leaves our facility.</p>"},
+    "delivery-and-payment": {
+        "bg": {"title": "Доставка и плащане", "html": "<p>Поръчките се обработват в рамките на 1–3 работни дни и се изпращат със Спиди до офис или адрес. Получавате имейл с товарителница след изпращане.</p>"},
+        "en": {"title": "Shipping & payment", "html": "<p>Orders are processed within 1–3 business days and shipped with a tracked courier. A tracking email is sent once the parcel leaves our facility.</p>"},
     },
     "faq": {
         "bg": {

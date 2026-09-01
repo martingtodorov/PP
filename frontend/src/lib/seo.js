@@ -39,7 +39,7 @@ export function useSeo({ title, description, locale = DEFAULT_LOCALE, path = "/"
     const origin = window.location.origin;
     const ogImage = image
       ? (image.startsWith("http") ? image : `${origin}${image}`)
-      : `${origin}/logo512.png`;
+      : `${origin}/og-image.jpg`;
     setMeta("property", "og:image", ogImage);
     setMeta("property", "og:site_name", "PurePeptide");
     setMeta("name", "twitter:image", ogImage);

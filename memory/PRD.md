@@ -157,3 +157,46 @@ Domains & languages
 - Email `admin@purepeptide.bg`, password `Admin@PurePeptide2026`
 - Sections: Табло, Продукти (+ редактор), Поръчки, Клиенти, Импорт, Езици и URL, Страници по език,
   Изтеглени линкове, Настройки
+
+## 2026-09-01 — Currency fix, articles carousel, live-URL alignment, one-click AI translation
+### Fixes
+- **RON orders**: imported Shopify orders in non-EUR currencies had the foreign amount inside the
+  `*_eur` fields. `currency.py` (rates, RON = 4.9750) + `fix_order_currency.py` migration: originals kept in
+  `*_orig` / `price_orig`, `*_eur` converted, `currency_rate` + `currency_normalized` flags, customer spend
+  re-computed (46 orders, 1017 customers). `_order_view` now returns `*_display` + `price_display`; admin list and
+  order detail show the original currency and the EUR equivalent ("курс 4.975 RON/EUR").
+- Desktop category tile titles: 13px/12px → **16px / weight 600**.
+- Homepage "Научни статии" is now a **single-row scrollable carousel** (`ArticlesCarousel.jsx`,
+  `.article-carousel*` CSS): 5 cards desktop with arrows, ~2.3 cards swipeable on mobile.
+- One article without an image (`retatrutid-…-9022-78`) got the RETA image.
+
+### Live-URL alignment (`align_live_urls.py`)
+- `all-peptides` → **`2all-the-peptides-1`** (live handle); legacy handle still resolves in the API.
+- Page slugs now mirror purepeptide.bg: `contact-1`, `about-1`, `become-a-distributor`,
+  `terms-conditions`, `delivery-and-payment`, `какво-са-пептиди` (old slugs 404).
+- Missing live collection **`retatrutide-price`** created (live meta title/description, `nav_hidden` so it
+  does not add a homepage tile).
+- The 15 imported Shopify 301 redirects were **removed** (owner's decision).
+
+### SEO / discovery
+- Own **HTML sitemap**: `/pages/html-sitemap` + `-products`, `-collections`, `-blogs`, `-articles`, `-pages`
+  (`HtmlSitemapPage.jsx`, `GET /api/link-index`), linked from the footer ("Карта на сайта") and from sitemap.xml.
+- `GET /api/agents.md` (live product list with prices) + static `/agents.md`,
+  `GET /api/sitemap_agentic_discovery.xml`; robots.txt lists both sitemaps + the agents.md hint.
+- `sitemap.xml` now contains every page slug and the html-sitemap pages.
+
+### Translations
+- **One button** in Admin → Продукти: "Преведи всичко с AI (всички езици)" → `resource: "everything"`
+  translates products, collections, **articles (incl. body)** and **pages**, now also **`seo_title` /
+  `seo_description`**, into all 10 non-BG locales. Background job with live progress.
+- Translation runs on the owner's own **Anthropic Claude key** (`claude-sonnet-5`) — the Emergent key is
+  only used for object storage.
+- Fixed truncated-JSON failures: `ai_translate_chunked` (2 locales per call, parallel, single-locale retry),
+  `max_tokens` 16000 + `stop_reason` guard.
+- New **Admin → „Колекции: текст и SEO"** (`/admin/collections/content`): per-locale title/handle/description/
+  SEO editor, `nav_hidden` toggle, per-locale or all-locale AI translate.
+
+### Verified
+- iteration_13.json (currency + carousel + category text + schema) — all pass.
+- iteration_14.json (URL alignment, link-index, sitemaps, agents.md, admin editor) — backend 22/22;
+  the html-sitemap sub-route bug it found was fixed (explicit routes) and re-verified manually.
