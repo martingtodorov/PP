@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import Layout, { USPRow } from "../components/Layout";
 import ProductsCarousel from "../components/ProductsCarousel";
+import ArticlesCarousel from "../components/ArticlesCarousel";
 import PPCalculator from "../components/PPCalculator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion";
 import { api } from "../lib/api";
@@ -86,7 +87,7 @@ export default function HomePage() {
       api.get("/articles"),
       api.get("/settings"),
     ]).then(([c, p, a, s]) => {
-      setCollections(c.data.collections.filter((x) => (x.base_handle || x.handle) !== "all-peptides"));
+      setCollections(c.data.collections.filter((x) => (x.base_handle || x.handle) !== "2all-the-peptides-1" && !x.nav_hidden));
       setProducts(p.data.products);
       setArticles(a.data.articles);
       setSettings(s.data);
@@ -130,7 +131,7 @@ export default function HomePage() {
               <h1 className="pp-hero__title" data-testid="hero-title">PurePeptide</h1>
               <h2 className="pp-hero__sub" data-testid="hero-subtitle">{t("heroSub")}</h2>
               <div className="pp-hero__cta">
-                <Link to={lp("/collections/all-peptides")} className="pp-hero__btn pp-hero__btn--primary" data-testid="hero-cta-primary">
+                <Link to={lp("/collections/2all-the-peptides-1")} className="pp-hero__btn pp-hero__btn--primary" data-testid="hero-cta-primary">
                   {t("heroCta1")} ›
                 </Link>
                 <Link to={lp("/pages/chemical-analysis")} className="pp-hero__btn" data-testid="hero-cta-secondary">
@@ -177,7 +178,7 @@ export default function HomePage() {
         <div className="pp-wide">
           <div className="flex flex-row justify-between items-baseline gap-3 mb-4 sm:mb-6">
             <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">{t("bestsellers")}</h2>
-            <Link to={lp("/collections/all-peptides")}
+            <Link to={lp("/collections/2all-the-peptides-1")}
               className="text-sm font-medium text-slate-700 hover:text-coral-600 underline-offset-4 hover:underline"
               data-testid="view-all-products-btn">
               {t("viewAll")}
@@ -209,13 +210,8 @@ export default function HomePage() {
               {t("viewAll")}
             </Link>
           </div>
-          <div className="grid grid-flow-col auto-cols-[68%] sm:auto-cols-[44%] lg:grid-flow-row lg:grid-cols-5 lg:auto-cols-auto gap-3 lg:gap-5 overflow-x-auto lg:overflow-visible no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 pb-2">
-            {articles.map((a) => (
-              <Link key={a.handle} to={lp(`/articles/${a.handle}`)} className="article-card" data-testid={`article-${a.handle}`}>
-                <div className="article-card__media"><img src={a.image} alt={a.title} loading="lazy" /></div>
-                <h3 className="article-card__title">{a.title}</h3>
-              </Link>
-            ))}
+          <div className="-mx-4 px-4 lg:mx-0 lg:px-0">
+            <ArticlesCarousel articles={articles} lp={lp} />
           </div>
         </div>
       </section>

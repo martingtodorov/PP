@@ -13,7 +13,7 @@ import { graph, faqLd, breadcrumbLd, organizationLd } from "../lib/schema";
 
 const BODY = {
   bg: {
-    "what-are-peptides": {
+    "какво-са-пептиди": {
       title: "Какво са пептидите?",
       html: "<p>Пептидите са къси вериги от аминокиселини, свързани чрез пептидни връзки. В организма те действат като сигнални молекули и участват в регулацията на метаболизъм, възстановяване на тъкани, имунен отговор и много други процеси.</p><h2>Лиофилизирана форма</h2><p>Всички наши пептиди се доставят в лиофилизирана (изсушена чрез замразяване) форма. Тя запазва структурата и биологичната активност значително по-дълго от готовите водни разтвори.</p><h2>Изследователска употреба</h2><p>Продуктите са предназначени изключително за лабораторни и научноизследователски цели.</p>",
     },
@@ -25,17 +25,17 @@ const BODY = {
       title: "Контакти",
       html: "<p>Свържете се с нас за въпроси относно продукти, поръчки и доставки.</p><p>Имейл: <a href='mailto:info@purepeptide.bg'>info@purepeptide.bg</a><br>Работно време: понеделник – петък, 9:00 – 18:00</p><p>Доставки се извършват със Спиди в рамките на 1–3 работни дни.</p>",
     },
-    partners: {
+    "become-a-distributor": {
       title: "Партньори",
       html: "<p>Работим с независими лаборатории и научни партньори, които подпомагат контрола на качеството и достоверността на публикуваната информация.</p><ul><li>Janoshik Analytical — HPLC / LC-MS анализи</li><li>Специализирани дистрибутори за научни консумативи</li></ul><p>За партньорски запитвания ни пишете на info@purepeptide.bg.</p>",
     },
     "privacy-policy": { title: "Политика за поверителност", html: "<p>Обработваме лични данни само за изпълнение на поръчки и комуникация, свързана с тях. Не предоставяме данни на трети страни извън необходимите за доставка партньори.</p>" },
     "refund-policy": { title: "Правила за възстановяване на суми", html: "<p>Приемаме връщане на неотворени продукти в оригинална опаковка в рамките на 14 дни от получаването. Възстановяването се извършва по същия начин на плащане.</p>" },
-    "terms-of-service": { title: "Общи условия", html: "<p>Използвайки този сайт, потвърждавате, че сте на възраст над 18 години и че поръчвате продуктите изключително за лабораторни и научноизследователски цели. Продуктите не са лекарствени средства.</p>" },
-    "shipping-policy": { title: "Условия за доставка", html: "<p>Поръчките се обработват в рамките на 1–3 работни дни и се изпращат със Спиди до офис или адрес. Получавате имейл с товарителница след изпращане.</p>" },
+    "terms-conditions": { title: "Общи условия", html: "<p>Използвайки този сайт, потвърждавате, че сте на възраст над 18 години и че поръчвате продуктите изключително за лабораторни и научноизследователски цели. Продуктите не са лекарствени средства.</p>" },
+    "delivery-and-payment": { title: "Условия за доставка", html: "<p>Поръчките се обработват в рамките на 1–3 работни дни и се изпращат със Спиди до офис или адрес. Получавате имейл с товарителница след изпращане.</p>" },
   },
   en: {
-    "what-are-peptides": {
+    "какво-са-пептиди": {
       title: "What are peptides?",
       html: "<p>Peptides are short chains of amino acids linked by peptide bonds. In the body they act as signalling molecules involved in metabolism, tissue repair, immune response and many other processes.</p><h2>Lyophilised form</h2><p>All of our peptides ship lyophilised (freeze-dried), which preserves structure and biological activity far longer than pre-mixed aqueous solutions.</p><h2>Research use</h2><p>All products are intended strictly for laboratory and research purposes.</p>",
     },
@@ -44,11 +44,11 @@ const BODY = {
       html: "<p>Every batch undergoes HPLC and LC-MS analysis at the independent Czech laboratory <strong>Janoshik Analytical</strong>, confirming identity, purity (&gt;99%) and net peptide content.</p><h2>What the certificate contains</h2><ul><li>Batch number and analysis date</li><li>HPLC chromatogram with purity percentage</li><li>Mass-spectrometry confirmation of molecular weight</li><li>Net peptide content</li></ul>",
     },
     contacts: { title: "Contact", html: "<p>Get in touch about products, orders and shipping.</p><p>Email: <a href='mailto:info@purepeptide.eu'>info@purepeptide.eu</a><br>Hours: Monday – Friday, 9:00 – 18:00 CET</p>" },
-    partners: { title: "Partners", html: "<p>We work with independent laboratories and research partners supporting quality control and the accuracy of the published information.</p><ul><li>Janoshik Analytical — HPLC / LC-MS testing</li><li>Specialised distributors of research consumables</li></ul>" },
+    "become-a-distributor": { title: "Partners", html: "<p>We work with independent laboratories and research partners supporting quality control and the accuracy of the published information.</p><ul><li>Janoshik Analytical — HPLC / LC-MS testing</li><li>Specialised distributors of research consumables</li></ul>" },
     "privacy-policy": { title: "Privacy policy", html: "<p>We process personal data only to fulfil orders and related communication. Data is never shared beyond the partners required for delivery.</p>" },
     "refund-policy": { title: "Refund policy", html: "<p>Unopened products in original packaging can be returned within 14 days of delivery. Refunds are issued via the original payment method.</p>" },
-    "terms-of-service": { title: "Terms of service", html: "<p>By using this site you confirm that you are over 18 and that you purchase the products strictly for laboratory and research purposes. The products are not medicinal products.</p>" },
-    "shipping-policy": { title: "Shipping policy", html: "<p>Orders are processed within 1–3 business days and shipped with a tracked courier. A tracking email is sent once the parcel leaves our facility.</p>" },
+    "terms-conditions": { title: "Terms of service", html: "<p>By using this site you confirm that you are over 18 and that you purchase the products strictly for laboratory and research purposes. The products are not medicinal products.</p>" },
+    "delivery-and-payment": { title: "Shipping policy", html: "<p>Orders are processed within 1–3 business days and shipped with a tracked courier. A tracking email is sent once the parcel leaves our facility.</p>" },
   },
 };
 
@@ -61,7 +61,7 @@ export default function StaticPage() {
 
   useEffect(() => {
     api.get("/articles").then(({ data }) => setArticles(data.articles));
-    api.get("/collections").then(({ data }) => setCollections(data.collections.filter((c) => (c.base_handle || c.handle) !== "all-peptides")));
+    api.get("/collections").then(({ data }) => setCollections(data.collections.filter((c) => (c.base_handle || c.handle) !== "2all-the-peptides-1" && !c.nav_hidden)));
   }, [locale]);
 
   useEffect(() => {
@@ -138,9 +138,9 @@ export default function StaticPage() {
           <div className="pp-rte mt-6" dangerouslySetInnerHTML={{ __html: page.html }} data-testid="static-body" />
         )}
 
-        {slug === "contacts" && <ContactForm />}
+        {slug === "contact-1" && <ContactForm />}
 
-        {slug === "what-are-peptides" && (
+        {slug === "какво-са-пептиди" && (
           <div className="mt-10">
             <PPCalculator />
           </div>

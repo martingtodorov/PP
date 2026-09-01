@@ -290,7 +290,7 @@ export default function AdminProductEditPage() {
         <div className="space-y-6">
           <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-3">
             <h2 className="font-bold text-slate-900">Категории</h2>
-            {collections.filter((c) => c.handle !== "all-peptides").map((c) => (
+            {collections.filter((c) => c.handle !== "2all-the-peptides-1").map((c) => (
               <label key={c.handle} className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" className="accent-coral-600"
                   checked={p.collections?.includes(c.handle)}

@@ -10,7 +10,7 @@ import { useSeo } from "../lib/seo";
 import { graph, itemListLd, breadcrumbLd, organizationLd } from "../lib/schema";
 
 export default function CollectionPage() {
-  const { handle = "all-peptides" } = useParams();
+  const { handle = "2all-the-peptides-1" } = useParams();
   const [data, setData] = useState({ collection: null, products: [], siblings: [] });
   const [sort, setSort] = useState("featured");
   const { lp, t, locale } = useLocaleCtx();
@@ -53,7 +53,7 @@ export default function CollectionPage() {
     <Layout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5">
         <Breadcrumbs
-          items={[{ label: t("catalog"), to: lp("/collections/all-peptides") }, { label: c?.title || handle }]}
+          items={[{ label: t("catalog"), to: lp("/collections/2all-the-peptides-1") }, { label: c?.title || handle }]}
         />
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-4" data-testid="collection-title">
           {c?.title || handle}
@@ -66,9 +66,9 @@ export default function CollectionPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-wrap gap-2 mb-7 overflow-x-auto no-scrollbar" data-testid="collection-tabs">
-          <Link to={lp("/collections/all-peptides")}
+          <Link to={lp("/collections/2all-the-peptides-1")}
             className={`px-4 py-2 rounded-full text-sm font-medium border whitespace-nowrap transition-colors ${
-              handle === "all-peptides" ? "bg-coral-600 text-white border-coral-600" : "bg-white text-slate-700 border-slate-200 hover:border-coral-400"
+              handle === "2all-the-peptides-1" ? "bg-coral-600 text-white border-coral-600" : "bg-white text-slate-700 border-slate-200 hover:border-coral-400"
             }`}>
             {t("catalog")}
           </Link>

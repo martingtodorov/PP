@@ -9,6 +9,7 @@ const NAV = [
   { to: "/admin/orders", label: "Поръчки", icon: ShoppingBag },
   { to: "/admin/products", label: "Продукти", icon: Package },
   { to: "/admin/collections", label: "Подредба на колекции", icon: ListOrdered },
+  { to: "/admin/collections/content", label: "Колекции: текст и SEO", icon: FileText },
   { to: "/admin/inventory", label: "Наличности", icon: Boxes },
   { to: "/admin/customers", label: "Клиенти", icon: Users },
   { to: "/admin/messages", label: "Запитвания", icon: MessageSquare },

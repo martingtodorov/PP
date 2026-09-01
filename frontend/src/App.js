@@ -30,6 +30,8 @@ import AdminAnalyticsPage from "./pages/AdminAnalyticsPage";
 import AdminInventoryPage from "./pages/AdminInventoryPage";
 import AdminOrderDetailPage from "./pages/AdminOrderDetailPage";
 import StaticPage from "./pages/StaticPage";
+import HtmlSitemapPage from "./pages/HtmlSitemapPage";
+import AdminCollectionEditPage from "./pages/AdminCollectionEditPage";
 
 const STOREFRONT = [
   { path: "/", el: <HomePage /> },
@@ -40,6 +42,12 @@ const STOREFRONT = [
   { path: "/cart", el: <CartPage /> },
   { path: "/checkout", el: <CheckoutPage /> },
   { path: "/checkout/success/:orderId", el: <CheckoutSuccessPage /> },
+  { path: "/pages/html-sitemap", el: <HtmlSitemapPage /> },
+  { path: "/pages/html-sitemap-products", el: <HtmlSitemapPage /> },
+  { path: "/pages/html-sitemap-collections", el: <HtmlSitemapPage /> },
+  { path: "/pages/html-sitemap-blogs", el: <HtmlSitemapPage /> },
+  { path: "/pages/html-sitemap-articles", el: <HtmlSitemapPage /> },
+  { path: "/pages/html-sitemap-pages", el: <HtmlSitemapPage /> },
   { path: "/pages/:slug", el: <StaticPage /> },
   { path: "/account/*", el: <AccountPage /> },
 ];
@@ -70,6 +78,7 @@ function App() {
                 <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
                 <Route path="/admin/inventory" element={<AdminInventoryPage />} />
                 <Route path="/admin/collections" element={<AdminCollectionsPage />} />
+                <Route path="/admin/collections/content" element={<AdminCollectionEditPage />} />
                 <Route path="/admin/messages" element={<AdminMessagesPage />} />
                 <Route path="/admin/customers" element={<AdminCustomersPage />} />
                 <Route path="/admin/import" element={<AdminImportPage />} />

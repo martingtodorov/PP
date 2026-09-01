@@ -160,7 +160,7 @@ export default function CheckoutPage() {
               </div>
               <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
                 <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} className="mt-0.5 accent-coral-600" data-testid="checkout-terms-checkbox" />
-                <span>Съгласявам се с <Link to={lp("/pages/terms-of-service")} className="underline hover:text-coral-600">общите условия</Link> и потвърждавам, че поръчвам за научноизследователски цели.</span>
+                <span>Съгласявам се с <Link to={lp("/pages/terms-conditions")} className="underline hover:text-coral-600">общите условия</Link> и потвърждавам, че поръчвам за научноизследователски цели.</span>
               </label>
               <Button type="submit" disabled={submitting || !terms} className="w-full bg-coral-600 hover:bg-coral-700" data-testid="place-order-btn">
                 {submitting ? "Обработка…" : "Завърши поръчката"}

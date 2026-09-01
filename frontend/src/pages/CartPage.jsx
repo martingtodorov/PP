@@ -23,7 +23,7 @@ export default function CartPage() {
         {items.length === 0 ? (
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-12 text-center">
             <p className="text-slate-600">Количката е празна.</p>
-            <Link to={lp("/collections/all-peptides")}>
+            <Link to={lp("/collections/2all-the-peptides-1")}>
               <Button className="mt-6 bg-coral-600 hover:bg-coral-700">Към каталога</Button>
             </Link>
           </div>

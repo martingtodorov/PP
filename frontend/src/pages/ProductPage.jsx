@@ -46,7 +46,7 @@ export default function ProductPage() {
       productLd({ product: p, variant: v, path: `/products/${handle}` }),
       breadcrumbLd([
         { name: "Начало", path: "/" },
-        { name: "Всички пептиди", path: "/collections/all-peptides" },
+        { name: "Всички пептиди", path: "/collections/2all-the-peptides-1" },
         { name: p.title, path: `/products/${handle}` },
       ]),
       organizationLd(),
@@ -65,7 +65,7 @@ export default function ProductPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-12">
         <Breadcrumbs
           items={[
-            { label: t("catalog"), to: lp("/collections/all-peptides") },
+            { label: t("catalog"), to: lp("/collections/2all-the-peptides-1") },
             ...(primaryCollection ? [{ label: primaryCollection.title, to: lp(`/collections/${primaryCollection.handle}`) }] : []),
             { label: p.title },
           ]}
@@ -187,7 +187,7 @@ export default function ProductPage() {
                   {c.title}
                 </Link>
               ))}
-              <Link to={lp("/collections/all-peptides")}
+              <Link to={lp("/collections/2all-the-peptides-1")}
                 className="px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-700 hover:border-coral-600 hover:text-coral-700 transition-colors">
                 {t("catalog")}
               </Link>

@@ -33,7 +33,7 @@ from seed_data import COLLECTIONS, PRODUCTS, ARTICLES, DEFAULT_SETTINGS, SEED_VE
 from translations_seed import COLLECTION_TR, PRODUCT_TR, ARTICLE_TR
 from i18n import (
     LOCALES, DEFAULT_LOCALE, LOCALE_META, SITE_ORIGINS,
-    normalize_locale, localize_doc, localize_list, ai_translate, ai_translate_page,
+    normalize_locale, localize_doc, localize_list, ai_translate, ai_translate_chunked, ai_translate_page,
 )
 from pages_seed import PAGE_SLUGS, PAGE_LABELS, DEFAULT_PAGES
 import storage
@@ -208,6 +208,7 @@ class CollectionIn(BaseModel):
     description: str = ""
     image: str = ""
     sort_order: int = 0
+    nav_hidden: bool = False
     seo_title: Optional[str] = ""
     seo_description: Optional[str] = ""
     translations: Dict[str, Dict[str, Any]] = {}
@@ -403,6 +404,10 @@ async def me(request: Request):
 
 
 # ---------- Public catalog ----------
+ALL_COLLECTION = "2all-the-peptides-1"   # live purepeptide.bg handle for "Всички пептиди"
+LEGACY_ALL = "all-peptides"
+
+
 def clean_doc(d: Dict[str, Any]) -> Dict[str, Any]:
     d.pop("_id", None)
     return d
@@ -426,18 +431,20 @@ def _apply_manual_order(prods: List[Dict[str, Any]], order: Optional[List[str]])
 @api.get("/collections/{handle}")
 async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
+    if handle == LEGACY_ALL:
+        handle = ALL_COLLECTION
     col = await db.collections_cat.find_one(
         {"$or": [{"handle": handle}, {f"translations.{loc}.handle": handle}]}, {"_id": 0}
     )
     if not col:
         raise HTTPException(404, "Колекцията не е намерена")
     base_handle = col["handle"]
-    if base_handle == "all-peptides":
+    if base_handle == ALL_COLLECTION:
         prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0}).to_list(500)
     else:
         prods = await db.products.find({"collections": base_handle, "active": {"$ne": False}}, {"_id": 0}).to_list(500)
     siblings = await db.collections_cat.find(
-        {"handle": {"$nin": [base_handle, "all-peptides"]}}, {"_id": 0}
+        {"handle": {"$nin": [base_handle, ALL_COLLECTION]}, "nav_hidden": {"$ne": True}}, {"_id": 0}
     ).sort("sort_order", 1).to_list(50)
     prods = _apply_manual_order(prods, col.get("product_order"))
     return {
@@ -465,7 +472,7 @@ async def list_products(
         ]
     docs = await db.products.find(q, {"_id": 0}).limit(500).to_list(500)
     if not search:
-        all_col = await db.collections_cat.find_one({"handle": "all-peptides"}, {"_id": 0, "product_order": 1})
+        all_col = await db.collections_cat.find_one({"handle": ALL_COLLECTION}, {"_id": 0, "product_order": 1})
         docs = _apply_manual_order(docs, (all_col or {}).get("product_order"))
     return {"products": localize_list(docs[:limit], loc)}
 
@@ -486,6 +493,19 @@ async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
         {"handle": {"$in": p.get("collections", [])}}, {"_id": 0}
     ).to_list(20)
     articles = await db.articles.find({"product_handle": p["handle"]}, {"_id": 0}).to_list(5)
+    if not articles:
+        # internal linking fallback: match the peptide name (e.g. "BPC-157") in article titles
+        tokens = re.findall(r"[A-Za-z][A-Za-z0-9]{2,}(?:-[0-9]{2,4})?", p.get("title", ""))
+        tokens = [t for t in tokens if t.lower() not in ("mg", "the", "and")]
+        if tokens:
+            rx = "|".join(re.escape(t) for t in tokens[:3])
+            articles = await db.articles.find(
+                {"published": True, "$or": [
+                    {"title": {"$regex": rx, "$options": "i"}},
+                    {"handle": {"$regex": rx, "$options": "i"}},
+                ]},
+                {"_id": 0},
+            ).to_list(4)
     return {
         "product": localize_doc(p, loc),
         "related": localize_list(related, loc),
@@ -790,12 +810,15 @@ def _order_view(o: Dict[str, Any]) -> Dict[str, Any]:
     info = o.get("customer_info") or {}
     ship = o.get("shipping") or {}
     raw_items = o.get("items") or o.get("line_items") or []
+    cur = str(o.get("currency") or "EUR").upper()
+    fx = float(o.get("currency_rate") or (1.0 if cur == "EUR" else 1.0))
     items = [{
         "title": it.get("title", ""),
         "variant": it.get("variant_name") or it.get("variant") or "",
         "sku": it.get("variant_sku") or it.get("sku") or "",
         "quantity": int(it.get("quantity") or 1),
         "price_eur": float(it.get("price_eur") or 0),
+        "price_display": float(it.get("price_orig") if it.get("price_orig") is not None else (it.get("price_eur") or 0)),
         "product_handle": it.get("product_handle") or "",
     } for it in raw_items]
     fulfillment = o.get("fulfillment_status")
@@ -826,6 +849,11 @@ def _order_view(o: Dict[str, Any]) -> Dict[str, Any]:
         "discount_eur": round(float(o.get("discount_eur") or 0), 2),
         "shipping_eur": round(float(o.get("shipping_eur") or 0), 2),
         "total_eur": round(float(o.get("total_eur") or 0), 2),
+        "subtotal_display": round(float(o.get("subtotal_orig") if o.get("subtotal_orig") is not None else (o.get("subtotal_eur") or 0)), 2),
+        "discount_display": round(float(o.get("discount_orig") if o.get("discount_orig") is not None else (o.get("discount_eur") or 0)), 2),
+        "shipping_display": round(float(o.get("shipping_orig") if o.get("shipping_orig") is not None else (o.get("shipping_eur") or 0)), 2),
+        "total_display": round(float(o.get("total_orig") if o.get("total_orig") is not None else (o.get("total_eur") or 0)), 2),
+        "currency_rate": fx,
         "payment_status": o.get("payment_status") or "awaiting_payment",
         "fulfillment_status": fulfillment,
         "shipping_method": o.get("shipping_method") or (tracking or {}).get("carrier") or "",
@@ -833,7 +861,7 @@ def _order_view(o: Dict[str, Any]) -> Dict[str, Any]:
         "tracking": tracking,
         "note": o.get("notes") or o.get("note") or "",
         "source": o.get("source") or "storefront",
-        "currency": o.get("currency") or "EUR",
+        "currency": cur,
     }
 
 
@@ -1337,7 +1365,7 @@ async def admin_collection_products(handle: str, user=Depends(require_admin)):
     col = await db.collections_cat.find_one({"handle": handle}, {"_id": 0})
     if not col:
         raise HTTPException(404, "Колекцията не е намерена")
-    q = {} if handle == "all-peptides" else {"collections": handle}
+    q = {} if handle == ALL_COLLECTION else {"collections": handle}
     prods = await db.products.find(q, {"_id": 0}).to_list(500)
     prods = _apply_manual_order(prods, col.get("product_order"))
     return {
@@ -1379,7 +1407,7 @@ async def admin_order_by_sales(handle: str, user=Depends(require_admin)):
             if h:
                 sold[h] = sold.get(h, 0) + int(it.get("quantity") or 1)
 
-    q = {} if handle == "all-peptides" else {"collections": handle}
+    q = {} if handle == ALL_COLLECTION else {"collections": handle}
     prods = await db.products.find(q, {"_id": 0, "handle": 1, "title": 1}).to_list(500)
     ordered = sorted(prods, key=lambda p: (-sold.get(p["handle"], 0), p.get("title", "")))
     handles = [p["handle"] for p in ordered]
@@ -1571,13 +1599,16 @@ async def admin_translate_page(slug: str, payload: PageTranslateIn, user=Depends
         return {"ok": True, "translated": [], "message": "Няма нови езици за превод"}
 
     source = {"title": source_doc.get("title", ""), "html": source_doc.get("html", "")}
+    for f in ("seo_title", "seo_description"):
+        if source_doc.get(f):
+            source[f] = source_doc[f]
     if source_doc.get("faq_items"):
         source["faq_items"] = source_doc["faq_items"]
 
     translated: List[str] = []
     failed: List[str] = []
-    for chunk_start in range(0, len(targets), 3):
-        chunk = targets[chunk_start:chunk_start + 3]
+    for chunk_start in range(0, len(targets), 2):
+        chunk = targets[chunk_start:chunk_start + 2]
         try:
             result = await ai_translate_page(source, chunk)
         except Exception as ex:
@@ -1592,6 +1623,8 @@ async def admin_translate_page(slug: str, payload: PageTranslateIn, user=Depends
                         "title": fields.get("title", ""),
                         "html": fields.get("html", ""),
                         "faq_items": fields.get("faq_items", []),
+                        "seo_title": fields.get("seo_title", ""),
+                        "seo_description": fields.get("seo_description", ""),
                         "updated_at": now_utc(),
                     },
                     "$setOnInsert": {"id": str(uuid.uuid4()), "slug": slug, "locale": loc},
@@ -2011,9 +2044,12 @@ async def admin_translate(payload: TranslateIn, user=Depends(require_admin)):
     }
     if doc.get("subtitle"):
         source["subtitle"] = doc["subtitle"]
+    for f in ("seo_title", "seo_description"):
+        if doc.get(f):
+            source[f] = doc[f]
 
     try:
-        result = await ai_translate(source, targets, context="PurePeptide research peptides e-commerce")
+        result = await ai_translate_chunked(source, targets, context="PurePeptide research peptides e-commerce")
     except Exception as ex:
         log.exception("Translation failed")
         raise HTTPException(502, f"Преводът се провали: {ex}")
@@ -2028,7 +2064,7 @@ async def admin_translate(payload: TranslateIn, user=Depends(require_admin)):
 
 
 class BulkTranslateIn(BaseModel):
-    resource: str = "product"  # product | collection | all
+    resource: str = "everything"  # product | collection | article | page | all | everything
     locales: List[str] = []
     overwrite: bool = False
 
@@ -2047,23 +2083,92 @@ async def _translate_one(coll, doc, targets: List[str], overwrite: bool) -> List
         source["subtitle"] = doc["subtitle"]
     if doc.get("menu_title"):
         source["menu_title"] = doc["menu_title"]
-    result = await ai_translate(source, todo, context="PurePeptide research peptides e-commerce")
+    for f in ("seo_title", "seo_description"):
+        if doc.get(f):
+            source[f] = doc[f]
+    result = await ai_translate_chunked(source, todo, context="PurePeptide research peptides e-commerce")
     updates = {f"translations.{loc}": {**(existing.get(loc) or {}), **fields} for loc, fields in result.items()}
     if updates:
         await coll.update_one({"id": doc["id"]}, {"$set": updates})
     return list(result.keys())
 
 
+async def _translate_article(doc, targets: List[str], overwrite: bool) -> List[str]:
+    """Articles are translated one locale per call — the body HTML is long."""
+    existing = doc.get("translations") or {}
+    todo = [l for l in targets if overwrite or not (existing.get(l) or {}).get("title")]
+    done: List[str] = []
+    for loc in todo:
+        source = {k: doc.get(k) for k in ("title", "handle", "excerpt", "body", "seo_title", "seo_description") if doc.get(k)}
+        result = await ai_translate(source, [loc], context="PurePeptide scientific article about research peptides")
+        fields = result.get(loc)
+        if not fields:
+            continue
+        await db.articles.update_one(
+            {"id": doc["id"]},
+            {"$set": {f"translations.{loc}": {**(existing.get(loc) or {}), **fields}}},
+        )
+        done.append(loc)
+    return done
+
+
+async def _translate_page_slug(slug: str, targets: List[str], overwrite: bool) -> List[str]:
+    source_doc = await db.pages.find_one({"slug": slug, "locale": "bg"}, {"_id": 0})
+    if not _has_content(source_doc):
+        return []
+    todo = list(targets)
+    if not overwrite:
+        kept = []
+        for loc in todo:
+            existing = await db.pages.find_one({"slug": slug, "locale": loc})
+            if not _has_content(existing):
+                kept.append(loc)
+        todo = kept
+    if not todo:
+        return []
+    source = {"title": source_doc.get("title", ""), "html": source_doc.get("html", "")}
+    for f in ("seo_title", "seo_description"):
+        if source_doc.get(f):
+            source[f] = source_doc[f]
+    if source_doc.get("faq_items"):
+        source["faq_items"] = source_doc["faq_items"]
+    done: List[str] = []
+    for start in range(0, len(todo), 2):
+        chunk = todo[start:start + 2]
+        result = await ai_translate_page(source, chunk)
+        for loc, fields in result.items():
+            await db.pages.update_one(
+                {"slug": slug, "locale": loc},
+                {"$set": {
+                    "title": fields.get("title", ""),
+                    "html": fields.get("html", ""),
+                    "faq_items": fields.get("faq_items", []),
+                    "seo_title": fields.get("seo_title", ""),
+                    "seo_description": fields.get("seo_description", ""),
+                    "updated_at": now_utc(),
+                }, "$setOnInsert": {"id": str(uuid.uuid4()), "slug": slug, "locale": loc}},
+                upsert=True,
+            )
+            done.append(loc)
+    return done
+
+
 async def _run_bulk_translate(job_id: str, resource: str, targets: List[str], overwrite: bool):
-    collections_to_do = []
-    if resource in ("product", "all"):
-        collections_to_do.append(("product", db.products))
-    if resource in ("collection", "all"):
-        collections_to_do.append(("collection", db.collections_cat))
+    do_all = resource in ("all", "everything")
+    steps: List[tuple] = []
+    if do_all or resource == "product":
+        steps.append(("product", db.products))
+    if do_all or resource == "collection":
+        steps.append(("collection", db.collections_cat))
+    if resource in ("everything", "article"):
+        steps.append(("article", db.articles))
+    include_pages = resource in ("everything", "page")
 
     total = 0
-    for _, coll in collections_to_do:
+    for _, coll in steps:
         total += await coll.count_documents({})
+    if include_pages:
+        total += len(PAGE_SLUGS)
     await db.translate_jobs.update_one(
         {"id": job_id},
         {"$set": {"status": "running", "total": total, "done": 0, "failed": [], "updated_at": now_utc()}},
@@ -2071,18 +2176,34 @@ async def _run_bulk_translate(job_id: str, resource: str, targets: List[str], ov
 
     done = 0
     failed: List[str] = []
-    for kind, coll in collections_to_do:
+    for kind, coll in steps:
         docs = await coll.find({}, {"_id": 0}).to_list(1000)
         for doc in docs:
             try:
-                await _translate_one(coll, doc, targets, overwrite)
+                if kind == "article":
+                    await _translate_article(doc, targets, overwrite)
+                else:
+                    await _translate_one(coll, doc, targets, overwrite)
             except Exception as ex:
                 log.error("Bulk translate failed for %s %s: %s", kind, doc.get("handle"), ex)
                 failed.append(f"{kind}:{doc.get('handle')}")
             done += 1
             await db.translate_jobs.update_one(
                 {"id": job_id},
-                {"$set": {"done": done, "failed": failed, "current": doc.get("handle"), "updated_at": now_utc()}},
+                {"$set": {"done": done, "failed": failed, "current": f"{kind}: {doc.get('handle')}",
+                          "updated_at": now_utc()}},
+            )
+    if include_pages:
+        for slug in PAGE_SLUGS:
+            try:
+                await _translate_page_slug(slug, targets, overwrite)
+            except Exception as ex:
+                log.error("Bulk translate failed for page %s: %s", slug, ex)
+                failed.append(f"page:{slug}")
+            done += 1
+            await db.translate_jobs.update_one(
+                {"id": job_id},
+                {"$set": {"done": done, "failed": failed, "current": f"page: {slug}", "updated_at": now_utc()}},
             )
     await db.translate_jobs.update_one(
         {"id": job_id}, {"$set": {"status": "finished", "current": "", "updated_at": now_utc()}}
@@ -2111,6 +2232,28 @@ async def admin_bulk_translate_status(user=Depends(require_admin)):
     return {"job": job}
 
 
+@api.get("/link-index")
+async def link_index(locale: str = Query(DEFAULT_LOCALE)):
+    """Everything that has a URL — powers the HTML sitemap pages."""
+    loc = normalize_locale(locale)
+    cols = await db.collections_cat.find({}, {"_id": 0}).sort("sort_order", 1).to_list(200)
+    prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0}).to_list(500)
+    arts = await db.articles.find({}, {"_id": 0}).to_list(200)
+    pages = await db.pages.find({"locale": {"$in": [loc, "bg"]}}, {"_id": 0}).to_list(200)
+    by_slug: Dict[str, Dict[str, Any]] = {}
+    for p in pages:
+        if p["slug"] not in by_slug or p["locale"] == loc:
+            by_slug[p["slug"]] = p
+    slim = lambda d: {"handle": d.get("handle"), "title": d.get("title", "")}
+    return {
+        "collections": [slim(c) for c in localize_list(cols, loc)],
+        "products": [slim(p) for p in localize_list(prods, loc)],
+        "articles": [slim(a) for a in localize_list(arts, loc)],
+        "pages": [{"slug": s, "title": (d.get("title") or PAGE_LABELS.get(s, s))}
+                  for s, d in by_slug.items() if s in PAGE_SLUGS],
+    }
+
+
 # ---------- SEO: sitemap + robots ----------
 def _loc_url(locale: str, path: str, routes: Dict[str, Any] = None) -> str:
     cfg = (routes or {}).get(locale) or SITE_ORIGINS[locale]
@@ -2125,8 +2268,11 @@ async def sitemap():
     cols = await db.collections_cat.find({}, {"_id": 0}).to_list(200)
     prods = await db.products.find({}, {"_id": 0}).to_list(500)
     arts = await db.articles.find({}, {"_id": 0}).to_list(200)
-    static_pages = ["", "/collections/all-peptides", "/pages/what-are-peptides",
-                    "/pages/chemical-analysis", "/pages/faq", "/pages/contacts", "/pages/partners"]
+    static_pages = ["", f"/collections/{ALL_COLLECTION}"] + [f"/pages/{s}" for s in PAGE_SLUGS] + [
+        "/pages/articles", "/pages/html-sitemap", "/pages/html-sitemap-products",
+        "/pages/html-sitemap-collections", "/pages/html-sitemap-blogs",
+        "/pages/html-sitemap-articles", "/pages/html-sitemap-pages",
+    ]
 
     def handle_for(doc, loc):
         return ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc.get("handle")
@@ -2163,6 +2309,71 @@ async def sitemap():
     return Response(content="".join(parts), media_type="application/xml")
 
 
+@api.get("/sitemap_agentic_discovery.xml")
+async def agentic_sitemap():
+    """Compact sitemap for AI agents / LLM crawlers (key entry points only)."""
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
+    origin = (routes.get("bg") or SITE_ORIGINS["bg"])["origin"]
+    cols = await db.collections_cat.find({}, {"_id": 0, "handle": 1}).to_list(200)
+    prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0, "handle": 1}).to_list(500)
+    paths = ["/", f"/collections/{ALL_COLLECTION}", "/pages/html-sitemap", "/pages/articles",
+             "/pages/chemical-analysis", "/pages/faq", "/pages/contact-1", "/agents.md"]
+    paths += [f"/collections/{c['handle']}" for c in cols]
+    paths += [f"/products/{p['handle']}" for p in prods]
+    today = datetime.now(timezone.utc).date().isoformat()
+    body = "".join(
+        f"<url><loc>{origin}{p}</loc><lastmod>{today}</lastmod></url>" for p in dict.fromkeys(paths)
+    )
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>'
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + body + "</urlset>")
+    return Response(content=xml, media_type="application/xml")
+
+
+@api.get("/agents.md", response_class=PlainTextResponse)
+async def agents_md():
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
+    origin = (routes.get("bg") or SITE_ORIGINS["bg"])["origin"]
+    cols = await db.collections_cat.find({}, {"_id": 0, "handle": 1, "title": 1}).sort("sort_order", 1).to_list(50)
+    prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0, "handle": 1, "title": 1, "variants": 1}).to_list(500)
+    lines = [
+        "# PurePeptide — AI agent guide",
+        "",
+        "PurePeptide е български доставчик на лиофилизирани изследователски пептиди с чистота >99%,",
+        "потвърдена с HPLC и LC-MS от независимата лаборатория Janoshik Analytical.",
+        "Продуктите са само за лабораторни и научноизследователски цели (Research Use Only).",
+        "",
+        "## Entry points",
+        f"- Home: {origin}/",
+        f"- All peptides: {origin}/collections/{ALL_COLLECTION}",
+        f"- HTML sitemap: {origin}/pages/html-sitemap",
+        f"- XML sitemap: {origin}/sitemap.xml",
+        f"- Scientific articles: {origin}/pages/articles",
+        f"- Lab analysis & COA: {origin}/pages/chemical-analysis",
+        f"- FAQ: {origin}/pages/faq",
+        f"- Contact: {origin}/pages/contact-1",
+        "",
+        "## Categories",
+    ]
+    lines += [f"- {c.get('title')}: {origin}/collections/{c['handle']}" for c in cols]
+    lines += ["", "## Products (price in EUR)"]
+    for p in prods:
+        prices = [v.get("price_eur") for v in (p.get("variants") or []) if v.get("price_eur")]
+        price = f" — from €{min(prices):.2f}" if prices else ""
+        lines.append(f"- {p.get('title')}{price}: {origin}/products/{p['handle']}")
+    lines += [
+        "",
+        "## Notes for agents",
+        "- Currency: EUR (BGN shown in parallel on purepeptide.bg).",
+        "- Localised storefronts: purepeptide.eu/en|fr|de|cz|hu|pl|sk|si, purepeptide.gr, purepeptide.ro.",
+        "- Payment: bank transfer. Shipping: Speedy/Econt in Bulgaria, couriers across the EU.",
+        "- Products are not medicinal products and are not for human or veterinary use.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 @api.get("/robots.txt", response_class=PlainTextResponse)
 async def robots():
     lines = [
@@ -2190,6 +2401,10 @@ async def robots():
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
     for origin in dict.fromkeys((routes.get(loc) or SITE_ORIGINS[loc])["origin"] for loc in LOCALES):
         lines.append(f"Sitemap: {origin}/sitemap.xml")
+        lines.append(f"Sitemap: {origin}/sitemap_agentic_discovery.xml")
+    origin_bg = (routes.get("bg") or SITE_ORIGINS["bg"])["origin"]
+    lines.append("")
+    lines.append(f"# AI agent guide: {origin_bg}/agents.md")
     return "\n".join(lines)
 
 

@@ -24,6 +24,10 @@ api.interceptors.request.use((cfg) => {
 export const FX = 1.95583;
 export const fmtEUR = (n) =>
   new Intl.NumberFormat("bg-BG", { style: "currency", currency: "EUR" }).format(Number(n) || 0);
+/* Orders imported from Shopify can be in RON/BGN/… — show them in their original currency */
+export const fmtMoney = (n, currency = "EUR") =>
+  new Intl.NumberFormat("bg-BG", { style: "currency", currency: (currency || "EUR").toUpperCase() })
+    .format(Number(n) || 0);
 export const fmtBGN = (eur) =>
   new Intl.NumberFormat("bg-BG", { style: "currency", currency: "BGN" }).format((Number(eur) || 0) * FX);
 

@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 14 tested URL alignment with live purepeptide.bg, new page slugs, /link-index, SEO endpoints (sitemap.xml, agents.md, sitemap_agentic_discovery.xml, robots.txt), delisted-links cleanup, storefront navigation, retatrutide collection visibility, admin bulk-translate status, and admin collections/content editor. 22/22 backend pytest cases pass. 12/16 frontend checks pass. One critical routing bug found: sub-pages /pages/html-sitemap-{products,collections,blogs,pages} are captured by the generic /pages/:slug route and rendered by StaticPage instead of HtmlSitemapPage - React Router v6 does not support partial-path dynamic segments (`html-sitemap-:kind`). The hub page /pages/html-sitemap itself works and shows all 4 sitemap-hub-links. Admin collections/content editor has every required data-testid and the bulk-translate button/status are visible with a job running (1/62 -> product: sermorelin).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "HtmlSitemapPage routing (App.js:46)",
+        "issue": "Route pattern '/pages/html-sitemap-:kind' does not match URLs like /pages/html-sitemap-products because React Router v6 requires an entire path segment for dynamic params. As a result StaticPage catches these URLs and shows a bare 'html-sitemap-products' slug page with no sitemap-list. Fix: change to '/pages/html-sitemap/:kind' (and update HUB links + backend sitemap.xml URLs) OR register 4 explicit routes for products/collections/blogs/pages, OR detect the slug inside StaticPage and delegate to HtmlSitemapPage.",
+        "selector": "[data-testid=\"sitemap-list\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration14_url_alignment.py",
+    "/app/test_reports/pytest/iteration14.xml"
+  ],
+  "action_items": [
+    "Fix /pages/html-sitemap-{products,collections,blogs,pages} routing so HtmlSitemapPage renders (React Router v6 doesn't support 'html-sitemap-:kind' partial-segment params). Recommended: either use '/pages/html-sitemap/:kind' and update the HUB array + Backend sitemap.xml links, or register 4 explicit paths, or handle the slug inside StaticPage. Also verify backend sitemap.xml URLs still match whatever path you settle on.",
+    "Console hydration warning observed in admin: '<span> cannot be a child of <option>' — minor, but should be cleaned up in the collection-select dropdown rendering."
+  ],
+  "critical_code_review_comments": [
+    "App.js:46 uses a React Router v6 unsupported pattern ('/pages/html-sitemap-:kind'). This silently falls through to '/pages/:slug' → StaticPage, breaking 4 sitemap sub-pages while still returning HTTP 200. Consider adding a smoke test that navigates each of these paths and asserts data-testid='sitemap-list' exists.",
+    "HtmlSitemapPage title falls back to the raw slug when SECTIONS[kind] is undefined; even if you fix the route, guard against unknown kinds by 404'ing or redirecting to /pages/html-sitemap.",
+    "AdminCollectionEditPage renders a <span> inside an <option> element (React hydration warning in console). Wrap the label text directly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration14_url_alignment.py (new)"
+  ],
+  "success_rate": {"backend": "100% (22/22)", "frontend": "75% (12/16 — 4 sub-sitemap pages fail)"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 (verified working)",
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend URL alignment (2all-the-peptides-1, retatrutide-price, new page slugs incl. Cyrillic, legacy 404s), /api/link-index counts (8/21/19/12), sitemap.xml, agents.md, sitemap_agentic_discovery.xml, robots.txt, delisted-links cleanup, and admin collections/content editor + admin/products bulk-translate button/status are ALL verified. The AI bulk-translate job is running (do NOT restart backend or trigger new jobs). The ONLY remaining bug is the html-sitemap-:kind route pattern in /app/frontend/src/App.js line 46 — after main agent fixes routing, re-run the 4 frontend checks for /pages/html-sitemap-products, -collections, -blogs, -pages expecting data-testid='sitemap-list' with >0 links.",
+  "rca of the issue": "React Router v6 tokenises each URL segment at '/' boundaries. A route path segment can be either fully literal ('foo') or a single param ('/:foo'), but NOT 'foo-:bar'. When '/pages/html-sitemap-:kind' is registered, RRv6 treats the entire second segment literally as the string 'html-sitemap-:kind' (which no URL will match), so the router falls back to '/pages/:slug' → StaticPage, giving a bare page with just the slug as title. Reproduction: open /pages/html-sitemap-products → title shows 'html-sitemap-products' and no [data-testid=sitemap-list] element exists. Mitigation: use '/pages/html-sitemap/:kind' (and update HUB links in HtmlSitemapPage.jsx plus the URLs emitted in backend sitemap.xml), or list four explicit routes '/pages/html-sitemap-products' … each pointing at <HtmlSitemapPage />."
+}

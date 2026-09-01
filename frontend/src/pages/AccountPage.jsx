@@ -71,7 +71,7 @@ export default function AccountPage() {
         <h2 className="font-display text-2xl font-bold text-slate-900 mb-4">Моите поръчки</h2>
         {orders.length === 0 ? (
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-10 text-center text-slate-500">
-            Все още нямате поръчки. <Link to="/collections/all-peptides" className="text-coral-600 font-medium">Към каталога →</Link>
+            Все още нямате поръчки. <Link to="/collections/2all-the-peptides-1" className="text-coral-600 font-medium">Към каталога →</Link>
           </div>
         ) : (
           <div className="space-y-3">

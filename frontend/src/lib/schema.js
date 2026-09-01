@@ -10,7 +10,8 @@ export const organizationLd = (settings = {}) => ({
   "@id": ORG_ID(),
   name: settings.site_name || "PurePeptide",
   url: `${ORIGIN()}/`,
-  logo: { "@type": "ImageObject", url: `${ORIGIN()}/logo192.png`, width: 192, height: 192 },
+  logo: { "@type": "ImageObject", url: `${ORIGIN()}/favicon-512.png`, width: 512, height: 512 },
+  image: `${ORIGIN()}/og-image.jpg`,
   email: settings.contact_email || "contact@purepeptide.bg",
   description:
     settings.tagline ||

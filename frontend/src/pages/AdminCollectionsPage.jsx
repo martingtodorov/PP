@@ -6,7 +6,7 @@ import { api, fmtEUR, formatErr } from "../lib/api";
 
 export default function AdminCollectionsPage() {
   const [collections, setCollections] = useState([]);
-  const [handle, setHandle] = useState("all-peptides");
+  const [handle, setHandle] = useState("2all-the-peptides-1");
   const [items, setItems] = useState([]);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);

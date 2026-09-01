@@ -3,7 +3,7 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Copy, Check, Truck, Clock, PackageCheck } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
-import { api, fmtEUR, formatErr } from "../lib/api";
+import { api, fmtEUR, fmtMoney, formatErr } from "../lib/api";
 import { Badge, PAY_BADGE, FUL_BADGE } from "./AdminOrdersPage";
 
 const CopyField = ({ label, value, testId, multiline = false }) => {
@@ -67,7 +67,10 @@ export default function AdminOrderDetailPage() {
 
   const paid = order.payment_status === "paid";
   const fulfilled = ["fulfilled", "shipped"].includes(order.fulfillment_status);
-  const balance = paid ? 0 : order.total_eur;
+  const cur = order.currency || "EUR";
+  const m = (n) => fmtMoney(n, cur);
+  const totalDisp = order.total_display ?? order.total_eur;
+  const balance = paid ? 0 : totalDisp;
   const addr = order.customer.address;
 
   return (
@@ -110,7 +113,7 @@ export default function AdminOrderDetailPage() {
                     {it.variant && <p className="text-sm text-slate-600">{it.variant}</p>}
                     {it.sku && <p className="text-xs text-slate-500 font-mono">SKU: {it.sku}</p>}
                     <p className="text-sm text-slate-500 mt-0.5">
-                      {fmtEUR(it.price_eur * it.quantity)} ({it.quantity} × {fmtEUR(it.price_eur)})
+                      {m((it.price_display ?? it.price_eur) * it.quantity)} ({it.quantity} × {m(it.price_display ?? it.price_eur)})
                     </p>
                   </div>
                   <span className="font-bold text-slate-900 whitespace-nowrap">× {it.quantity}</span>
@@ -143,14 +146,17 @@ export default function AdminOrderDetailPage() {
             </div>
 
             <dl className="text-sm space-y-2">
-              <div className="flex justify-between"><dt className="text-slate-500">{order.items_count} артикула · Междинна сума</dt><dd className="font-medium">{fmtEUR(order.subtotal_eur)}</dd></div>
-              {order.discount_eur > 0 && (
-                <div className="flex justify-between"><dt className="text-slate-500">Отстъпка</dt><dd className="font-medium text-emerald-700">− {fmtEUR(order.discount_eur)}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-500">{order.items_count} артикула · Междинна сума</dt><dd className="font-medium">{m(order.subtotal_display ?? order.subtotal_eur)}</dd></div>
+              {(order.discount_display ?? order.discount_eur) > 0 && (
+                <div className="flex justify-between"><dt className="text-slate-500">Отстъпка</dt><dd className="font-medium text-emerald-700">− {m(order.discount_display ?? order.discount_eur)}</dd></div>
               )}
-              <div className="flex justify-between"><dt className="text-slate-500">Доставка</dt><dd className="font-medium">{fmtEUR(order.shipping_eur)}</dd></div>
-              <div className="flex justify-between border-t border-slate-100 pt-2 text-base"><dt className="font-bold">Общо</dt><dd className="font-bold">{fmtEUR(order.total_eur)}</dd></div>
-              <div className="flex justify-between"><dt className="text-slate-500">Платено</dt><dd className="font-medium">{fmtEUR(paid ? order.total_eur : 0)}</dd></div>
-              <div className="flex justify-between"><dt className="text-slate-500">Остатък</dt><dd className="font-semibold">{fmtEUR(balance)}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-500">Доставка</dt><dd className="font-medium">{m(order.shipping_display ?? order.shipping_eur)}</dd></div>
+              <div className="flex justify-between border-t border-slate-100 pt-2 text-base"><dt className="font-bold">Общо</dt><dd className="font-bold" data-testid="order-total">{m(totalDisp)}</dd></div>
+              {cur !== "EUR" && (
+                <div className="flex justify-between"><dt className="text-slate-500">Равностойност в евро (курс {order.currency_rate} {cur}/EUR)</dt><dd className="font-medium" data-testid="order-total-eur">{fmtEUR(order.total_eur)}</dd></div>
+              )}
+              <div className="flex justify-between"><dt className="text-slate-500">Платено</dt><dd className="font-medium">{m(paid ? totalDisp : 0)}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-500">Остатък</dt><dd className="font-semibold">{m(balance)}</dd></div>
             </dl>
 
             <div className="mt-5 space-y-2">

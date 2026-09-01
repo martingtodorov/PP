@@ -27,9 +27,9 @@ export default function AdminProductsPage() {
   }, [job?.status]);
 
   const startBulk = async () => {
-    if (!window.confirm("Да преведа ли всички продукти и категории на всички езици с AI? Това отнема няколко минути.")) return;
+    if (!window.confirm("Да преведа ли АБСОЛЮТНО ВСИЧКО (продукти, категории, научни статии и страници, вкл. SEO мета) на всички езици с Claude? Това отнема няколко минути.")) return;
     try {
-      const { data } = await api.post("/admin/translate/bulk", { resource: "all", overwrite: false });
+      const { data } = await api.post("/admin/translate/bulk", { resource: "everything", overwrite: false });
       toast.success(data.message || "Преводът стартира във фонов режим");
       loadJob();
     } catch (e) { toast.error(formatErr(e)); }
@@ -75,7 +75,7 @@ export default function AdminProductsPage() {
           data-testid="bulk-translate-btn"
         >
           <Sparkles className="h-4 w-4" />
-          {busyJob ? `Превежда… ${job.done}/${job.total}` : "Преведи целия каталог с AI"}
+          {busyJob ? `Превежда… ${job.done}/${job.total}` : "Преведи всичко с AI (всички езици)"}
         </button>
         <Link
           to="/admin/products/new"

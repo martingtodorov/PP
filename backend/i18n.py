@@ -1,5 +1,6 @@
 """Locale registry, document localisation and AI translation for PurePeptide."""
 
+import asyncio
 import json
 import os
 from typing import Any, Dict, List
@@ -37,7 +38,7 @@ SITE_ORIGINS = {
     "ro": {"origin": "https://purepeptide.ro", "prefix": ""},
 }
 
-TRANSLATABLE = ["title", "subtitle", "description", "handle", "menu_title", "excerpt", "seo_title", "seo_description"]
+TRANSLATABLE = ["title", "subtitle", "description", "handle", "menu_title", "excerpt", "body", "seo_title", "seo_description"]
 
 
 def normalize_locale(locale: str | None) -> str:
@@ -110,7 +111,7 @@ async def ai_translate(source: Dict[str, str], locales: List[str], context: str 
     try:
         response = await client.messages.create(
             model=model,
-            max_tokens=8000,
+            max_tokens=16000,
             system=system,
             messages=[{
                 "role": "user",
@@ -119,6 +120,9 @@ async def ai_translate(source: Dict[str, str], locales: List[str], context: str 
         )
     finally:
         await client.close()
+
+    if getattr(response, "stop_reason", None) == "max_tokens":
+        raise RuntimeError("Отговорът беше отрязан (max_tokens) — намалете броя езици на заявка")
 
     block = next((b for b in response.content if getattr(b, "type", None) == "text"), None)
     if block is None:
@@ -130,6 +134,27 @@ async def ai_translate(source: Dict[str, str], locales: List[str], context: str 
             text = text.lstrip()[4:]
     data = json.loads(text)
     return {loc: {k: v for k, v in vals.items() if k in TRANSLATABLE} for loc, vals in data.items() if loc in LOCALES}
+
+
+async def ai_translate_chunked(source: Dict[str, str], locales: List[str], context: str = "",
+                               chunk: int = 2) -> Dict[str, Dict[str, str]]:
+    """Translate in small locale batches (run in parallel) so long texts never hit the token limit."""
+    parts = [locales[i:i + chunk] for i in range(0, len(locales), chunk)]
+
+    async def one(part: List[str]):
+        try:
+            return await ai_translate(source, part, context=context)
+        except Exception:
+            merged: Dict[str, Dict[str, str]] = {}
+            for loc in part:  # retry one locale at a time
+                merged.update(await ai_translate(source, [loc], context=context))
+            return merged
+
+    out: Dict[str, Dict[str, str]] = {}
+    for res in await asyncio.gather(*(one(p) for p in parts), return_exceptions=True):
+        if isinstance(res, dict):
+            out.update(res)
+    return out
 
 
 async def ai_translate_page(source: Dict[str, Any], locales: List[str]) -> Dict[str, Dict[str, Any]]:
@@ -146,8 +171,11 @@ async def ai_translate_page(source: Dict[str, Any], locales: List[str]) -> Dict[
         "Translate the static page content faithfully. Keep scientific terminology, peptide names, "
         "dosages, laboratory names, email addresses, URLs and ALL HTML markup exactly intact — never "
         "add, remove or reorder HTML tags. Keep the same number of faq_items in the same order. "
+        "Also translate `seo_title` (max 60 chars) and `seo_description` (max 155 chars) when present, "
+        "keeping them natural and click-worthy in the target language. "
         "Return ONLY valid minified JSON shaped as "
-        "{\"<locale>\": {\"title\": \"...\", \"html\": \"...\", \"faq_items\": [{\"q\": \"...\", \"a\": \"...\"}]}}, "
+        "{\"<locale>\": {\"title\": \"...\", \"html\": \"...\", \"seo_title\": \"...\", "
+        "\"seo_description\": \"...\", \"faq_items\": [{\"q\": \"...\", \"a\": \"...\"}]}}, "
         "omitting faq_items when the source has none. No markdown fences, no commentary."
     )
     payload = {
@@ -170,6 +198,9 @@ async def ai_translate_page(source: Dict[str, Any], locales: List[str]) -> Dict[
     finally:
         await client.close()
 
+    if getattr(response, "stop_reason", None) == "max_tokens":
+        raise RuntimeError("Отговорът беше отрязан (max_tokens) — намалете броя езици на заявка")
+
     block = next((b for b in response.content if getattr(b, "type", None) == "text"), None)
     if block is None:
         raise RuntimeError("Claude returned no text block")
@@ -188,6 +219,9 @@ async def ai_translate_page(source: Dict[str, Any], locales: List[str]) -> Dict[
             entry["title"] = vals["title"]
         if isinstance(vals.get("html"), str):
             entry["html"] = vals["html"]
+        for f in ("seo_title", "seo_description"):
+            if vals.get(f):
+                entry[f] = str(vals[f])
         items = vals.get("faq_items")
         if isinstance(items, list):
             entry["faq_items"] = [

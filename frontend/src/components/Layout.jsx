@@ -161,12 +161,12 @@ const NavDrawer = ({ open, setOpen, collections }) => {
 
   const links = [
     { to: lp("/"), label: t("home") },
-    { to: lp("/pages/what-are-peptides"), label: t("whatArePeptides") },
+    { to: lp("/pages/какво-са-пептиди"), label: t("whatArePeptides") },
     { to: lp("/pages/articles"), label: t("articles") },
-    { to: lp("/pages/contacts"), label: t("contacts") },
+    { to: lp("/pages/contact-1"), label: t("contacts") },
     { to: lp("/pages/chemical-analysis"), label: t("chemicalAnalysis") },
     { to: lp("/pages/faq"), label: t("faq") },
-    { to: lp("/pages/partners"), label: t("partners") },
+    { to: lp("/pages/become-a-distributor"), label: t("partners") },
   ];
 
   return (
@@ -390,7 +390,7 @@ const CartDrawer = () => {
               />
               <span>
                 {locale === "bg" ? "Съгласявам се с " : "I agree to the "}
-                <Link to={lp("/pages/terms-of-service")} className="underline hover:text-coral-600" onClick={() => setOpen(false)}>
+                <Link to={lp("/pages/terms-conditions")} className="underline hover:text-coral-600" onClick={() => setOpen(false)}>
                   {locale === "bg" ? "общите условия" : "terms & conditions"}
                 </Link>
                 {locale === "bg" ? " и политиката за поверителност." : " and privacy policy."}
@@ -426,13 +426,13 @@ const Header = ({ collections, settings }) => {
 
   const topNav = [
     { to: lp("/"), label: t("home"), exact: true },
-    { to: lp("/collections/all-peptides"), label: t("shop"), dropdown: true },
-    { to: lp("/pages/what-are-peptides"), label: t("whatArePeptides") },
+    { to: lp("/collections/2all-the-peptides-1"), label: t("shop"), dropdown: true },
+    { to: lp("/pages/какво-са-пептиди"), label: t("whatArePeptides") },
     { to: lp("/pages/articles"), label: t("articles") },
-    { to: lp("/pages/contacts"), label: t("contacts") },
+    { to: lp("/pages/contact-1"), label: t("contacts") },
     { to: lp("/pages/chemical-analysis"), label: t("chemicalAnalysis") },
     { to: lp("/pages/faq"), label: t("faq") },
-    { to: lp("/pages/partners"), label: t("partners") },
+    { to: lp("/pages/become-a-distributor"), label: t("partners") },
   ];
 
   const menuCollections = [...collections].sort((a, b) => (a.menu_order ?? 99) - (b.menu_order ?? 99));
@@ -525,7 +525,7 @@ const Header = ({ collections, settings }) => {
                         </li>
                       ))}
                       <li className="pp-megamenu__all">
-                        <Link to={lp("/collections/all-peptides")} data-testid="dropdown-collection-all">
+                        <Link to={lp("/collections/2all-the-peptides-1")} data-testid="dropdown-collection-all">
                           {t("viewAll")} →
                         </Link>
                       </li>
@@ -638,7 +638,7 @@ const Footer = ({ collections, articles, settings }) => {
           <ul className="space-y-2 text-sm text-slate-300">
             <li><Link to={lp("/pages/faq")} className="hover:text-white">{t("faq")}</Link></li>
             <li><Link to={lp("/pages/chemical-analysis")} className="hover:text-white">{t("chemicalAnalysis")}</Link></li>
-            <li><Link to={lp("/pages/contacts")} className="hover:text-white">{t("contacts")}</Link></li>
+            <li><Link to={lp("/pages/contact-1")} className="hover:text-white">{t("contacts")}</Link></li>
             <li><Link to={lp("/account")} className="hover:text-white">{t("account")}</Link></li>
           </ul>
         </div>
@@ -648,8 +648,9 @@ const Footer = ({ collections, articles, settings }) => {
           <ul className="space-y-2 text-sm text-slate-300">
             <li><Link to={lp("/pages/privacy-policy")} className="hover:text-white">{t("policyPrivacy")}</Link></li>
             <li><Link to={lp("/pages/refund-policy")} className="hover:text-white">{t("policyRefund")}</Link></li>
-            <li><Link to={lp("/pages/terms-of-service")} className="hover:text-white">{t("policyTerms")}</Link></li>
-            <li><Link to={lp("/pages/shipping-policy")} className="hover:text-white">{t("policyShipping")}</Link></li>
+            <li><Link to={lp("/pages/terms-conditions")} className="hover:text-white">{t("policyTerms")}</Link></li>
+            <li><Link to={lp("/pages/delivery-and-payment")} className="hover:text-white">{t("policyShipping")}</Link></li>
+            <li><Link to={lp("/pages/html-sitemap")} className="hover:text-white" data-testid="footer-html-sitemap">Карта на сайта</Link></li>
           </ul>
           <p className="text-xs uppercase tracking-[0.2em] text-coral-500 mb-3 mt-6 font-bold">{t("otherCountries")}</p>
           <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-slate-300" data-testid="footer-locales">
@@ -708,7 +709,7 @@ export default function Layout({ children }) {
   useEffect(() => {
     Promise.all([api.get("/collections"), api.get("/articles"), api.get("/settings")]).then(
       ([c, a, s]) => {
-        setCollections(c.data.collections.filter((x) => (x.base_handle || x.handle) !== "all-peptides"));
+        setCollections(c.data.collections.filter((x) => (x.base_handle || x.handle) !== "2all-the-peptides-1" && !x.nav_hidden));
         setArticles(a.data.articles);
         setSettings(s.data);
       }

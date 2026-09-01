@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration-13 verified (a) RON currency normalisation across admin orders API + UI, (b) new homepage 'Научни статии' single-row carousel with prev/next arrows on desktop and swipeable mobile view, (c) desktop category tile titles at 16px/600, and (d) SEO/JSON-LD regression (Product AggregateOffer/Offer, BreadcrumbList, Organization, WebSite, robots.txt, sitemap.xml). 6/6 executed backend pytest cases pass (2 SEO ones skipped in pytest and re-verified via Playwright because JSON-LD is client-rendered). All requested data-testids (order-total, order-total-eur, articles-carousel, articles-carousel-prev/next) are present and correct.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verification": {
+    "currency_backend": {
+      "status": "PASS",
+      "evidence": "GET /api/admin/orders returned 1902 orders, exactly 46 with currency=RON (matches migration count). Every RON order: currency_rate=4.975, total_eur ≈ total_display/4.975 within 0.02. EUR orders: total_display == total_eur. GET /api/admin/orders/{id} on a RON order returns currency=RON, currency_rate=4.975, subtotal/discount/shipping/total_display in RON, items have price_display (RON) and price_eur (converted). Customer.total_spent is EUR-normalised numeric. GET /api/admin/analytics?range=30d returns 200 with current.sales aggregated from *_eur (no crash)."
+    },
+    "currency_admin_ui": {
+      "status": "PASS",
+      "evidence": "Logged in as admin, searched 'PP-2614553' (Alexandra Florea, Romania). List row shows '2711,00 RON ≈ 544,92 €'. Detail page /admin/orders/{id} shows Междинна сума 2676,00 RON, Доставка 35,00 RON, Общо 2711,00 RON, then 'Равностойност в евро (курс 4.975 RON/EUR)' 544,92 €, then Платено/Остатък in RON. data-testid=order-total → '2711,00 RON', data-testid=order-total-eur → '544,92 €'. Screenshots /app/.screenshots/admin_orders_ron.png, /app/.screenshots/admin_order_detail_ron.png."
+    },
+    "articles_carousel_desktop": {
+      "status": "PASS",
+      "evidence": "1920x1080 home: [data-testid=articles-carousel] present with 19 article cards, all images loaded (0 broken), .article-carousel__track scrollWidth=6944 / clientWidth=1813 (single row). Clicking [data-testid=articles-carousel-next] scrolls the track from scrollLeft 0 → 367 (smooth horizontal). Prev/next arrows both render (data-testid=articles-carousel-prev / -next)."
+    },
+    "articles_carousel_mobile": {
+      "status": "PASS",
+      "evidence": "390x844: same 19 cards, cardWidth ≈146.5px, clientWidth 358 → ~2.44 cards visible; unique card top offsets = 1 (single row). Horizontally scrollable/swipeable track."
+    },
+    "category_tile_titles": {
+      "status": "PASS",
+      "evidence": "Desktop 1920: .collection-carousel__title computed font-size=16px, font-weight=600 (readable)."
+    },
+    "seo_schema": {
+      "status": "PASS",
+      "evidence": "Home JSON-LD types: Organization + WebSite + WebPage. /products/bpc-157-5 (multi-variant): Product with AggregateOffer{lowPrice:29, highPrice:49, priceCurrency:EUR} + 2 nested Offer entries each with price + availability=https://schema.org/InStock + sku, plus BreadcrumbList + Organization. /products/1-ghk-cu (single-variant): plain Offer{price:39, InStock} + BreadcrumbList + Organization. /api/robots.txt → 200 with Sitemap directive. /api/sitemap.xml → 200 with <urlset> and <loc> entries."
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration13_currency.py",
+    "/app/test_reports/pytest/iteration13_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "One RON order (PP-2614553) legitimately has total_eur=544.92 (2711 RON / 4.975). The review-request checkpoint 'no RON order has total_eur > 400' is too strict — it is a real large order (12 items: 6× GHK-Cu 100mg + 6× BPC-157 10mg). The migration is correct; the checkpoint should be relaxed to 'no RON.total_eur > ~2000' (sanity for un-normalised data).",
+    "server.py still 2242 lines — modularisation debt persists from iterations 10-12."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration13_currency.py"
+  ],
+  "success_rate": {"backend": "100% (6/6 executed, 2 skipped as they require SPA rendering — covered via Playwright)", "frontend": "100%"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026",
+  "seed_data_creation": "None. Read-only verification.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration-13 pytest at /app/backend/tests/test_iteration13_currency.py — 8 collected (6 passed, 2 skipped). JSON-LD is client-rendered by React so SEO/schema must be validated via Playwright (see this iteration's inline script). Admin UI data-testids of interest: order-total, order-total-eur, articles-carousel, articles-carousel-prev, articles-carousel-next. Known Romanian order used for admin currency testing: PP-2614553 (id 144c21b0-20fe-463e-92ea-9806f45e6dcb, 2711 RON / 544,92 €). All 46 RON orders normalised correctly.",
+  "rca of the issue": "N/A — no bugs found this round. Currency normalisation, homepage articles carousel and category-tile typography all implemented correctly and rendered as expected on the preview URL."
+}
