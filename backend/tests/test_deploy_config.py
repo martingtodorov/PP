@@ -395,12 +395,16 @@ def test_mongodb_is_checked_before_the_app_is_deployed():
     assert "bootstrap_backend_base.yml --tags mongo" in pre
 
 
-def test_mongo_repository_falls_back_to_a_supported_codename():
-    """MongoDB does not publish packages for every Ubuntu release."""
+def test_mongo_repository_is_probed_not_guessed():
+    """MongoDB 7.0 has no 'noble' packages and new Ubuntu releases have none at all — probe first."""
     boot = (BOOTSTRAP / "bootstrap_backend_base.yml").read_text()
-    assert "mongo_repo_codename" in boot
+    assert "repo.mongodb.org/apt/ubuntu/dists/" in boot   # HEAD probe before adding the repo
+    assert "method: HEAD" in boot
+    assert "mongo_selected" in boot and "mongo_repo_codename" in boot
     assert "ansible_distribution_release }}/mongodb-org" not in boot
-    assert "journalctl -u mongod" in boot          # diagnostics when it will not start
-    assert "port: 27017" in boot                   # verified after install
+    assert "server-{{ mongo_major }}.asc" in boot          # key fetched for the selected version
+    assert boot.index("Probe which mongodb-org") < boot.index("MongoDB apt key")
+    assert "journalctl -u mongod" in boot                  # diagnostics when it will not start
+    assert "port: 27017" in boot                           # verified after install
     defaults = (TASKS / "infra_defaults.yml").read_text()
-    assert "mongo_supported_codenames" in defaults and "mongo_repo_fallback_codename" in defaults
+    assert "mongo_supported_codenames" in defaults and "mongo_major_candidates" in defaults

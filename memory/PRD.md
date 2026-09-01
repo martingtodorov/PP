@@ -493,3 +493,13 @@ Changes:
 - `deploy_backend.yml` health check now hits `/api/settings` (there is no `GET /api/` route — the old
   check would 404 forever) and on failure prints `systemctl status` + 60 journal lines.
 47 deploy-config tests green.
+
+### 2026-06 — MongoDB repo is probed, not guessed
+`mongodb-org 7.0` has no `noble` packages (and pp-back runs an even newer Ubuntu), so the apt cache
+update failed with "does not have a Release file". `bootstrap_backend_base.yml` now HEAD-probes
+`https://repo.mongodb.org/apt/ubuntu/dists/<codename>/mongodb-org/<major>/Release` for
+`mongo_major_candidates` (8.0, 8.2, 7.0) × [distro codename, noble, jammy], uses the first that
+returns 200, fetches the matching `server-<major>.asc` key and prints the choice. Fails with the full
+probe list if MongoDB publishes nothing usable.
+Verified live against repo.mongodb.org: Ubuntu resolute → **8.0 / resolute**, plucky → 8.0 / noble
+(7.0/noble correctly 404s). 61 deploy tests + dryrun green.
