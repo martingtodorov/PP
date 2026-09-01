@@ -76,7 +76,7 @@ bank_iban: "BG61STSA93000032400775"
 bank_bic: "STSABGSF"
 bank_holder: "Purepeptide LTD"
 
-nextcart_base_url: "https://client.nextcartmanager.com"
+nextcart_base_url: "https://api.nextcartmanager.com"
 nextcart_shop: "etb7zb-gy.myshopify.com"
 nextcart_country: "BG"
 nextcart_locale: "bg"

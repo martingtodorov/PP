@@ -393,3 +393,25 @@ list from `backend/requirements.txt` minus `platform_only_packages` (`emergentin
 `{{ env_dir }}/requirements-prod.generated.txt` — byte-identical to `deploy/requirements-prod.txt`.
 If nothing is found it fails with the exact paths it looked for. Verified locally with ansible-playbook
 (both branches + idempotent rerun) and by 2 new pytest cases (40 deploy tests total).
+
+### 2026-06 — deploy dry-run harness (`deploy/hetzner/dryrun.py`)
+Offline validation of every deploy artefact with the real tools: renders all 8 Jinja templates with
+StrictUndefined, `systemd-analyze verify` on the backend unit + route-guard units, `nginx -t` on the
+rendered site config for BOTH http2 variants (asserting the version switch in deploy_nginx.yml is
+right), `bash -n` on the route guard, backend.env vs. every `os.environ[...]` key in backend/*.py,
+`--syntax-check` on all 12 playbooks and `pip install --dry-run -r deploy/requirements-prod.txt`
+(all 133 pins resolve). All green.
+
+Additionally the backend was booted exactly as systemd will boot it (release copy + rendered
+backend.env, single uvicorn worker): `/api/settings`, `/api/products`, `/api/collections`,
+`/api/sitemap.xml`, `/api/robots.txt`, `/api/link-index`, `/api/nextcart/countries`,
+`/api/nextcart/config`, `/api/nextcart/pickups` (589 Econt offices), admin login + `/api/admin/orders`
++ `/api/admin/analytics` and a **full bank-transfer order** (order BEM72, deleted afterwards) — all OK.
+
+**Bug found and fixed:** `group_vars/all.yml.example` had `nextcart_base_url:
+https://client.nextcartmanager.com`, which answers 404 → `/api/nextcart/*` returned 502 and the whole
+checkout/courier flow would be dead in production. Correct host: `https://api.nextcartmanager.com`.
+Guarded by a test, and `deploy_backend.yml` now verifies `/api/nextcart/countries` and
+`/api/products?locale=bg` after the restart, so a wrong value fails the deploy instead of the shop.
+⚠️ The owner's local (gitignored) `group_vars/all.yml` must be checked for the same wrong value.
+Deploy test suite: 52 pytest cases green.
