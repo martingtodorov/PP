@@ -10,8 +10,7 @@ import { useLocaleCtx } from "../i18n/LocaleContext";
 import { TRUST_CARDS, FAQ_ITEMS, pick } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
 
-const HERO_BG =
-  "https://cdn.shopify.com/s/files/1/0941/8965/0294/files/brand-3_b5f4565b-7bec-41db-9d3b-7bbd1c49e2ac.png?v=1767112972";
+const HERO_BG = "/hero-home.png";
 
 const CollectionsCarousel = ({ collections }) => {
   const trackRef = useRef(null);
