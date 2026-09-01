@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
+import { useSeo } from "../lib/seo";
 import { Button } from "../components/ui/button";
 import { useCart } from "../context/CartContext";
-import { fmtEUR, fmtBGN } from "../lib/api";
+import { fmtEUR, fmtBGN, img } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { formatErr } from "../lib/api";
 import { toast } from "sonner";
 
 export default function CartPage() {
+  useSeo({ title: "Кошница | PurePeptide", description: "Вашата кошница.", path: "/cart", robots: "noindex,follow" });
+
   const { items, remove, updateQty, subtotal, discount, discountAmount, applyDiscount, removeDiscount } = useCart();
   const [code, setCode] = useState("");
   const [applying, setApplying] = useState(false);
@@ -32,7 +35,7 @@ export default function CartPage() {
             <div className="lg:col-span-2 space-y-3">
               {items.map((it) => (
                 <div key={it.variant_sku} className="bg-white border border-slate-200 rounded-xl p-4 flex gap-4" data-testid={`cart-line-${it.variant_sku}`}>
-                  <img src={it.image} alt={it.title} className="w-24 h-24 object-contain bg-white border border-slate-200 rounded" />
+                  <img src={img(it.image, 300)} alt={it.title} className="w-24 h-24 object-contain bg-white border border-slate-200 rounded" />
                   <div className="flex-1 min-w-0">
                     <Link to={lp(`/products/${it.product_handle}`)} className="font-display font-semibold text-slate-900 hover:text-coral-600">{it.title}</Link>
                     <p className="text-sm text-slate-500">{it.variant_name}</p>

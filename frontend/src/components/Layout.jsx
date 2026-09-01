@@ -10,7 +10,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { LOCALES, LOCALE_META } from "../i18n/locales";
-import { api, fmtEUR, fmtBGN, showsBGN, formatErr } from "../lib/api";
+import { api, fmtEUR, fmtBGN, showsBGN, formatErr, img } from "../lib/api";
 import { toast } from "sonner";
 
 const Price = ({ eur, className = "" }) => (
@@ -121,7 +121,7 @@ const SearchDrawer = ({ open, setOpen, collections }) => {
                   data-testid={`search-result-${p.handle}`}
                 >
                   <div className="aspect-square bg-white">
-                    <img src={p.image} alt={p.title} className="w-full h-full object-contain" />
+                    <img src={img(p.image, 160)} alt={p.title} className="w-full h-full object-contain" loading="lazy" decoding="async" />
                   </div>
                   <p className="text-sm font-medium text-slate-900 mt-2 line-clamp-2">{p.title}</p>
                   <Price eur={min} className="text-sm font-semibold text-slate-900 mt-1 block" />
@@ -269,7 +269,8 @@ const CartDrawer = () => {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetContent className="w-full sm:max-w-md flex flex-col p-0" data-testid="cart-drawer">
+      <SheetContent className="w-[88vw] sm:w-[400px] sm:max-w-none flex flex-col p-0" data-testid="cart-drawer">
+        <div className="pp-drawer-right flex flex-col h-full min-h-0">
         <SheetHeader className="px-6 pt-6 pb-3 border-b border-slate-100">
           <SheetTitle>{t("cart")} ({count})</SheetTitle>
           <SheetDescription className="sr-only">{t("subtotal")}</SheetDescription>
@@ -281,7 +282,7 @@ const CartDrawer = () => {
           )}
           {items.map((it) => (
             <div key={it.variant_sku} className="flex gap-3 border-b border-slate-100 pb-4" data-testid={`cart-line-${it.variant_sku}`}>
-              <img src={it.image} alt={it.title} className="w-20 h-20 object-contain bg-white border border-slate-200 rounded" />
+              <img src={img(it.image, 160)} alt={it.title} className="w-20 h-20 object-contain bg-white border border-slate-200 rounded" loading="lazy" decoding="async" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-900">{it.title}</p>
                 <p className="text-xs text-slate-500">{it.variant_name}</p>
@@ -398,18 +399,16 @@ const CartDrawer = () => {
             </label>
 
             <Button
-              className="w-full bg-coral-600 hover:bg-coral-700 disabled:opacity-50"
+              className="w-full h-14 text-base sm:text-lg font-semibold bg-coral-600 hover:bg-coral-700 disabled:opacity-50"
               onClick={goCheckout}
               disabled={!terms}
               data-testid="cart-checkout-btn"
             >
               {t("checkout")}
             </Button>
-            <Button variant="outline" className="w-full" onClick={() => { setOpen(false); nav(lp("/cart")); }} data-testid="cart-view-btn">
-              {t("viewCart")}
-            </Button>
           </div>
         )}
+        </div>
       </SheetContent>
     </Sheet>
   );

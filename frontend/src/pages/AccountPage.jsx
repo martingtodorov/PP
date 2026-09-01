@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import Layout from "../components/Layout";
+import { useSeo } from "../lib/seo";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -19,6 +20,8 @@ const STATUS_BG = {
 };
 
 export default function AccountPage() {
+  useSeo({ title: "Моят профил | PurePeptide", description: "Вашият профил и поръчки.", path: "/account", robots: "noindex,nofollow" });
+
   const { user, login, logout } = useAuth();
   const [orders, setOrders] = useState([]);
   const [li, setLi] = useState({ email: "", password: "" });

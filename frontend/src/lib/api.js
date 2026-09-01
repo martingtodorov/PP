@@ -22,6 +22,10 @@ api.interceptors.request.use((cfg) => {
 
 // EUR -> BGN conversion (peg)
 export const FX = 1.95583;
+/** Ask the API for a resized WebP variant (big win on mobile). */
+export const img = (url, w = 600) =>
+  url && url.startsWith("/api/files/") ? `${url}${url.includes("?") ? "&" : "?"}w=${w}` : url;
+
 export const fmtEUR = (n) =>
   new Intl.NumberFormat("bg-BG", { style: "currency", currency: "EUR" }).format(Number(n) || 0);
 /* Orders imported from Shopify can be in RON/BGN/… — show them in their original currency */
