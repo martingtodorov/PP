@@ -1,0 +1,75 @@
+---
+# BOOTSTRAP ONLY — everything pp-front needs before a routine deploy can run:
+# nginx, the Node build toolchain, the web root and the TLS directory.
+# A fresh server must never require a manual "apt install nginx" any more.
+#
+# It does NOT touch: the Cloudflare Origin certificate/key (uploaded by a human), WireGuard,
+# the firewall or DNS.
+- name: Frontend base layer
+  hosts: frontend
+  become: true
+  tags: [frontend_base]
+  pre_tasks:
+    - import_tasks: ../../tasks/infra_defaults.yml
+  tasks:
+    - name: Base packages (nginx + build tooling)
+      apt:
+        name: [nginx, git, curl, ca-certificates, gnupg, rsync, ufw, iptables]
+        state: present
+        update_cache: true
+      register: front_pkgs
+      retries: 3
+      delay: 5
+      until: front_pkgs is succeeded
+
+    - name: apt keyrings directory
+      file: { path: /etc/apt/keyrings, state: directory, mode: "0755" }
+
+    - name: NodeSource key
+      shell: |
+        set -o pipefail
+        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+          | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+      args: { creates: /etc/apt/keyrings/nodesource.gpg, executable: /bin/bash }
+
+    - name: NodeSource repository
+      apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_{{ node_major }}.x nodistro main"
+        filename: nodesource
+        state: present
+
+    - name: Install Node.js
+      apt: { name: nodejs, update_cache: true, state: present }
+
+    - name: Install yarn globally (npm causes breaking changes in this project)
+      npm: { name: yarn, global: true, state: present }
+
+    - name: Web root and source directory
+      file: { path: "{{ item }}", state: directory, owner: www-data, group: www-data, mode: "0755" }
+      loop:
+        - "{{ web_root }}"
+        - "/opt/{{ app_name }}-src"
+
+    - name: TLS directory for the Cloudflare Origin pair (files are uploaded by a human)
+      file: { path: "{{ ssl_cert_path | dirname }}", state: directory, owner: root, group: root, mode: "0755" }
+
+    - name: nginx enabled and running
+      systemd: { name: nginx, enabled: true, state: started }
+
+    - name: Remind about the TLS files when they are missing
+      stat: { path: "{{ ssl_cert_path }}" }
+      register: cf_cert
+      changed_when: false
+
+    - name: TLS reminder
+      debug:
+        msg: >-
+          Upload the Cloudflare Origin certificate to {{ ssl_cert_path }} (0644) and the key to
+          {{ ssl_key_path }} (0600) before running site.yml.
+      when: not cf_cert.stat.exists
+
+    - name: Toolchain summary
+      command: "{{ item }}"
+      loop: ["node -v", "yarn -v", "nginx -v"]
+      changed_when: false
+      tags: [verify]

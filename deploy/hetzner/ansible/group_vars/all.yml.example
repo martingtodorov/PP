@@ -21,6 +21,9 @@ repo_url: git@github.com:martingtodorov/PP.git
 ref: main
 
 # ---------- existing production network (DO NOT CHANGE) ----------
+# Every value below also has a default in ansible/tasks/infra_defaults.yml, so a missing key can
+# never break a playbook. frontend_public_ip defaults to the pp-front ansible_host from the
+# inventory — you may delete the line here and it will still be correct.
 ssh_port: 22
 private_cidr: 10.0.0.0/16
 frontend_public_ip: 2.28.79.24
@@ -40,6 +43,8 @@ wg_mtu: 1370
 nat_table: 100
 nat_mark: "0x1"
 nat_rule_priority: 1000
+# systemd timer interval of /usr/local/sbin/pp-wg-routes (restores table 100 + the ip rules)
+wg_guard_interval_sec: 30
 # safety switches — both default to false, only a human may flip them
 wg_force_regenerate_keys: false
 wg_force_rewrite_config: false

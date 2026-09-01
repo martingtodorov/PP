@@ -8,6 +8,11 @@
     release_stamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
     release_dir: "{{ app_dir }}/releases/{{ ref }}-{{ release_stamp }}"
 
+  pre_tasks:
+    - import_tasks: ../tasks/infra_defaults.yml
+    - name: The tunnel routing must be in place (git/pip need the internet)
+      import_tasks: ../tasks/wg_route_ensure.yml
+
   tasks:
     - name: Assert the base layout exists (run bootstrap_backend_base.yml if this fails)
       stat: { path: "{{ item }}" }

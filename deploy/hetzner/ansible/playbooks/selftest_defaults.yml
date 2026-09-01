@@ -1,0 +1,30 @@
+---
+# Local self-test of ansible/tasks/infra_defaults.yml (no server access).
+#   ansible-playbook -i inventory.ini playbooks/selftest_defaults.yml -e ansible_connection=local
+# Proves that a group_vars/all.yml WITHOUT frontend_public_ip / ssl_cert_path / ssl_key_path still
+# resolves every variable the playbooks use — the bug that used to break preflight.
+- name: infra_defaults self-test
+  hosts: all
+  gather_facts: false
+  connection: local
+  pre_tasks:
+    - import_tasks: ../tasks/infra_defaults.yml
+  tasks:
+    - name: Resolved values
+      debug:
+        msg: >-
+          {{ inventory_hostname }}: public={{ frontend_public_ip }} private={{ frontend_private_ip }}
+          endpoint={{ wg_front_endpoint }} wg_subnet={{ wg_subnet }} table={{ nat_table }}
+          cert={{ ssl_cert_path }} key={{ ssl_key_path }} media={{ media_dir }}
+
+    - name: Everything the playbooks reference is defined
+      assert:
+        that:
+          - frontend_public_ip == '2.28.79.24'
+          - wg_front_endpoint == '10.0.0.2:51820'
+          - wg_subnet == '10.99.0.0/24'
+          - ssl_cert_path == '/etc/ssl/cloudflare/origin.pem'
+          - ssl_key_path == '/etc/ssl/cloudflare/origin.key'
+          - nat_rule_priority | int == 1000
+          - nat_table | int == 100
+        quiet: true

@@ -1,0 +1,11 @@
+[Unit]
+Description=Restore the WireGuard policy routing for {{ app_name }}
+After=wg-quick@wg0.service
+Wants=wg-quick@wg0.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pp-wg-routes
+
+[Install]
+WantedBy=multi-user.target
