@@ -56,6 +56,10 @@ JWT_SECRET = os.environ["JWT_SECRET"]
 ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
 ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 
+
+def _env_flag(name: str) -> bool:
+    return (os.environ.get(name) or "").strip().lower() in ("1", "true", "yes")
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 log = logging.getLogger("purepeptide")
 
@@ -254,11 +258,13 @@ async def seed_admin():
             "created_at": now_utc(),
         })
         log.info("Seeded admin: %s", ADMIN_EMAIL)
-    elif not verify_password(ADMIN_PASSWORD, existing["password_hash"]):
+    elif _env_flag("ADMIN_PASSWORD_RESET") and not verify_password(ADMIN_PASSWORD, existing["password_hash"]):
+        # opt-in only: a normal deploy/restart must never reset a password changed in the admin panel
         await db.users.update_one(
             {"email": ADMIN_EMAIL},
             {"$set": {"password_hash": hash_password(ADMIN_PASSWORD)}},
         )
+        log.warning("Admin password re-synced from ADMIN_PASSWORD (ADMIN_PASSWORD_RESET=1)")
 
     test_email = "customer@example.com"
     if not await db.users.find_one({"email": test_email}):

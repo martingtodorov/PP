@@ -23,8 +23,8 @@ server {
 {% endif %}
     server_name {{ site_domains | join(' ') }};
 
-    ssl_certificate     {{ ssl_dir }}/cert.pem;
-    ssl_certificate_key {{ ssl_dir }}/key.pem;
+    ssl_certificate     {{ ssl_cert_path }};
+    ssl_certificate_key {{ ssl_key_path }};
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers off;
     ssl_session_cache shared:SSL:10m;

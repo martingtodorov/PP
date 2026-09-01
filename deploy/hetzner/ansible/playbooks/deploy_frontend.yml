@@ -1,4 +1,6 @@
 ---
+# ROUTINE FRONTEND DEPLOY — builds the SPA and swaps the web root. Build tooling is installed
+# only if missing; nothing else on the host is touched.
 - name: PurePeptide frontend build on pp-front
   hosts: frontend
   become: true

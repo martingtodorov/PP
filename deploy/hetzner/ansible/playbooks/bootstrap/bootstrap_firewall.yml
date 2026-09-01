@@ -1,0 +1,30 @@
+---
+# BOOTSTRAP ONLY — the firewall on pp-front. Never run automatically: enabling ufw with the wrong
+# rule set locks us out and drops the WireGuard listener.
+- name: Firewall on pp-front
+  hosts: frontend
+  become: true
+  tags: [firewall]
+  tasks:
+    - name: Allow SSH, HTTP, HTTPS and WireGuard
+      ufw: { rule: allow, port: "{{ item.port }}", proto: "{{ item.proto }}" }
+      loop:
+        - { port: "{{ ssh_port }}", proto: tcp }
+        - { port: "80", proto: tcp }
+        - { port: "443", proto: tcp }
+        - { port: "{{ wg_port }}", proto: udp }
+
+    - name: Allow the Hetzner private network (Ansible jump + backend proxying)
+      ufw: { rule: allow, src: "{{ private_cidr }}" }
+
+    - name: Default deny incoming
+      ufw: { direction: incoming, policy: deny }
+
+    - name: Enable ufw
+      ufw: { state: enabled }
+
+    - name: SSH still answers (fail loudly if we just locked ourselves out)
+      wait_for: { port: "{{ ssh_port }}", host: "{{ frontend_public_ip }}", timeout: 20 }
+      delegate_to: localhost
+      become: false
+      tags: [verify]

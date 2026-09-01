@@ -1,9 +1,12 @@
 ---
-# copy to group_vars/all.yml, fill in the secrets, then: ansible-vault encrypt group_vars/all.yml
+# copy to group_vars/all.yml, fill in the REAL production secrets, then: ansible-vault encrypt group_vars/all.yml
+#
+# The running production infrastructure is authoritative. Values in this file that describe the
+# servers, network, WireGuard tunnel, TLS files or users must match reality and must not be "improved".
 
 # ---------- identity / paths ----------
 app_name: purepeptide
-# first domain is the canonical one (used for sitemaps, emails, OG tags)
+# first domain is the canonical one (sitemaps, emails, OG tags)
 site_domains:
   - purepeptide.bg
   - purepeptide.eu
@@ -14,67 +17,79 @@ app_dir: /opt/purepeptide
 web_root: /var/www/purepeptide
 env_dir: /etc/purepeptide
 media_dir: /var/lib/purepeptide/media      # PERSISTENT — never touched by a deploy
-ssl_dir: /etc/ssl/purepeptide
-repo_url: git@github.com:YOURORG/purepeptide.git
+repo_url: git@github.com:martingtodorov/PP.git
 ref: main
 
-# ---------- network / NAT ----------
+# ---------- existing production network (DO NOT CHANGE) ----------
 ssh_port: 22
 private_cidr: 10.0.0.0/16
+frontend_public_ip: 2.28.79.24
 frontend_private_ip: 10.0.0.2
 backend_private_ip: 10.0.0.3
-# nat_public_iface: eth0                   # autodetected when omitted
+frontend_public_iface: eth0                # NAT/MASQUERADE happens here
+backend_private_iface: enp7s0
+backend_service_user: www-data
+
+# WireGuard tunnel — pp-back has NO internet before the tunnel is up, therefore the peer
+# endpoint MUST be the PRIVATE address of pp-front. Never 2.28.79.24:51820.
 wg_port: 51820
+wg_front_endpoint: "10.0.0.2:51820"
 wg_front_ip: 10.99.0.1
 wg_back_ip: 10.99.0.2
 wg_mtu: 1370
-backend_service_user: www-data
 nat_table: 100
 nat_mark: "0x1"
 nat_rule_priority: 1000
+# safety switches — both default to false, only a human may flip them
+wg_force_regenerate_keys: false
+wg_force_rewrite_config: false
 
-# ---------- backend env ----------
+# ---------- existing TLS (Cloudflare Origin, installed manually) ----------
+ssl_cert_path: /etc/ssl/cloudflare/origin.pem
+ssl_key_path: /etc/ssl/cloudflare/origin.key
+
+# ---------- backend env (REAL production secrets) ----------
 db_name: purepeptide
 mongo_url: "mongodb://localhost:27017"
 public_site_url: ""                        # empty = per-locale domains are used in emails
-jwt_secret: "CHANGE_ME_64_HEX"
+jwt_secret: "REAL_PRODUCTION_JWT_SECRET"
 admin_email: "admin@purepeptide.bg"
-admin_password: "CHANGE_ME"
+admin_password: "REAL_PRODUCTION_ADMIN_PASSWORD"
+# leave false: the backend must never reset a password changed in the admin panel
+admin_password_reset: false
 contact_email: "info@purepeptide.bg"
 
-# AI translations (owner's own Anthropic key)
 anthropic_api_key: "sk-ant-..."
 anthropic_model: "claude-sonnet-5"
 
-# transactional email
 resend_api_key: "re_..."
 sender_email: "PurePeptide <no-reply@purepeptide.bg>"
 admin_notify_email: "admin@purepeptide.bg"
 
-# bank transfer details shown at checkout and in emails
 bank_name: "DSK Bank"
 bank_iban: "BG61STSA93000032400775"
 bank_bic: "STSABGSF"
 bank_holder: "Purepeptide LTD"
 
-# courier / checkout platform (Econt, BoxNow, Pigeon, GLS, FAN, Speedex)
 nextcart_base_url: "https://client.nextcartmanager.com"
 nextcart_shop: "etb7zb-gy.myshopify.com"
 nextcart_country: "BG"
 nextcart_locale: "bg"
 nextcart_currency: "EUR"
 
-# web push for admin order alerts
-vapid_public_key: "..."
-vapid_private_key: "..."
+vapid_public_key: "REAL_VAPID_PUBLIC_KEY"
+vapid_private_key: "REAL_VAPID_PRIVATE_KEY"
 vapid_subject: "mailto:admin@purepeptide.bg"
 
-# abandoned cart recovery
 abandoned_delay_min: 60
 abandoned_sweep_sec: 600
 
-# managed object storage — only needed for the one-off media export (--tags media)
+# only needed for the one-off media import from the managed storage
 emergent_llm_key: ""
+
+# ---------- backend DNS (systemd-resolved, managed persistently) ----------
+backend_dns: "1.1.1.1 8.8.8.8"
+backend_fallback_dns: "9.9.9.9"
 
 # ---------- behaviour ----------
 releases_kept: 5

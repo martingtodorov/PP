@@ -1,5 +1,7 @@
 ---
-- name: PurePeptide backend (FastAPI + MongoDB) on pp-back
+# ROUTINE APPLICATION DEPLOY — code, dependencies, env, service. No infrastructure.
+# It does NOT install MongoDB, create users, touch SSH, WireGuard, DNS, firewall or the media disk.
+- name: PurePeptide backend — application deploy
   hosts: backend
   become: true
   vars:
@@ -7,63 +9,15 @@
     release_dir: "{{ app_dir }}/releases/{{ ref }}-{{ release_stamp }}"
 
   tasks:
-    # ---------------- base ----------------
-    - name: Install OS packages
-      apt:
-        name: [git, python3-venv, python3-pip, python3-dev, build-essential, curl, gnupg,
-               libjpeg-dev, zlib1g-dev, libwebp-dev, rsync]
-        update_cache: true
-        state: present
-      tags: [base]
-
-    - name: Create directories
-      file: { path: "{{ item }}", state: directory, owner: root, group: "{{ backend_service_user }}", mode: "0755" }
+    - name: Assert the base layout exists (run bootstrap_backend_base.yml if this fails)
+      stat: { path: "{{ item }}" }
+      register: layout
+      failed_when: not layout.stat.exists
       loop:
         - "{{ app_dir }}"
-        - "{{ app_dir }}/releases"
         - "{{ env_dir }}"
-        - "{{ backup_dir }}"
-      tags: [base]
-
-    - name: Create the persistent media directory (never wiped by a deploy)
-      file:
-        path: "{{ media_dir }}"
-        state: directory
-        owner: "{{ backend_service_user }}"
-        group: "{{ backend_service_user }}"
-        mode: "0755"
-      tags: [base, media]
-
-    # ---------------- mongodb ----------------
-    - name: MongoDB apt key
-      get_url:
-        url: "https://pgp.mongodb.com/server-{{ mongo_major }}.asc"
-        dest: /etc/apt/trusted.gpg.d/mongodb.asc
-        mode: "0644"
-      tags: [mongo]
-
-    - name: MongoDB repository
-      apt_repository:
-        repo: "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu {{ ansible_distribution_release }}/mongodb-org/{{ mongo_major }} multiverse"
-        filename: mongodb-org
-        state: present
-      tags: [mongo]
-
-    - name: Install mongodb-org
-      apt: { name: mongodb-org, update_cache: true, state: present }
-      tags: [mongo]
-
-    - name: Bind MongoDB to localhost only
-      lineinfile:
-        path: /etc/mongod.conf
-        regexp: '^\s*bindIp:'
-        line: "  bindIp: 127.0.0.1"
-      notify: restart mongod
-      tags: [mongo]
-
-    - name: Enable mongod
-      systemd: { name: mongod, enabled: true, state: started }
-      tags: [mongo]
+        - "{{ media_dir }}"
+      tags: [code, config]
 
     # ---------------- code ----------------
     - name: Checkout the release
@@ -75,13 +29,9 @@
         accept_hostkey: true
       tags: [code]
 
-    - name: Create the virtualenv
+    - name: Create the virtualenv (kept between releases)
       command: "python3 -m venv {{ app_dir }}/venv"
       args: { creates: "{{ app_dir }}/venv/bin/python" }
-      tags: [code]
-
-    - name: Upgrade pip
-      pip: { name: [pip, setuptools, wheel], state: latest, virtualenv: "{{ app_dir }}/venv" }
       tags: [code]
 
     - name: Install Python dependencies (portable list — no platform-only packages)
@@ -91,17 +41,18 @@
       tags: [code]
 
     # ---------------- config ----------------
-    - name: Render backend.env
+    - name: Render backend.env from the vault (no defaults — every value comes from group_vars)
       template:
         src: ../templates/backend.env.j2
         dest: "{{ env_dir }}/backend.env"
         owner: root
         group: "{{ backend_service_user }}"
         mode: "0640"
+        backup: true
       notify: restart backend
       tags: [config]
 
-    - name: Symlink backend.env into the release (local runs / management scripts)
+    - name: Symlink backend.env into the release (management scripts read it)
       file:
         src: "{{ env_dir }}/backend.env"
         dest: "{{ release_dir }}/backend/.env"
@@ -148,34 +99,20 @@
       systemd: { name: "{{ app_name }}-backend", enabled: true, state: started, daemon_reload: true }
       tags: [service, publish]
 
-    - name: Prune old releases
+    - name: Prune old releases (media, env and database are untouched)
       shell: "ls -1dt {{ app_dir }}/releases/*/ | tail -n +{{ (releases_kept | int) + 1 }} | xargs -r rm -rf"
       changed_when: false
       tags: [publish]
 
-    # ---------------- media ----------------
-    - name: Pull every stored image onto the local media disk (one-off / idempotent)
+    # ---------------- optional, never automatic ----------------
+    - name: Import media from the managed storage (only with -e run_media_import=true)
       command: "{{ app_dir }}/venv/bin/python export_media_to_disk.py"
       args: { chdir: "{{ app_dir }}/current/backend" }
       become_user: "{{ backend_service_user }}"
-      register: media_export
-      changed_when: "'downloaded: 0' not in media_export.stdout"
+      register: media_import
+      changed_when: "'downloaded: 0' not in media_import.stdout"
+      when: run_media_import | default(false) | bool
       tags: [media]
-
-    - name: Show the media export result
-      debug: { var: media_export.stdout_lines }
-      tags: [media]
-
-    # ---------------- backup ----------------
-    - name: Nightly mongodump (14 days retention)
-      cron:
-        name: "{{ app_name }} mongodump"
-        minute: "20"
-        hour: "3"
-        job: >-
-          /usr/bin/mongodump --db {{ db_name }} --archive={{ backup_dir }}/{{ db_name }}-$(date +\%F).gz --gzip
-          && find {{ backup_dir }} -name '{{ db_name }}-*.gz' -mtime +14 -delete
-      tags: [backup]
 
     # ---------------- verify ----------------
     - name: Health check
@@ -196,7 +133,5 @@
   handlers:
     - name: reload systemd
       systemd: { daemon_reload: true }
-    - name: restart mongod
-      systemd: { name: mongod, state: restarted }
     - name: restart backend
       systemd: { name: "{{ app_name }}-backend", state: restarted, daemon_reload: true }

@@ -1,0 +1,63 @@
+---
+# Infrastructure preflight. Runs first in site.yml and only VERIFIES — it changes nothing.
+# If any check fails, fix the infrastructure by hand (or run the bootstrap playbooks explicitly).
+
+- name: Preflight — backend connectivity
+  hosts: backend
+  gather_facts: false
+  tags: [preflight, verify]
+  tasks:
+    - name: SSH reachable through the jump host
+      ping:
+
+    - name: WireGuard tunnel is up with a recent handshake
+      become: true
+      shell: |
+        set -o pipefail
+        wg show wg0 latest-handshakes | awk '{print $2}'
+      args: { executable: /bin/bash }
+      register: wg_handshake
+      changed_when: false
+      failed_when: >-
+        wg_handshake.rc != 0 or
+        wg_handshake.stdout | trim == '' or
+        wg_handshake.stdout_lines[0] | int == 0 or
+        (ansible_date_time.epoch | default(lookup('pipe', 'date +%s')) | int) - (wg_handshake.stdout_lines[0] | int) > 300
+
+    - name: Internet reachable through the tunnel
+      command: ping -c 3 -W 3 1.1.1.1
+      changed_when: false
+
+    - name: DNS resolves through systemd-resolved
+      command: resolvectl query ifconfig.me
+      changed_when: false
+
+    - name: Outbound traffic exits through pp-front
+      command: curl -sS --max-time 15 https://ifconfig.me
+      register: egress_ip
+      changed_when: false
+      failed_when: egress_ip.stdout | trim != frontend_public_ip
+
+    - name: Egress summary
+      debug:
+        msg: "pp-back -> internet via {{ egress_ip.stdout | trim }} (expected {{ frontend_public_ip }})"
+
+- name: Preflight — frontend prerequisites
+  hosts: frontend
+  gather_facts: false
+  tags: [preflight, verify]
+  tasks:
+    - name: SSH reachable
+      ping:
+
+    - name: Cloudflare Origin certificate and key are present
+      stat: { path: "{{ item }}" }
+      register: tls_files
+      failed_when: not tls_files.stat.exists
+      loop:
+        - "{{ ssl_cert_path }}"
+        - "{{ ssl_key_path }}"
+
+    - name: nginx is installed
+      command: nginx -v
+      changed_when: false
