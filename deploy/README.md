@@ -33,7 +33,7 @@ One build serves every domain; the locale is derived from the hostname by the ap
 | `purepeptide.eu` | en / fr / de / cz / hu / pl / sk / si (path prefixes) |
 | `purepeptide.ro` | ro |
 | `purepeptide.gr` | gr |
-| `purepeptide-labs.com` | bg (alias) |
+| `purepeptide-labs.bg` | bg (alias) |
 
 ## Environment variables that stop the boot
 

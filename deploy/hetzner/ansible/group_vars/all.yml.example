@@ -9,7 +9,7 @@ site_domains:
   - purepeptide.eu
   - purepeptide.ro
   - purepeptide.gr
-  - purepeptide-labs.com
+  - purepeptide-labs.bg
 app_dir: /opt/purepeptide
 web_root: /var/www/purepeptide
 env_dir: /etc/purepeptide

@@ -4,6 +4,7 @@ import { X, Minus, Plus, Trash2, Loader2, Check, Search } from "lucide-react";
 import { toast } from "sonner";
 import { api, fmtEUR, fmtBGN, showsBGN, img, formatErr } from "../lib/api";
 import { loadSaved, saveCheckout, pfBank, pfCountries, pfGeo, pfConfig, pfPickups } from "../lib/checkoutPrefetch";
+import { siteMedia } from "../lib/media";
 import { useCart } from "../context/CartContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 
@@ -480,7 +481,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
     <div className="nc2-backdrop" role="dialog" aria-modal="true" data-testid="precheckout-modal">
       <div className="nc2-dialog">
         <div className="nc2-hd">
-          <img src="/logo-header.png" alt="PurePeptide" className="nc2-logo" />
+          <img src={siteMedia("logo", "/logo-header.png")} alt="PurePeptide" className="nc2-logo" />
           <span className="nc2-hd-title">Бърза поръчка</span>
           <button type="button" className="nc2-x" aria-label="Затвори" onClick={onClose} data-testid="precheckout-close">
             <X className="h-5 w-5" />

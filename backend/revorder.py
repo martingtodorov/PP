@@ -54,7 +54,11 @@ async def _all_domains() -> Dict[str, Dict[str, Any]]:
     return ((doc or {}).get("value") or {}).get("domains") or {}
 
 
+DOMAIN_ALIASES = {"purepeptide-labs.bg": "purepeptide.bg"}
+
+
 async def domain_config(domain: str) -> Optional[Dict[str, Any]]:
+    domain = DOMAIN_ALIASES.get(domain, domain)
     cfg = (await _all_domains()).get(domain)
     if cfg and cfg.get("enabled") and cfg.get("api_key") and cfg.get("secret_key"):
         return cfg

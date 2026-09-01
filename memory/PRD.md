@@ -308,3 +308,17 @@ Domains & languages
 - iteration_21.json — backend 5/5; frontend 6/7 → the reported buy-bar/banner overlap was fixed and
   re-verified manually (banner open → buy bar hidden; after consent → buy bar returns).
 - All Ansible YAML parses and every Jinja template renders against `group_vars/all.yml.example`.
+
+## 2026-09-01 (session 2, part 4) — Brand assets in storage + purepeptide-labs.bg alias
+- `frontend/src/lib/media.js`: site media map filled from `/api/settings` (`settings.media`), readable from
+  non-React modules. Header/desktop/checkout logo, footer light logo, OG image and the schema.org logo now
+  come from our object storage (`/api/files/purepeptide/site/...`, served as WebP/JPEG); local files stay as
+  fallbacks. `og:image` is always absolute. Favicons + manifest icons stay in `public/` — browsers request
+  them at fixed paths.
+- `migrate_media_to_storage.py` now also uploads `favicon-512.png` (site media map = hero, logo,
+  logo_light, og, icon).
+- **`purepeptide-labs.bg` is the Bulgarian alias**: `PROD_HOST_RE` / `isProdHost()` in `i18n/locales.js`
+  (used by `seo.js` and `LocaleContext`) recognises `purepeptide(-labs)?.(bg|eu|ro|gr)`, so canonical and
+  hreflang stay on `purepeptide.bg` instead of falling back to preview-style prefixes.
+  `revorder.DOMAIN_ALIASES` maps the alias to the `purepeptide.bg` credentials. Deploy `site_domains`
+  updated (was purepeptide-labs.com).
