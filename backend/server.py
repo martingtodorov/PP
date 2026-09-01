@@ -39,6 +39,7 @@ from i18n import (
 from pages_seed import PAGE_SLUGS, PAGE_LABELS, DEFAULT_PAGES
 import storage
 import email_service
+from starlette.concurrency import run_in_threadpool
 import email_templates
 import push_service
 
@@ -1515,8 +1516,8 @@ IMAGE_CACHE.mkdir(exist_ok=True)
 ALLOWED_WIDTHS = {160, 300, 480, 600, 900, 1200}
 
 
-def _webp_variant(data: bytes, width: int, cache_file: Path) -> bytes:
-    """Resize + convert to WebP once, then serve from disk cache."""
+def _image_variant(data: bytes, width: int, fmt: str, cache_file: Path) -> bytes:
+    """Resize + convert to WebP/JPEG once, then serve from disk cache."""
     if cache_file.exists():
         return cache_file.read_bytes()
     from io import BytesIO
@@ -1524,18 +1525,30 @@ def _webp_variant(data: bytes, width: int, cache_file: Path) -> bytes:
     from PIL import Image
 
     im = Image.open(BytesIO(data))
-    im = im.convert("RGBA" if im.mode in ("RGBA", "LA", "P") else "RGB")
-    if im.width > width:
+    if fmt == "WEBP":
+        im = im.convert("RGBA" if im.mode in ("RGBA", "LA", "P") else "RGB")
+    else:
+        if im.mode in ("RGBA", "LA", "P"):
+            im = im.convert("RGBA")
+            bg = Image.new("RGB", im.size, (255, 255, 255))
+            bg.paste(im, mask=im.split()[-1])
+            im = bg
+        else:
+            im = im.convert("RGB")
+    if width and im.width > width:
         im.thumbnail((width, width * 4), Image.LANCZOS)
     buf = BytesIO()
-    im.save(buf, "WEBP", quality=82, method=5)
+    if fmt == "WEBP":
+        im.save(buf, "WEBP", quality=82, method=5)
+    else:
+        im.save(buf, "JPEG", quality=84, optimize=True, progressive=True)
     out = buf.getvalue()
     cache_file.write_bytes(out)
     return out
 
 
 @api.get("/files/{path:path}")
-async def serve_file(path: str, w: int = 0):
+async def serve_file(path: str, request: Request, w: int = 0):
     record = await db.files.find_one({"storage_path": path, "is_deleted": False})
     if not record:
         raise HTTPException(404, "Файлът не е намерен")
@@ -1551,18 +1564,25 @@ async def serve_file(path: str, w: int = 0):
         except Exception:
             raise HTTPException(404, "Файлът не е намерен")
 
-    if w in ALLOWED_WIDTHS and content_type.startswith("image/") and "svg" not in content_type:
+    # every raster image is served as WebP (or JPEG for older clients), resized on demand
+    convertible = content_type.startswith("image/") and not any(
+        x in content_type for x in ("svg", "gif"))
+    if convertible:
+        accept = request.headers.get("accept", "")
+        fmt = "WEBP" if "image/webp" in accept or not accept else "JPEG"
+        width = w if w in ALLOWED_WIDTHS else 0
         try:
-            variant = IMAGE_CACHE / f"{cache_file.name}-w{w}.webp"
-            data = _webp_variant(data, w, variant)
-            content_type = "image/webp"
+            suffix = "webp" if fmt == "WEBP" else "jpg"
+            variant = IMAGE_CACHE / f"{cache_file.name}-w{width}.{suffix}"
+            data = await run_in_threadpool(_image_variant, data, width, fmt, variant)
+            content_type = f"image/{suffix if fmt == 'WEBP' else 'jpeg'}"
         except Exception as ex:
-            log.warning("WebP variant failed for %s: %s", path, ex)
+            log.warning("Image variant failed for %s: %s", path, ex)
 
     return Response(
         content=data,
         media_type=content_type,
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={"Cache-Control": "public, max-age=31536000, immutable", "Vary": "Accept"},
     )
 
 

@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration-20 verified: (1) cart-drawer prefetch — after add-to-cart the drawer opens and clicking cart-checkout-btn renders pc-courier-econt in 0.41s (well under 1s) with the Econt method already labelled '3,89 €' and offices populated. (2) pc-dial is a <select> with exactly 245 options; manually choosing +30 keeps that prefix after switching pc-country to RO (and after pc-country -> BG), verifying that the manual choice beats the country->dial auto-mapping. (3) Fresh browser (localStorage cleared): country defaults to BG with dial=359; switching to RO auto-fills dial=40. (4) Memory: seeding pp_checkout_v1 with dial=30 + dialTouched=true and reopening the modal restores country=BG dial=30. (5) Placing a COD order with the manual +30 prefix stores customer.phone = '+30888444333' in the admin GET /api/admin/orders/{id} response — full phone preserved. (6) Mobile (420x900) nav drawer: opening 'Пазарувай' shows 7 items, the FIRST is data-testid='drawer-collection-all' text 'Всички пептиди' href /collections/2all-the-peptides-1, and clicking it navigates there. (7) Backend image serving: /api/files/<product image> with Accept: image/webp returns content-type image/webp + 'Vary: Accept'; Accept: image/jpeg returns image/jpeg; ?w=600 returns a smaller payload than full; cached request is <2s. (8) settings.media.hero is 'https://.../api/files/purepeptide/site/7e1ee16b6f81-hero-home.webp' — site media now in object storage and the homepage sets that URL as a computed background-image. (9) /api/pages/chemical-analysis html has no cdn.shopify.com references and its <img src> targets all load 200 from /api/files/... (10) Regression: /api/nextcart/config?country=BG includes Econt and payment_methods[0].key=='cod'; /api/nextcart/countries default=='BG' with BG/RO/GR/DE all present; /api/bank-details returns iban BG61STSA93000032400775. Backend pytest: 9/9 pass in test_iteration20_images.py (~6.5s).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PreCheckoutModal pc-dial <select>", "issues": ["Console hydration warning: '<span> cannot be a child of <option>' — caused by Visual Editor instrumentation wrapping option children in <span> with style display:contents. Pre-existing and not our code (the wrapper is x-excluded='true' Visual-Editor markup); no functional impact, select works and value updates correctly, but it produces a noisy React hydration warning in prod."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration20_images.py",
+    "/app/test_reports/pytest/iteration20.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "checkoutPrefetch.js: pfConfig/pfPickups/pfBank/pfCountries/pfGeo cache never expires within a session. Fine for a warm-up cache (immutable data), but if the merchant changes courier config in admin the storefront won't pick it up until reload — consider a TTL or bust the cache when settings mutate.",
+    "PreCheckoutModal.jsx: dialTouched is a ref reset from saved.current at mount; if the user clears localStorage in another tab and reopens the modal in this tab, dialTouched still reflects the pre-clear state until reload. Low-risk.",
+    "server.py serve_file: WebP/JPEG variant is written to disk but content is a plain read on the request thread — a very large upload could block the event loop. Consider running the PIL work in a thread pool for images over a few MB.",
+    "server.py serve_file: 'Vary: Accept' is set only on the final response headers; if an upstream/edge CDN caches without normalising Accept it could serve WebP to non-WebP clients. Confirm ingress/CDN respects Vary — the header is correct on origin."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration20_images.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% — prefetch, dial dropdown, manual-wins-over-country, fresh-browser auto BG/RO, 90-day memory reopen, order phone with +30, mobile drawer 'Всички пептиди' first, hero from /api/files/, no shopify cdn all verified"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026",
+  "seed_data_creation": "1 real order created via COD checkout on preview URL: id=70c18bcf-80e0-48e6-a298-52d25e4fc834 (order_number GKJ29, customer_email test_iter20_reuse@example.com, customer.phone '+30888444333'). Used to confirm manual dial prefix is persisted end-to-end.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 4 requested behaviours (prefetch warm-up, independent dial dropdown, 'Всички пептиди' first in mobile drawer, WebP/JPEG negotiation + site media in storage) verified on the preview URL. Backend regression: /app/backend/tests/test_iteration20_images.py (9 tests, ~6.5s). Key selectors: cart-checkout-btn, pc-dial (245 options), pc-country, pc-courier-econt, pc-pickup-search, pc-pickup-results, pc-continue, cart-terms-checkbox, nav-drawer-trigger (mobile burger), drawer-shop-toggle, drawer-shop-submenu, drawer-collection-all. localStorage key pp_checkout_v1 accepts dialTouched:true to force memory of the manual prefix. The visual-editor hydration warning about <span> in <option> is instrumentation noise and pre-existing.",
+  "rca of the issue": "Not applicable — no bugs found this iteration."
+}

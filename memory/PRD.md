@@ -258,3 +258,22 @@ Domains & languages
   mail. The owner must verify a domain in Resend and set `SENDER_EMAIL`.
 - RevOrder outbound push stays **disabled** until the merchant confirms endpoint + enables the domain.
 - P2: abandoned-cart second reminder / discount incentive, Speedy API (if still needed).
+
+## 2026-09-01 (session 2, part 2) — Checkout prefetch, phone prefix, media in storage
+- **Checkout warm-up** (`frontend/src/lib/checkoutPrefetch.js`): opening the cart drawer prefetches
+  countries, bank details, geo, courier config and the default pickup list (5-minute TTL cache).
+  The modal now shows couriers in **~0.4s** instead of firing 5 requests on mount.
+  `loadSaved` / `saveCheckout` (90-day memory) moved into the same module.
+- **Phone prefix is now an independent dropdown** (`pc-dial`, 245 territories). It follows the shipping
+  country until the customer picks a prefix himself (`dialTouched`), then the manual choice wins and is
+  remembered for 90 days — a Bulgarian number can ship to Greece.
+- **Mobile nav drawer**: „Всички пептиди" added as the first item under „Пазарувай"
+  (`drawer-collection-all`, new `allPeptides` key in all 11 locales).
+- **All images in our own object storage + automatic WebP/JPEG**:
+  `migrate_media_to_storage.py` uploaded the remaining site media (hero, logos, OG image) and re-hosted the
+  last external Shopify-CDN image inside the chemical-analysis page; `serve_file` now negotiates on the
+  `Accept` header (WebP, JPEG fallback), any `?w=` in {160,300,480,600,900,1200}, `Vary: Accept`,
+  immutable cache, PIL work off the event loop. Homepage hero comes from `settings.media.hero`.
+  Favicons/manifest icons stay in `public/` (browser-level, fixed paths).
+- Verified: iteration_20.json — backend 9/9, frontend 100% (prefetch speed, dial dropdown, drawer item,
+  image negotiation, hero from storage, no Shopify CDN left).
