@@ -423,3 +423,12 @@ def test_mongo_probe_checks_the_package_index_not_just_the_repo():
     assert "multiverse/binary-amd64/Packages" in boot
     assert "Package: mongodb-org-server" in boot
     assert "apt-get install -s mongodb-org" in boot   # unmet deps are reported, not hidden by retries
+
+
+def test_mongodb_kernel_workaround_is_applied():
+    """MongoDB 8.x will not start on Linux >= 6.19 without glibc.pthread.rseq=1 (SERVER-121912)."""
+    boot = (BOOTSTRAP / "bootstrap_backend_base.yml").read_text()
+    assert "/etc/systemd/system/mongod.service.d" in boot
+    assert "Environment=GLIBC_TUNABLES=glibc.pthread.rseq=1" in boot
+    assert "SERVER-121912" in boot
+    assert boot.index("Kernel workaround for MongoDB") < boot.index("Enable mongod")

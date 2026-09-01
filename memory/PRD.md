@@ -520,3 +520,13 @@ repo that really has the server. Verified live: resolute → **8.0 / noble** (no
 builds; deps libssl3t64/libcurl4t64 exist on 24.04+). `Install mongodb-org` got a rescue that prints
 `apt-get install -s mongodb-org` so unmet dependencies are visible instead of hidden behind retries.
 49 deploy-config tests green.
+
+### 2026-06 — MongoDB 8.x does not start on Linux >= 6.19 (SERVER-121912)
+mongod exited immediately: "Linux kernel versions 6.19 and newer has a known incompatibility with this
+version of MongoDB". Cause: the TCMalloc vendored into MongoDB 8.x is incompatible with the new
+restartable-sequences (rseq) behaviour; **no patched MongoDB release exists** (8.0/8.2 all affected).
+Upstream workaround, now applied by `bootstrap_backend_base.yml`:
+`/etc/systemd/system/mongod.service.d/10-pp-rseq.conf` with
+`Environment=GLIBC_TUNABLES=glibc.pthread.rseq=1` (rseq=0 causes memory corruption), followed by
+daemon-reload + restart when the drop-in changes. Guarded by
+`test_mongodb_kernel_workaround_is_applied`. 50 deploy-config tests green.
