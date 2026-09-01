@@ -50,23 +50,50 @@
       tags: [base, media]
 
     # ---------------- mongodb ----------------
-    - name: MongoDB apt key
-      get_url:
-        url: "https://pgp.mongodb.com/server-{{ mongo_major }}.asc"
-        dest: /etc/apt/trusted.gpg.d/mongodb.asc
-        mode: "0644"
-      register: mongo_key
-      retries: 3
-      delay: 10
-      until: mongo_key is succeeded
+    # MongoDB does not publish every version for every Ubuntu release (7.0 has no 'noble' repo, and
+    # brand-new releases have none at all), so probe what really exists instead of guessing.
+    - name: Candidate MongoDB repositories, most preferred first
+      set_fact:
+        mongo_repo_candidates: >-
+          {{ ([ansible_distribution_release] + mongo_supported_codenames) | unique | list }}
       tags: [mongo]
 
-    - name: MongoDB repository codename
+    - name: Probe which mongodb-org repositories exist
+      uri:
+        url: "https://repo.mongodb.org/apt/ubuntu/dists/{{ item.1 }}/mongodb-org/{{ item.0 }}/Release"
+        method: HEAD
+        status_code: [200, 403, 404]
+      loop: "{{ mongo_major_candidates | product(mongo_repo_candidates) | list }}"
+      loop_control: { label: "{{ item.0 }} / {{ item.1 }}" }
+      register: mongo_probe
+      changed_when: false
+      retries: 3
+      delay: 5
+      until: mongo_probe is not failed
+      tags: [mongo]
+
+    - name: Select the newest MongoDB version that has packages for this release
       set_fact:
-        mongo_repo_codename: >-
-          {{ ansible_distribution_release
-             if ansible_distribution_release in mongo_supported_codenames
-             else mongo_repo_fallback_codename }}
+        mongo_selected: >-
+          {{ (mongo_probe.results | selectattr('status', 'equalto', 200)
+              | map(attribute='item') | list | first) | default([], true) }}
+      tags: [mongo]
+
+    - name: Fail when MongoDB publishes nothing usable
+      fail:
+        msg: >-
+          No mongodb-org repository exists for {{ ansible_distribution }}
+          {{ ansible_distribution_version }} ({{ ansible_distribution_release }}). Probed:
+          {{ mongo_major_candidates | join(', ') }} against
+          {{ ([ansible_distribution_release] + mongo_supported_codenames) | unique | join(', ') }}.
+          Set mongo_major / mongo_supported_codenames in group_vars/all.yml.
+      when: mongo_selected | length == 0
+      tags: [mongo]
+
+    - name: Use the selected version and codename
+      set_fact:
+        mongo_major: "{{ mongo_selected[0] }}"
+        mongo_repo_codename: "{{ mongo_selected[1] }}"
       tags: [mongo]
 
     - name: Which MongoDB repository will be used
@@ -75,6 +102,18 @@
           {{ ansible_distribution }} {{ ansible_distribution_version }}
           ({{ ansible_distribution_release }}) → mongodb-org {{ mongo_major }} repo for
           '{{ mongo_repo_codename }}'
+      tags: [mongo]
+
+    - name: MongoDB apt key
+      get_url:
+        url: "https://pgp.mongodb.com/server-{{ mongo_major }}.asc"
+        dest: /etc/apt/trusted.gpg.d/mongodb.asc
+        mode: "0644"
+        force: true
+      register: mongo_key
+      retries: 3
+      delay: 10
+      until: mongo_key is succeeded
       tags: [mongo]
 
     - name: MongoDB repository

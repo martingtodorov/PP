@@ -99,5 +99,5 @@ backend_fallback_dns: "9.9.9.9"
 # ---------- behaviour ----------
 releases_kept: 5
 node_major: 20
-mongo_major: "7.0"
+mongo_major: "8.0"   # auto-probed against repo.mongodb.org; only used if probing is skipped
 backup_dir: /var/backups/purepeptide
