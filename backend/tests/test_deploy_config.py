@@ -432,3 +432,13 @@ def test_mongodb_kernel_workaround_is_applied():
     assert "Environment=GLIBC_TUNABLES=glibc.pthread.rseq=1" in boot
     assert "SERVER-121912" in boot
     assert boot.index("Kernel workaround for MongoDB") < boot.index("Enable mongod")
+
+
+def test_single_worker_check_counts_children_not_matching_processes():
+    """`pgrep -fc 'uvicorn server:app'` returns 2 with --workers 1 (supervisor + worker)."""
+    text = (PLAYBOOKS / "deploy_backend.yml").read_text()
+    assert "pgrep -fc" not in text
+    assert "systemctl show -p MainPID" in text
+    assert "pgrep -P" in text
+    unit = (TEMPLATES / "purepeptide-backend.service.j2").read_text()
+    assert "--workers 1" in unit
