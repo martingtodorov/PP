@@ -12,6 +12,40 @@ import { PRODUCT_BLOCKS, pick, LOCALES } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
 import { graph, productLd, breadcrumbLd, organizationLd } from "../lib/schema";
 
+/** Size token of a variant name, e.g. "5 mg" -> "5mg" */
+const sizeToken = (name) => (name || "").toLowerCase().replace(/\s+/g, "");
+
+/** Which variant sizes does this image filename mention? ("bpc-157br5mg10mg" mentions both) */
+const tokensInUrl = (url, tokens) => {
+  const flat = decodeURIComponent(url || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return tokens.filter((tok) => {
+    const i = flat.indexOf(tok);
+    return i >= 0 && !/[0-9]/.test(flat[i - 1] || "");
+  });
+};
+
+/**
+ * Gallery for the selected variant: its own photos first, then the shared ones
+ * (lab tests / COA / photos that mention every size), never the other variants' designs.
+ */
+export const variantGallery = (images, variants, index) => {
+  const tokens = variants.map((v) => sizeToken(v.name)).filter(Boolean);
+  const current = tokens[index];
+  if (!current || tokens.length < 2) return images;
+  const own = [];
+  const shared = [];
+  images.forEach((url) => {
+    const hits = tokensInUrl(url, tokens);
+    if (hits.length === 1) {
+      if (hits[0] === current) own.push(url);
+    } else {
+      shared.push(url);
+    }
+  });
+  const gallery = [...own, ...shared];
+  return gallery.length ? gallery : images;
+};
+
 export default function ProductPage() {
   const { handle } = useParams();
   const [data, setData] = useState({ product: null, related: [], collections: [], articles: [] });
@@ -55,7 +89,8 @@ export default function ProductPage() {
 
   if (!p) return <Layout><div className="max-w-7xl mx-auto px-4 py-20 text-slate-500">{t("loading")}</div></Layout>;
 
-  const images = p.images?.length ? p.images : [p.image];
+  const allImages = p.images?.length ? p.images : [p.image];
+  const images = variantGallery(allImages, p.variants || [], variantIdx);
   const out = !v || (v.stock || 0) <= 0;
   const primaryCollection = data.collections?.[0];
   const specs = p.specs || {};
@@ -78,7 +113,7 @@ export default function ProductPage() {
               <img src={images[imgIdx]} alt={p.title} className="w-full h-full object-contain p-2 sm:p-4" data-testid="product-main-image" />
             </div>
             {images.length > 1 && (
-              <div className="pp-thumbs -mx-4 px-4 sm:mx-0 sm:px-0 mt-4" data-testid="product-thumbs">
+              <div className="pp-thumbs -mx-4 px-4 sm:mx-0 sm:px-0 mt-1 sm:mt-1.5" data-testid="product-thumbs">
                 {images.map((src, i) => (
                   <button key={i} onClick={() => setImgIdx(i)}
                     className={`pp-thumb${i === imgIdx ? " pp-thumb--active" : ""}`}
@@ -112,7 +147,7 @@ export default function ProductPage() {
                 <p className="text-sm text-slate-600 mb-2">{t("package")}:</p>
                 <div className="pp-variants" data-testid="variant-selector">
                   {p.variants.map((va, i) => (
-                    <button key={va.sku || va.name} type="button" onClick={() => setVariantIdx(i)}
+                    <button key={va.sku || va.name} type="button" onClick={() => { setVariantIdx(i); setImgIdx(0); }}
                       className={`pp-variant${i === variantIdx ? " pp-variant--active" : ""}${(va.stock || 0) <= 0 ? " pp-variant--out" : ""}`}
                       data-testid={`variant-${va.sku || va.name}`}>
                       {va.name}

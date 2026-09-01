@@ -1306,7 +1306,7 @@ button.bg-coral-600:disabled { box-shadow: none; }
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  padding-bottom: 2px;
+  padding-block: 0;
   max-width: 100%;
 }
 .pp-thumbs::-webkit-scrollbar { display: none; }
