@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Truck, Minus, Plus, ShieldCheck, Droplets } from "lucide-react";
 import { toast } from "sonner";
 import Layout, { USPRow } from "../components/Layout";
 import ProductsCarousel from "../components/ProductsCarousel";
 import Breadcrumbs from "../components/Breadcrumbs";
+import StickyBuyBar from "../components/StickyBuyBar";
 import { api, fmtEUR, fmtBGN, showsBGN, img } from "../lib/api";
 import { useCart } from "../context/CartContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
@@ -58,6 +59,7 @@ export default function ProductPage() {
   const [data, setData] = useState({ product: null, related: [], collections: [], articles: [] });
   const [variantIdx, setVariantIdx] = useState(0);
   const [imgIdx, setImgIdx] = useState(0);
+  const ctaRef = useRef(null);
   const [qty, setQty] = useState(1);
   const { add } = useCart();
   const { lp, t, locale } = useLocaleCtx();
@@ -171,7 +173,7 @@ export default function ProductPage() {
               </p>
             )}
 
-            <div className="flex items-stretch gap-3 pt-1.5 pb-1">
+            <div className="flex items-stretch gap-3 pt-1.5 pb-1" ref={ctaRef}>
               <div className="flex items-center border border-slate-300 rounded-md">
                 <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 py-2.5 text-slate-600" aria-label="-"><Minus className="h-4 w-4" /></button>
                 <span className="w-10 text-center text-sm font-medium" data-testid="qty-value">{qty}</span>
@@ -263,6 +265,13 @@ export default function ProductPage() {
         )}
       </div>
       <USPRow />
+      <StickyBuyBar
+        product={p}
+        variant={v}
+        anchorRef={ctaRef}
+        soldOut={out}
+        onAdd={() => { add(p, v, qty); toast.success(t("addToCart"), { description: `${p.title} × ${qty}` }); }}
+      />
     </Layout>
   );
 }
