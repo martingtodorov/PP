@@ -105,3 +105,4 @@ credentials.json
 *.key
 .credentials
 test_reports/
+frontend/node_modules/.cache/default-development/22.pack
