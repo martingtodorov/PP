@@ -98,3 +98,9 @@ deploy/hetzner/ansible/inventory.ini
 deploy/hetzner/ansible/group_vars/all.yml
 backend/.media/
 frontend/node_modules/.cache/default-development/24.pack
+.env
+.env.*
+*.env
+credentials.json
+*.key
+.credentials
