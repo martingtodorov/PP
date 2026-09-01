@@ -1173,6 +1173,37 @@ img { max-width: 100%; height: auto; }
     }
 }
 
+/* Coral buttons: soft coral drop shadow + a light lift on hover (site-wide) */
+a.bg-coral-600,
+button.bg-coral-600,
+a.bg-coral-500,
+button.bg-coral-500,
+.pp-hero__btn--primary,
+.pp-variant--active {
+  box-shadow: 0 6px 18px -8px rgba(254, 111, 97, 0.9);
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease,
+    box-shadow 0.22s ease, transform 0.22s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  a.bg-coral-600:hover,
+  button.bg-coral-600:hover:not(:disabled),
+  a.bg-coral-500:hover,
+  button.bg-coral-500:hover:not(:disabled),
+  .pp-hero__btn--primary:hover,
+  .pp-variant--active:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 26px -10px rgba(254, 111, 97, 1);
+  }
+}
+a.bg-coral-600:active,
+button.bg-coral-600:active,
+.pp-hero__btn--primary:active,
+.pp-variant--active:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px -8px rgba(254, 111, 97, 0.9);
+}
+button.bg-coral-600:disabled { box-shadow: none; }
+
 /* Package / variant pills — coral Shopify-style selectors (always visible, even for a single SKU) */
 .pp-variants {
   display: flex;
