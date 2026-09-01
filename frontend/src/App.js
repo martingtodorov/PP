@@ -25,6 +25,7 @@ import AdminDelistedLinksPage from "./pages/AdminDelistedLinksPage";
 import AdminLocalesPage from "./pages/AdminLocalesPage";
 import AdminPagesPage from "./pages/AdminPagesPage";
 import AdminCollectionsPage from "./pages/AdminCollectionsPage";
+import AdminMessagesPage from "./pages/AdminMessagesPage";
 import AdminAnalyticsPage from "./pages/AdminAnalyticsPage";
 import AdminInventoryPage from "./pages/AdminInventoryPage";
 import AdminOrderDetailPage from "./pages/AdminOrderDetailPage";
@@ -69,6 +70,7 @@ function App() {
                 <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
                 <Route path="/admin/inventory" element={<AdminInventoryPage />} />
                 <Route path="/admin/collections" element={<AdminCollectionsPage />} />
+                <Route path="/admin/messages" element={<AdminMessagesPage />} />
                 <Route path="/admin/customers" element={<AdminCustomersPage />} />
                 <Route path="/admin/import" element={<AdminImportPage />} />
                 <Route path="/admin/settings" element={<AdminSettingsPage />} />

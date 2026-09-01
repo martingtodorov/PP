@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration-11 end-to-end validation of SEO meta coverage, schema.org structured data, scientific-literature page seeding, contact HTML-escape + async push, checkout speed + order-number, sitemap/robots and storefront regressions. 14/14 backend pytest cases pass; frontend meta+JSON-LD verified on 10 pages (home, product, 2x collections, faq, about, cookies, scientific-literature, contacts, article). All pages carry real Bulgarian titles/descriptions, canonical, and parseable JSON-LD with expected @types. Only minor gaps: og:image missing on all non-product/non-article pages; product-page og:image is relative URL; article JSON-LD uses author @type=Organization with a Person's name.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/articles", "issue": "1 legacy article (retatrutid-mexanizam-efektivnost-lekar-mnenie-2026-9022-78) still missing seo_title/seo_description — matches the allowed fallback in the review request."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "All pages except /products/* and /articles/*", "issues": ["og:image meta tag is missing (home, /collections/immunology, /collections/longevity-and-more, /pages/faq, /pages/about, /pages/cookies, /pages/scientific-literature, /pages/contacts). Facebook/LinkedIn/Twitter cards will fall back to a random inline image or nothing. Add a site-default og:image (e.g. /logo512.png or a hero JPG) in useSeo when no per-entity image is provided."]},
+      {"screen": "/products/bpc-157-5", "issues": ["og:image content is a relative path ('/api/files/import/....png') instead of an absolute URL. Social crawlers require an absolute URL — prefix with window.location.origin (or the canonical domain) before emitting."]},
+      {"screen": "/articles/tesamorelin JSON-LD", "issues": ["BlogPosting.author has @type=Organization but the name is a person ('Georgi Mladenov'). Google Rich Results expects Person for a named human author. Use { @type:'Person', name: article.author } and drop the @id pointing at Organization on the author node."]}
+    ]
+  },
+  "verification": {
+    "meta_coverage_frontend": {"status": "PASS", "evidence": "10/10 tested pages have non-empty title (all begin with real BG copy, none equal fallback 'PurePeptide' alone), meta description length >20, canonical present and matches current path, og:title + og:description present."},
+    "meta_coverage_backend": {"status": "PASS with 1 known fallback", "evidence": "GET /api/products → 21/21 have seo_title+seo_description; /api/collections → 7/7; /api/articles → 22/23 (retatrutid-mexanizam-... falls back as expected); /api/pages/{slug} → 5/5 tested slugs (faq/about/cookies/scientific-literature/contacts) all have SEO meta."},
+    "structured_data": {"status": "PASS", "evidence": "Every tested URL emits exactly 1 <script type=application/ld+json> block that parses cleanly with @context=https://schema.org and @graph[]. Types observed — product: [Product, BreadcrumbList, Organization] with AggregateOffer lowPrice=29 highPrice=49 priceCurrency=EUR availability=InStock offerCount=2, brand PurePeptide, sku PP-BPC157-5MG, CAS 137525-51-0 additionalProperty; collection: [CollectionPage, BreadcrumbList, Organization] with ItemList of products; faq: [FAQPage(mainEntity=4 Question/Answer), BreadcrumbList, Organization]; about/cookies/scientific-literature/contacts: [WebPage, BreadcrumbList, Organization]; article: [BlogPosting(headline, image, datePublished, dateModified, author, publisher, mainEntityOfPage), BreadcrumbList, Organization]; home: [Organization, WebSite(SearchAction), WebPage]. No null/undefined values found in required fields."},
+    "scientific_literature": {"status": "PASS", "evidence": "GET /api/pages/scientific-literature?locale=bg returns non-empty title 'Научни изследвания' + BG html (>500 chars). Frontend renders it with a valid canonical + JSON-LD."},
+    "contact_form_escape_and_speed": {"status": "PASS", "evidence": "POST /api/contact with '<script>alert(1)</script> тест' payload → 200 {ok:true} in <5s. GET /api/admin/messages shows the entry with the raw string stored (HTML escape happens only in the outbound email body via html.escape) — safe because admin UI /admin/messages renders as textContent, not innerHTML. Async push means the endpoint no longer blocks on FCM."},
+    "checkout_speed_and_order_number": {"status": "PASS", "evidence": "POST /api/checkout (bpc-157-5 UUID + PP-BPC157-5MG, quantity=1) returns 200/201 in <6s with order_number matching ^[A-Z]{3}[0-9]{2}$ (this run: see stdout). Note: field is 'quantity' not 'qty' — worth documenting."},
+    "sitemap_robots": {"status": "PASS", "evidence": "GET /api/sitemap.xml → 200 <urlset> that lists /products/bpc-157-5, /collections/..., /pages/faq, /articles/... URLs. GET /api/robots.txt → 200 with User-agent line and Sitemap: reference."},
+    "storefront_regression": {"status": "PASS", "evidence": "/collections/all-peptides: 21 [data-testid^=quick-add-] buttons, no [data-testid=sort-select]. Homepage: hero renders, 6 category tiles visible with images, first 4 bestseller cards in order GHK-Cu, BPC-157, TB-500, hGH frag 176-191. Product/collection pages render correctly."}
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration11.py",
+    "/app/test_reports/pytest/iteration11_results.xml"
+  ],
+  "action_items": [
+    "Add a site-default og:image inside useSeo (e.g. absolute URL to /logo512.png or a hero JPG) so home/collections/pages/faq/contacts share cleanly on social.",
+    "Convert relative og:image URLs to absolute in ProductPage.jsx (prefix window.location.origin or the canonical origin).",
+    "In schema.js articleLd: emit author as { '@type':'Person', name: article.author } — currently @type=Organization with a person's name, which Google Rich Results will flag."
+  ],
+  "critical_code_review_comments": [
+    "og:image is optional per OpenGraph but strongly recommended; every page currently missing it will render a blank social card. A single site-default fallback in seo.js would fix the whole storefront in one edit.",
+    "The relative og:image on the product page is a functional bug for social sharing — the ProductPage.jsx path builder should reuse the same 'startsWith(/) → prefix ORIGIN()' logic that productLd already uses on the JSON-LD image field.",
+    "articleLd author uses @type=Organization while article.author is a human name; this will emit a warning in Google Search Console. Fix to Person.",
+    "CheckoutIn Pydantic field is 'quantity' but review request and previous docs mention 'qty' — inconsistent naming; either accept both or update docs.",
+    "server.py is still 2221 lines — same modularisation debt flagged in iteration_10; no action required this round but growing.",
+    "notify_admin_push_bg now correctly wraps notify_admin_push in asyncio.create_task + wait_for(timeout=20), so contact and checkout are non-blocking as required."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration11.py"],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% of tested items (with 3 minor SEO polish notes)"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 (works)",
+  "seed_data_creation": "1 contact message TEST_Iter11 (test@example.com, contains <script> to verify escaping — should be marked handled/deleted by main agent). 1 checkout order (test@example.com, 1x BPC-157 5mg, order_number printed in stdout).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration-11 pytest at /app/backend/tests/test_iteration11.py — 14 cases, ~3s runtime, covers SEO meta on all product/collection/article/page endpoints, scientific-literature content, contact HTML escape + speed, checkout speed + order number pattern, sitemap/robots. Frontend JSON-LD script inspection covered home/product/2 collections/faq/about/cookies/scientific-literature/contacts/tesamorelin. Only outstanding items are 3 minor SEO polish tasks (og:image fallback + absolute URLs + Person author in articleLd). The 1 article without seo_title/seo_description (retatrutid-mexanizam-efektivnost-lekar-mnenie-2026-9022-78) is expected and matches the review-request fallback allowance.",
+  "rca of the issue": "Not applicable — no critical issue this round. Scientific-literature page from iteration_10 is now fully seeded (title + >500 chars BG html). Contact endpoint now HTML-escapes via html.escape() before the email template, and notify_admin_push_bg wraps the pywebpush call in asyncio.create_task + 20s timeout so contact and checkout are non-blocking (both endpoints responded in <5s during tests)."
+}

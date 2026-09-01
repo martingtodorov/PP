@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import AdminLayout from "../components/AdminLayout";
+import { PushOptIn } from "../components/PushOptIn";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -32,6 +33,7 @@ export default function AdminSettingsPage() {
 
   return (
     <AdminLayout title="Настройки">
+      <div className="max-w-3xl mb-6"><PushOptIn /></div>
       <div className="max-w-3xl bg-white border border-slate-200 rounded-xl p-8 space-y-5">
         <div><Label>Име на сайта</Label><Input value={s.site_name || ""} onChange={(e) => set("site_name", e.target.value)} data-testid="set-site_name" /></div>
         <div><Label>Слоган</Label><Input value={s.tagline || ""} onChange={(e) => set("tagline", e.target.value)} /></div>

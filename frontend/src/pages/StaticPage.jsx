@@ -8,6 +8,8 @@ import { api } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { FAQ_ITEMS, pick } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
+import { ContactForm } from "../components/ContactForm";
+import { graph, faqLd, breadcrumbLd, organizationLd } from "../lib/schema";
 
 const BODY = {
   bg: {
@@ -76,10 +78,25 @@ export default function StaticPage() {
   const title = isArticles ? t("articles") : remote?.title || (isFaq ? t("faq") : page?.title) || slug;
 
   useSeo({
-    title: `${title} | PurePeptide`,
-    description: (page?.html || "").replace(/<[^>]+>/g, "").slice(0, 155),
+    title: remote?.seo_title || `${title} | PurePeptide`,
+    description:
+      remote?.seo_description ||
+      (page?.html || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 155),
     locale,
     path: `/pages/${slug}`,
+    jsonLd: graph(
+      isFaq && faqItems.length ? faqLd(faqItems) : {
+        "@type": "WebPage",
+        name: title,
+        url: `${window.location.origin}/pages/${slug}`,
+        isPartOf: { "@id": `${window.location.origin}/#website` },
+      },
+      breadcrumbLd([
+        { name: "Начало", path: "/" },
+        { name: title, path: `/pages/${slug}` },
+      ]),
+      organizationLd(),
+    ),
   });
 
   return (
@@ -120,6 +137,8 @@ export default function StaticPage() {
         {page?.html && !isArticles && (
           <div className="pp-rte mt-6" dangerouslySetInnerHTML={{ __html: page.html }} data-testid="static-body" />
         )}
+
+        {slug === "contacts" && <ContactForm />}
 
         {slug === "what-are-peptides" && (
           <div className="mt-10">

@@ -49,6 +49,7 @@ PAGE_MAP = {
     "terms-conditions": "terms-of-service",
     "delivery-and-payment": "shipping-policy",
     "cookies": "cookies",
+    "scientific-literature": "scientific-literature",
     "data-sharing-opt-out": "privacy-policy",
 }
 

@@ -6,6 +6,7 @@ import ProductCard from "../components/ProductCard";
 import { api } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { useSeo } from "../lib/seo";
+import { graph, articleLd, breadcrumbLd, organizationLd } from "../lib/schema";
 
 export default function ArticlePage() {
   const { handle } = useParams();
@@ -26,19 +27,20 @@ export default function ArticlePage() {
   }, [article?.product_handle]);
 
   useSeo({
-    title: article ? `${article.title} | PurePeptide` : "PurePeptide",
-    description: article?.excerpt || "",
+    title: article ? (article.seo_title || `${article.title} | PurePeptide`) : "PurePeptide",
+    description: article?.seo_description || article?.excerpt || "",
     locale,
     path: `/articles/${handle}`,
     image: article?.image,
-    jsonLd: article && {
-      "@context": "https://schema.org",
-      "@type": "Article",
-      headline: article.title,
-      description: article.excerpt,
-      image: article.image,
-      publisher: { "@type": "Organization", name: "PurePeptide" },
-    },
+    jsonLd: article && graph(
+      articleLd({ article, path: `/articles/${handle}` }),
+      breadcrumbLd([
+        { name: "Начало", path: "/" },
+        { name: "Научни статии", path: "/pages/articles" },
+        { name: article.title, path: `/articles/${handle}` },
+      ]),
+      organizationLd(),
+    ),
   });
 
   if (!article) {

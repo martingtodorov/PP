@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowUp, ArrowDown, Save, EyeOff } from "lucide-react";
+import { ArrowUp, ArrowDown, Save, EyeOff, TrendingUp } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import { api, fmtEUR, formatErr } from "../lib/api";
 
@@ -40,6 +40,15 @@ export default function AdminCollectionsPage() {
     next.splice(Math.max(0, Math.min(position, next.length)), 0, item);
     setItems(next);
     setDirty(true);
+  };
+
+  const sortBySales = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/admin/collections/${handle}/order/by-sales`);
+      toast.success("Подредено по продажби (най-продаваният е първи)");
+      load();
+    } catch (e) { toast.error(formatErr(e)); } finally { setBusy(false); }
   };
 
   const save = async () => {
@@ -110,6 +119,11 @@ export default function AdminCollectionsPage() {
           className="inline-flex items-center gap-2 bg-coral-600 hover:bg-coral-700 text-white px-5 py-2.5 rounded-md text-sm font-semibold disabled:opacity-50"
           data-testid="admin-order-save-btn">
           <Save className="h-4 w-4" /> {busy ? "Запазване…" : "Запази подредбата"}
+        </button>
+        <button onClick={sortBySales} disabled={busy}
+          className="inline-flex items-center gap-2 border border-slate-300 hover:border-slate-900 px-4 py-2.5 rounded-md text-sm font-semibold disabled:opacity-50"
+          data-testid="admin-order-by-sales-btn">
+          <TrendingUp className="h-4 w-4" /> Подреди по продажби
         </button>
         {dirty && <span className="text-xs text-amber-700">Има незапазени промени</span>}
       </div>

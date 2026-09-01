@@ -1,0 +1,52 @@
+{
+  "summary": "Iteration-10 end-to-end testing of PurePeptide covering the storefront-blank regression, hidden NAD+/bacteriostatic water products, best-seller manual ordering (public + admin), contact form + admin messages, Web Push endpoints (public-key, subscribe/unsubscribe, status, test), checkout order-notification path, static pages content, and frontend UI (article images, product-card CTA row alignment, contact page copy, admin messages/collections/settings UIs). 38/39 backend pytest cases pass; the single failure is a real data-content bug on the 'scientific-literature' page. All frontend checks pass. all-peptides was restored to best-seller-first order (GHK-Cu) via /admin/collections/all-peptides/order/by-sales at end of test.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/pages/scientific-literature?locale=bg", "issue": "Returns page with empty html and empty faq_items — no Bulgarian content seeded. All other 10 required slugs (what-are-peptides, faq, contacts, chemical-analysis, partners, about, cookies, privacy-policy, terms-of-service, shipping-policy) return real BG content."},
+      {"endpoint": "PUT /api/admin/collections/{handle}/order", "issue": "Payload key is `handles` (not `order` as stated in the review request). Not a bug — just note for main agent that the admin UI + tests must use {handles:[...]} which they already do."},
+      {"endpoint": "POST /api/admin/collections/{handle}/order/by-sales", "issue": "URL is `/order/by-sales` (with slash), not `/order-by-sales`. Works correctly."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification": {
+    "storefront_alive": {"status": "PASS", "evidence": "GET /api/products=21 active, /api/collections=7, /api/products/bpc-157-5=200. Homepage title 'PurePeptide – Nº1 пептиди…' renders. backend.err.log tail shows clean startup, no SyntaxError."},
+    "hidden_products": {"status": "PASS", "evidence": "GET /api/products contains 0 NAD / bacteriostatic titles. Admin /api/admin/products has >=2 active=false products (NAD 100mg + Бактериостатична вода). Their /api/products/{handle} still returns 200."},
+    "best_seller_order": {"status": "PASS", "evidence": "GET /api/products and /api/collections/all-peptides both return, in order: GHK-Cu, BPC-157, TB-500, hGH-frag-176-191 (titles/handles verified). Confirmed after final by-sales restore. Note: handles have manual-sort prefixes '1-', 'fg', 'axc' (see code review)."},
+    "sort_dropdown_removed": {"status": "PASS", "evidence": "[data-testid=sort-select] not found on /collections/all-peptides."},
+    "admin_manual_ordering": {"status": "PASS", "evidence": "GET /admin/collections/all-peptides/products returns ordered handles. PUT /admin/collections/all-peptides/order {handles:[...]} persists — storefront reflects swap. POST /admin/collections/all-peptides/order/by-sales resorts by sold units and GHK-Cu is first again. UI /admin/collections has 23 admin-order-up/down btns, admin-order-save-btn and admin-order-by-sales-btn present."},
+    "contact_form": {"status": "PASS", "evidence": "POST /api/contact {name:'',...} -> 400, {email:'notanemail'} -> 400, valid -> 200 {ok:true, email_sent:true}. GET /api/admin/messages returns it; PATCH {status:'handled'} moves it to Обработени tab. UI /pages/contacts shows contact@purepeptide.bg, 10:00, 17:00, 24 keywords and full form with contact-name/email/phone/message/submit testids."},
+    "push": {"status": "PASS", "evidence": "GET /api/push/public-key -> {public_key:'BExt…'}; /api/admin/push/status anon -> 401/403, admin -> {subscriptions,log,public_key}; POST /push/subscriptions anon -> 401/403, admin upsert -> {ok:true}; DELETE removes; /admin/push/test with no active subs -> 400 with BG msg. UI /admin/settings has push-optin-card, push-toggle-btn, push-test-btn, push-device-count. /service-worker.js and /manifest.json (display:standalone) and /logo192.png all HTTP 200."},
+    "checkout_order_notify": {"status": "PASS", "evidence": "POST /api/checkout (bpc-157-5 + PP-BPC157-5MG, test@example.com) returned order_number matching ^[A-Z]{3}[0-9]{2}$. Two orders created during this test run (see seed_data): XSK95 (final valid run) and an earlier passing one — see below. Both appear in GET /api/admin/orders and /admin/inventory/log has fresh decrement entries."},
+    "static_pages": {"status": "PARTIAL", "evidence": "10 of 11 required slugs return non-empty BG content. Failing: scientific-literature (html:'', faq_items:[]). /admin/pages lists all 12 slugs in sidebar (verified visually in Bulgarian labels)."},
+    "product_card_cta": {"status": "PASS", "evidence": "21 [data-testid^=quick-add-] on /collections/all-peptides. First 4 buttons in same row all at y=898px (equal within 2px), 5th at y=1416 (next row). Clicking one increased cart count to 1 without navigating away (URL unchanged). image->title gap = 0px."},
+    "article_images": {"status": "PASS", "evidence": ".article-card__media img computed transform = matrix(1.08, 0, 0, 1.08, 0, 21.6) i.e. scale(1.08) translateY(20px). 19 article images render on homepage at 1920px."}
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration10.py",
+    "/app/test_reports/pytest/iteration10_results.xml"
+  ],
+  "action_items": [
+    "SEED the 'scientific-literature' BG page — currently returns empty html and empty faq_items. All other 10 slugs are populated. Add real BG content via seed_pages() or /admin/pages editor."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 2205 lines — still grows monotonically each iteration. Split into a routes/ package (push, contact, pages, orders, admin_collections, etc.).",
+    "The best-seller ordering uses manual-sort HACK handles: GHK-Cu ships as '1-ghk-cu', TB-500 as 'fgtb-500', hGH-frag as 'axchgh-frag-176-191'. Product handles should be the human/canonical slug and manual ordering should live only in collections_cat.product_order (which already exists). These prefixed handles will confuse SEO, sitemaps, redirects and any external links that expect the real handle.",
+    "Contact endpoint sends the raw user-supplied name/message directly into an HTML email body without HTML-escaping (server.py:1884-1889). A malicious visitor could inject arbitrary HTML/links into the admin's inbox. Wrap payload.name/message with html.escape() before formatting.",
+    "notify_admin_push() is fire-and-forget inside contact_form and inside checkout — but the push_service.send() call is not gathered / not shielded. If pywebpush blocks (e.g. FCM slow), the checkout response time grows. Consider asyncio.create_task with a timeout.",
+    "iteration_9 comments still open: admin_orders search+status $or overwrite; admin_customer_orders only queries customer_info.email (native orders store customer_email top-level, so those customers see empty history).",
+    "PushSubscriptionIn.expirationTime is camelCase which is fine for the browser payload, but everywhere else in the codebase snake_case is used — kept for wire compatibility, worth a comment."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration10.py"],
+  "success_rate": {"backend": "97.4% (38/39)", "frontend": "100% of tested items"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026 (works). Storefront guest checkout used test@example.com.",
+  "seed_data_creation": "1 contact message (name='TEST_Iter10', email='test@example.com') — marked as handled in-test but still present in DB. 2 native checkout orders during pytest runs (test@example.com, 1x BPC-157 5mg). Final valid order_number: XSK95 (an earlier order was also created in the same test run before the customer_email schema fix — main agent should identify + cancel both if not needed). Cart on storefront has 1 item from the quick-add UI test (does not persist server-side).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration-10 spec at /app/backend/tests/test_iteration10.py (39 cases, 5s runtime). Key API contracts: PUT /api/admin/collections/{h}/order takes {handles:[...]}; POST /api/admin/collections/{h}/order/by-sales (URL has slash between order and by-sales); CheckoutIn requires top-level customer_email/customer_name/customer_phone (NOT nested 'email'). Push subscribe/unsubscribe both require admin auth by design. Only real bug found: scientific-literature page has empty BG html — needs seeding. 2 test orders were created (numbers printed with -s flag: XSK95 + one earlier).",
+  "rca of the issue": "Storefront-blank regression from prior iteration is FULLY resolved. Backend log tail shows clean uvicorn startup with no SyntaxError; /api/products returns 21 products within ~200ms. The f-string nested-quotes bug in server.py has been fixed by main agent and verified end-to-end."
+}

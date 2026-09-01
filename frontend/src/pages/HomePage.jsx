@@ -9,6 +9,7 @@ import { api } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { TRUST_CARDS, FAQ_ITEMS, pick } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
+import { graph, organizationLd, websiteLd } from "../lib/schema";
 
 const HERO_BG = "/hero-home.png";
 
@@ -105,6 +106,13 @@ export default function HomePage() {
     description: t("heroSub"),
     locale,
     path: "/",
+    jsonLd: graph(organizationLd(settings), websiteLd(locale), {
+      "@type": "WebPage",
+      "@id": `${window.location.origin}/#webpage`,
+      url: `${window.location.origin}/`,
+      name: "PurePeptide",
+      isPartOf: { "@id": `${window.location.origin}/#website` },
+    }),
   });
 
   const logos = settings.brand_logos || [];
