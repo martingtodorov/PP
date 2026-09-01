@@ -77,3 +77,16 @@ ln -sfn "$(readlink /var/www/purepeptide/build.previous)" /var/www/purepeptide/b
 ```
 
 Logs: `journalctl -fu purepeptide-backend`, `journalctl -fu nginx`, `journalctl -fu mongod`.
+
+## Secrets and GitHub
+
+Nothing secret is committed: `.env`, `deploy/hetzner/ansible/inventory.ini`,
+`group_vars/all.yml` (vault-encrypted anyway), `memory/test_credentials.md` and `backend/.media/` are all
+gitignored, and a full history scan finds no Anthropic / Resend / RevOrder key, no `.pem` and no SSH key.
+
+Two things to keep in mind:
+
+1. `ADMIN_EMAIL`, `ADMIN_PASSWORD` and `JWT_SECRET` have **no defaults** — the backend refuses to boot
+   without them (guarded by `backend/tests/test_requirements_portable.py`).
+2. The development test suite and the older `test_reports/*.json` still contain the preview admin password,
+   so **set a fresh `ADMIN_PASSWORD` in the vault before going live**. `test_reports/` is now gitignored.
