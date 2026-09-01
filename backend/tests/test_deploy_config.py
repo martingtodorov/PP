@@ -408,3 +408,11 @@ def test_mongo_repository_is_probed_not_guessed():
     assert "port: 27017" in boot                           # verified after install
     defaults = (TASKS / "infra_defaults.yml").read_text()
     assert "mongo_supported_codenames" in defaults and "mongo_major_candidates" in defaults
+
+
+def test_stale_mongodb_repo_is_removed_before_any_apt_update():
+    """A previously added 7.0/noble repo poisons every apt update on the host."""
+    boot = (BOOTSTRAP / "bootstrap_backend_base.yml").read_text()
+    assert "/etc/apt/sources.list.d/mongodb-org.list" in boot
+    assert boot.index("Drop any previously added mongodb-org source list") < boot.index("Probe which mongodb-org")
+    assert "update_cache: false" in boot   # adding the repo must not trigger a cache update

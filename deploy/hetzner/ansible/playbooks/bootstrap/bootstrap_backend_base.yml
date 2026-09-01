@@ -52,6 +52,25 @@
     # ---------------- mongodb ----------------
     # MongoDB does not publish every version for every Ubuntu release (7.0 has no 'noble' repo, and
     # brand-new releases have none at all), so probe what really exists instead of guessing.
+    #
+    # A previously added, non-existent repo (e.g. 7.0/noble) poisons EVERY `apt update` on the host,
+    # so the stale source list is removed before anything else.
+    - name: Drop any previously added mongodb-org source list
+      file: { path: "{{ item }}", state: absent }
+      loop:
+        - /etc/apt/sources.list.d/mongodb-org.list
+        - /etc/apt/sources.list.d/mongodb-org.sources
+      register: stale_mongo_repo
+      tags: [mongo]
+
+    - name: Refresh the apt cache without the broken repo
+      apt: { update_cache: true }
+      when: stale_mongo_repo is changed
+      retries: 3
+      delay: 5
+      register: clean_cache
+      until: clean_cache is succeeded
+      tags: [mongo]
     - name: Candidate MongoDB repositories, most preferred first
       set_fact:
         mongo_repo_candidates: >-
@@ -116,11 +135,20 @@
       until: mongo_key is succeeded
       tags: [mongo]
 
-    - name: MongoDB repository
+    - name: MongoDB repository (cache refreshed separately so a bad repo cannot abort this task)
       apt_repository:
         repo: "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu {{ mongo_repo_codename }}/mongodb-org/{{ mongo_major }} multiverse"
         filename: mongodb-org
         state: present
+        update_cache: false
+      tags: [mongo]
+
+    - name: Refresh the apt cache with the MongoDB repository
+      apt: { update_cache: true }
+      register: mongo_cache
+      retries: 3
+      delay: 5
+      until: mongo_cache is succeeded
       tags: [mongo]
 
     - name: Install mongodb-org
