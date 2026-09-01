@@ -1,0 +1,90 @@
+---
+# Restores the WireGuard POLICY ROUTING on pp-back. Idempotent, read-only when nothing is broken.
+#
+# ROOT CAUSE of the recurring "handshake healthy but no internet" outage:
+# systemd-networkd deletes every route and routing-policy rule it does not manage itself
+# (ManageForeignRoutes / ManageForeignRoutingPolicyRules default to "yes"). Any networkd reload —
+# `netplan apply`, a package install that touches the network stack, a DHCP renewal, cloud-init —
+# therefore removes
+#     ip route add default dev wg0 table <nat_table>
+#     ip rule  add from all lookup <nat_table> priority <prio>
+#     ip rule  add to <private_cidr> lookup main priority <prio-10>
+# while the wg0 interface itself survives and keeps handshaking. Result: `ping 1.1.1.1` says
+# "Network is unreachable" and DNS to 1.1.1.1/8.8.8.8 fails, although `wg show` looks perfect.
+#
+# bootstrap_nat.yml installs the permanent fixes (networkd drop-in, /usr/local/sbin/pp-wg-routes,
+# a systemd timer and an apt Post-Invoke hook). These tasks are the in-band repair used by
+# preflight and by every playbook that needs outbound internet on pp-back.
+#
+# What this file NEVER does: generate keys, rewrite wg0.conf, restart wg-quick when the tunnel is up,
+# touch DNS, firewall, users or packages.
+
+- name: Is wg0 present?
+  become: true
+  command: ip -o link show wg0
+  register: pp_wg_link
+  changed_when: false
+  failed_when: false
+  tags: [always]
+
+- name: Start wg-quick@wg0 when the interface is missing entirely
+  become: true
+  systemd: { name: "wg-quick@wg0", state: started, enabled: true }
+  when: pp_wg_link.rc != 0
+  register: pp_wg_started
+  tags: [always]
+
+- name: Restore the wg0 default route and the ip rules when they are missing
+  become: true
+  shell: |
+    set -u
+    TABLE={{ nat_table }}
+    PRIO={{ nat_rule_priority }}
+    PRIV_PRIO={{ nat_rule_priority | int - 10 }}
+    changed=0
+    if ! ip route show table "$TABLE" | grep -q '^default .*dev wg0'; then
+      ip route replace default dev wg0 table "$TABLE" && changed=1
+    fi
+    if ! ip rule show | grep -q "^$PRIO:.*lookup $TABLE"; then
+      ip rule add from all lookup "$TABLE" priority "$PRIO" && changed=1
+    fi
+    if ! ip rule show | grep -q "^$PRIV_PRIO:.*{{ private_cidr }}.*lookup main"; then
+      ip rule add to {{ private_cidr }} lookup main priority "$PRIV_PRIO" && changed=1
+    fi
+    echo "pp_routes_changed=$changed"
+  args: { executable: /bin/bash }
+  register: pp_wg_routes
+  changed_when: "'pp_routes_changed=1' in pp_wg_routes.stdout"
+  tags: [always]
+
+- name: Keep the permanent route guard armed (installed by bootstrap_nat.yml)
+  become: true
+  stat: { path: /etc/systemd/system/pp-wg-route-guard.timer }
+  register: pp_guard_unit
+  changed_when: false
+  tags: [always]
+
+- name: Route guard timer enabled
+  become: true
+  systemd: { name: pp-wg-route-guard.timer, state: started, enabled: true }
+  when: pp_guard_unit.stat.exists
+  tags: [always]
+
+- name: Warn when the permanent route guard is not installed yet
+  debug:
+    msg: >-
+      pp-wg-route-guard is NOT installed on {{ inventory_hostname }}. The WireGuard routing will
+      keep disappearing after package installs / netplan reloads. Run once:
+      ansible-playbook -i inventory.ini playbooks/bootstrap/bootstrap_nat.yml
+  when: not pp_guard_unit.stat.exists
+  tags: [always]
+
+- name: Outbound internet through the tunnel
+  become: true
+  command: ping -c 2 -W 3 1.1.1.1
+  changed_when: false
+  register: pp_wg_ping
+  retries: 3
+  delay: 3
+  until: pp_wg_ping.rc == 0
+  tags: [always]

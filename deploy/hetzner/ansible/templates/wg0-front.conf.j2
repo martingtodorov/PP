@@ -5,7 +5,7 @@ PrivateKey = {{ wg_front_private }}
 MTU = {{ wg_mtu }}
 
 # NAT for the tunnel subnet (idempotent: only added when the rule is missing)
-PostUp   = iptables -t nat -C POSTROUTING -s {{ wg_front_ip | regex_replace('\.[0-9]+$', '.0') }}/24 -o {{ frontend_public_iface }} -j MASQUERADE || iptables -t nat -A POSTROUTING -s {{ wg_front_ip | regex_replace('\.[0-9]+$', '.0') }}/24 -o {{ frontend_public_iface }} -j MASQUERADE
+PostUp   = iptables -t nat -C POSTROUTING -s {{ wg_subnet }} -o {{ frontend_public_iface }} -j MASQUERADE || iptables -t nat -A POSTROUTING -s {{ wg_subnet }} -o {{ frontend_public_iface }} -j MASQUERADE
 PostUp   = iptables -C FORWARD -i %i -o {{ frontend_public_iface }} -j ACCEPT || iptables -A FORWARD -i %i -o {{ frontend_public_iface }} -j ACCEPT
 PostUp   = iptables -C FORWARD -i {{ frontend_public_iface }} -o %i -m state --state RELATED,ESTABLISHED -j ACCEPT || iptables -A FORWARD -i {{ frontend_public_iface }} -o %i -m state --state RELATED,ESTABLISHED -j ACCEPT
 

@@ -1,10 +1,15 @@
 ---
 # BOOTSTRAP ONLY — persistent DNS for pp-back through systemd-resolved.
 # /etc/resolv.conf is never replaced with a static file.
+#
+# NOTE: a DNS failure on pp-back is almost always a ROUTING failure — 1.1.1.1 / 8.8.8.8 are only
+# reachable through wg0. The routing is therefore verified/repaired before the resolver is checked.
 - name: Backend DNS
   hosts: backend
   become: true
   tags: [dns]
+  pre_tasks:
+    - import_tasks: ../../tasks/infra_defaults.yml
   tasks:
     - name: resolved drop-in directory
       file: { path: /etc/systemd/resolved.conf.d, state: directory, mode: "0755" }
@@ -32,9 +37,19 @@
         msg: "/etc/resolv.conf is not a symlink — leave it as it is, it is managed by hand"
       when: not resolv.stat.islnk
 
+    - name: Flush handlers before verifying
+      meta: flush_handlers
+
+    - name: WireGuard routing is in place (DNS depends on it)
+      import_tasks: ../../tasks/wg_route_ensure.yml
+
     - name: Resolution works
       command: resolvectl query ifconfig.me
+      register: dns_probe
       changed_when: false
+      retries: 3
+      delay: 5
+      until: dns_probe.rc == 0
       tags: [verify]
 
   handlers:

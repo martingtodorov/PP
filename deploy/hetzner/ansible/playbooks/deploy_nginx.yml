@@ -5,6 +5,9 @@
   hosts: frontend
   become: true
 
+  pre_tasks:
+    - import_tasks: ../tasks/infra_defaults.yml
+
   tasks:
     - name: Existing Cloudflare Origin certificate must be in place (never generated here)
       stat: { path: "{{ item }}" }

@@ -1,9 +1,19 @@
 ---
 # BOOTSTRAP ONLY — OS packages, MongoDB, the directory layout, the media disk and backups.
 # Not part of site.yml: it installs packages and restarts mongod.
+#
+# Every stage that installs packages is bracketed by tasks/wg_route_ensure.yml, because a package
+# operation can trigger a networkd reload which used to wipe the WireGuard policy routing and left
+# the host without internet or DNS half-way through the run (the "Temporary failure in name
+# resolution" on the MongoDB key). Re-running this playbook is always safe.
 - name: Backend base layer
   hosts: backend
   become: true
+  pre_tasks:
+    - import_tasks: ../../tasks/infra_defaults.yml
+    - name: Routing and internet before we start
+      import_tasks: ../../tasks/wg_route_ensure.yml
+
   tasks:
     - name: OS packages
       apt:
@@ -11,6 +21,14 @@
                libjpeg-dev, zlib1g-dev, libwebp-dev, rsync]
         update_cache: true
         state: present
+      register: base_pkgs
+      retries: 3
+      delay: 10
+      until: base_pkgs is succeeded
+      tags: [base]
+
+    - name: Routing survived the package installation
+      import_tasks: ../../tasks/wg_route_ensure.yml
       tags: [base]
 
     - name: Directory layout
@@ -37,6 +55,10 @@
         url: "https://pgp.mongodb.com/server-{{ mongo_major }}.asc"
         dest: /etc/apt/trusted.gpg.d/mongodb.asc
         mode: "0644"
+      register: mongo_key
+      retries: 3
+      delay: 10
+      until: mongo_key is succeeded
       tags: [mongo]
 
     - name: MongoDB repository
@@ -48,6 +70,14 @@
 
     - name: Install mongodb-org
       apt: { name: mongodb-org, update_cache: true, state: present }
+      register: mongo_pkgs
+      retries: 3
+      delay: 10
+      until: mongo_pkgs is succeeded
+      tags: [mongo]
+
+    - name: Routing survived the MongoDB installation
+      import_tasks: ../../tasks/wg_route_ensure.yml
       tags: [mongo]
 
     - name: Bind MongoDB to localhost only
@@ -72,6 +102,15 @@
           /usr/bin/mongodump --db {{ db_name }} --archive={{ backup_dir }}/{{ db_name }}-$(date +\%F).gz --gzip
           && find {{ backup_dir }} -name '{{ db_name }}-*.gz' -mtime +14 -delete
       tags: [backup]
+
+  post_tasks:
+    - name: Routing and internet are still healthy at the end of the run
+      import_tasks: ../../tasks/wg_route_ensure.yml
+
+    - name: DNS still resolves
+      command: resolvectl query ifconfig.me
+      changed_when: false
+      tags: [verify]
 
   handlers:
     - name: restart mongod

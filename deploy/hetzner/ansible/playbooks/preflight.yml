@@ -1,11 +1,20 @@
 ---
-# Infrastructure preflight. Runs first in site.yml and only VERIFIES — it changes nothing.
-# If any check fails, fix the infrastructure by hand (or run the bootstrap playbooks explicitly).
+# Infrastructure preflight. Runs first in site.yml.
+#
+# It verifies the infrastructure and performs exactly ONE kind of repair: restoring the WireGuard
+# policy routing on pp-back (ip route/ip rule in table {{ nat_table }}). That is transient kernel
+# state, not configuration — it is regularly wiped by systemd-networkd reloads and must never
+# require a manual `systemctl restart wg-quick@wg0` before a deploy.
+#
+# It does NOT install packages, generate keys, rewrite configs, touch DNS, the firewall, users,
+# TLS files or secrets. Anything else that is missing fails with the bootstrap command to run.
 
 - name: Preflight — backend connectivity
   hosts: backend
   gather_facts: false
   tags: [preflight, verify]
+  pre_tasks:
+    - import_tasks: ../tasks/infra_defaults.yml
   tasks:
     - name: SSH reachable through the jump host
       ping:
@@ -22,30 +31,47 @@
         wg_handshake.rc != 0 or
         wg_handshake.stdout | trim == '' or
         wg_handshake.stdout_lines[0] | int == 0 or
-        (ansible_date_time.epoch | default(lookup('pipe', 'date +%s')) | int) - (wg_handshake.stdout_lines[0] | int) > 300
+        (lookup('pipe', 'date +%s') | int) - (wg_handshake.stdout_lines[0] | int) > 300
 
-    - name: Internet reachable through the tunnel
-      command: ping -c 3 -W 3 1.1.1.1
-      changed_when: false
+    - name: Restore the WireGuard policy routing if networkd wiped it
+      import_tasks: ../tasks/wg_route_ensure.yml
 
     - name: DNS resolves through systemd-resolved
       command: resolvectl query ifconfig.me
+      register: dns_probe
       changed_when: false
+      retries: 3
+      delay: 5
+      until: dns_probe.rc == 0
 
     - name: Outbound traffic exits through pp-front
       command: curl -sS --max-time 15 https://ifconfig.me
       register: egress_ip
       changed_when: false
+      retries: 3
+      delay: 5
+      until: egress_ip.rc == 0
       failed_when: egress_ip.stdout | trim != frontend_public_ip
 
     - name: Egress summary
       debug:
-        msg: "pp-back -> internet via {{ egress_ip.stdout | trim }} (expected {{ frontend_public_ip }})"
+        msg: "pp-back -> internet via {{ egress_ip.stdout | trim }} (expected {{ frontend_public_ip }} from the inventory)"
+
+    - name: Base layout exists (created by bootstrap_backend_base.yml)
+      stat: { path: "{{ item }}" }
+      register: layout
+      failed_when: not layout.stat.exists
+      loop:
+        - "{{ app_dir }}"
+        - "{{ env_dir }}"
+        - "{{ media_dir }}"
 
 - name: Preflight — frontend prerequisites
   hosts: frontend
   gather_facts: false
   tags: [preflight, verify]
+  pre_tasks:
+    - import_tasks: ../tasks/infra_defaults.yml
   tasks:
     - name: SSH reachable
       ping:
@@ -58,6 +84,17 @@
         - "{{ ssl_cert_path }}"
         - "{{ ssl_key_path }}"
 
-    - name: nginx is installed
-      command: nginx -v
+    - name: Build toolchain and nginx are installed
+      command: "{{ item }}"
+      loop: ["nginx -v", "node -v", "yarn -v"]
+      register: tooling
       changed_when: false
+      failed_when: tooling.rc != 0
+      ignore_errors: true
+
+    - name: Fail with the bootstrap command when the toolchain is missing
+      fail:
+        msg: >-
+          nginx / node / yarn are missing on {{ inventory_hostname }}. Run once:
+          ansible-playbook -i inventory.ini playbooks/bootstrap/bootstrap_frontend_base.yml
+      when: tooling is failed

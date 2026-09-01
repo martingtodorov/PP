@@ -1,0 +1,81 @@
+---
+# Central, non-secret infrastructure defaults.
+#
+# Imported by EVERY play (pre_tasks) so that:
+#   * no playbook can ever fail on an undefined variable (preflight used to die on
+#     frontend_public_ip / ssl_cert_path / ssl_key_path)
+#   * production values live in exactly one place; group_vars/all.yml still wins when it defines them
+#   * the frontend public IP is derived from the inventory instead of being hardcoded twice
+#
+# Nothing here is a secret, so this file is committed.
+
+- name: Frontend host entry from the inventory
+  set_fact:
+    pp_front_inventory_ip: >-
+      {{ hostvars[(groups['frontend'] | default([]) | first) | default('__missing__', true)].ansible_host
+         | default('', true) }}
+  tags: [always]
+
+- name: Backend host entry from the inventory
+  set_fact:
+    pp_back_inventory_ip: >-
+      {{ hostvars[(groups['backend'] | default([]) | first) | default('__missing__', true)].ansible_host
+         | default('', true) }}
+  tags: [always]
+
+- name: Infrastructure defaults (group_vars/all.yml overrides any of these)
+  set_fact:
+    app_name: "{{ app_name | default('purepeptide', true) }}"
+    app_dir: "{{ app_dir | default('/opt/purepeptide', true) }}"
+    web_root: "{{ web_root | default('/var/www/purepeptide', true) }}"
+    env_dir: "{{ env_dir | default('/etc/purepeptide', true) }}"
+    media_dir: "{{ media_dir | default('/var/lib/purepeptide/media', true) }}"
+    backup_dir: "{{ backup_dir | default('/var/backups/purepeptide', true) }}"
+    ref: "{{ ref | default('main', true) }}"
+    ssh_port: "{{ ssh_port | default(22, true) }}"
+    private_cidr: "{{ private_cidr | default('10.0.0.0/16', true) }}"
+    frontend_public_ip: "{{ frontend_public_ip | default(pp_front_inventory_ip, true) }}"
+    frontend_private_ip: "{{ frontend_private_ip | default('10.0.0.2', true) }}"
+    backend_private_ip: "{{ backend_private_ip | default(pp_back_inventory_ip, true) }}"
+    frontend_public_iface: "{{ frontend_public_iface | default('eth0', true) }}"
+    backend_private_iface: "{{ backend_private_iface | default('enp7s0', true) }}"
+    backend_service_user: "{{ backend_service_user | default('www-data', true) }}"
+    wg_port: "{{ wg_port | default(51820, true) }}"
+    wg_front_ip: "{{ wg_front_ip | default('10.99.0.1', true) }}"
+    wg_back_ip: "{{ wg_back_ip | default('10.99.0.2', true) }}"
+    wg_mtu: "{{ wg_mtu | default(1370, true) }}"
+    nat_table: "{{ nat_table | default(100, true) }}"
+    nat_rule_priority: "{{ nat_rule_priority | default(1000, true) }}"
+    wg_guard_interval_sec: "{{ wg_guard_interval_sec | default(30, true) }}"
+    wg_force_regenerate_keys: "{{ wg_force_regenerate_keys | default(false, true) }}"
+    wg_force_rewrite_config: "{{ wg_force_rewrite_config | default(false, true) }}"
+    ssl_cert_path: "{{ ssl_cert_path | default('/etc/ssl/cloudflare/origin.pem', true) }}"
+    ssl_key_path: "{{ ssl_key_path | default('/etc/ssl/cloudflare/origin.key', true) }}"
+    backend_dns: "{{ backend_dns | default('1.1.1.1 8.8.8.8', true) }}"
+    backend_fallback_dns: "{{ backend_fallback_dns | default('9.9.9.9', true) }}"
+    releases_kept: "{{ releases_kept | default(5, true) }}"
+    node_major: "{{ node_major | default(20, true) }}"
+    mongo_major: "{{ mongo_major | default('7.0', true) }}"
+    site_domains: "{{ site_domains | default(['purepeptide.bg'], true) }}"
+  tags: [always]
+
+- name: Derived defaults
+  set_fact:
+    # pp-back has NO public route before the tunnel exists -> the peer endpoint is the PRIVATE
+    # address of pp-front. Never the public IP.
+    wg_front_endpoint: "{{ wg_front_endpoint | default(frontend_private_ip ~ ':' ~ wg_port, true) }}"
+    wg_subnet: "{{ wg_front_ip | regex_replace('\\.[0-9]+$', '.0') }}/24"
+  tags: [always]
+
+- name: The inventory and the variables must agree
+  assert:
+    that:
+      - frontend_public_ip | length > 0
+      - frontend_private_ip | length > 0
+      - frontend_public_ip not in wg_front_endpoint
+    fail_msg: >-
+      Infrastructure variables are inconsistent. frontend_public_ip='{{ frontend_public_ip }}',
+      wg_front_endpoint='{{ wg_front_endpoint }}'. The WireGuard endpoint must be the PRIVATE
+      address of pp-front ({{ frontend_private_ip }}:{{ wg_port }}).
+    quiet: true
+  tags: [always]

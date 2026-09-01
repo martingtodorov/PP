@@ -1,38 +1,70 @@
 ---
-# BOOTSTRAP ONLY — the tunnel already exists in production. Running this play is safe (idempotent),
-# but it is never imported by site.yml.
+# BOOTSTRAP ONLY — the WireGuard tunnel, the NAT gateway and the permanent routing guard.
+# Never imported by site.yml. Safe to re-run: keys and wg0.conf are reused unless explicitly forced.
 #
 # Rules baked in:
 #   * existing WireGuard keys are reused; regenerating needs -e wg_force_regenerate_keys=true
 #   * an existing /etc/wireguard/wg0.conf is left alone unless -e wg_force_rewrite_config=true
-#   * the backend peer endpoint is the PRIVATE address ({{ wg_front_endpoint }}) — pp-back has no
-#     public route before the tunnel is up
-#   * no apt on pp-back (it would need the internet that this tunnel provides)
+#   * the backend peer endpoint is the PRIVATE address ({{ '{{ wg_front_endpoint }}' }}) — pp-back has
+#     no public route before the tunnel is up
+#   * a FRESH pp-back has no internet at all, so this play first builds a temporary NAT path over the
+#     Hetzner private network (default via pp-front private IP) purely to install the wireguard
+#     package, and removes that temporary default route again once the tunnel works
+#   * the permanent fix for the disappearing policy routing is installed here:
+#     networkd drop-in + /usr/local/sbin/pp-wg-routes + systemd timer + apt Post-Invoke hook
 
 - name: Gateway on pp-front
   hosts: frontend
   become: true
   tags: [gateway]
+  pre_tasks:
+    - import_tasks: ../../tasks/infra_defaults.yml
   tasks:
-    - name: WireGuard must already be installed
-      command: which wg
-      register: wg_bin
-      changed_when: false
-      failed_when: wg_bin.rc != 0
+    - name: WireGuard tooling on the gateway (pp-front has public internet)
+      apt:
+        name: [wireguard, wireguard-tools, iptables]
+        state: present
+        update_cache: true
+      register: wg_pkgs
+      retries: 3
+      delay: 5
+      until: wg_pkgs is succeeded
 
+    - name: IPv4 forwarding stays on
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: "1"
+        sysctl_set: true
+        state: present
+        reload: true
+
+    # -------- temporary NAT for the private network: lets a FRESH pp-back reach apt --------
+    - name: Temporary MASQUERADE for the Hetzner private network (removed at the end of this play)
+      shell: |
+        iptables -t nat -C POSTROUTING -s {{ private_cidr }} -o {{ frontend_public_iface }} -j MASQUERADE 2>/dev/null \
+          || iptables -t nat -A POSTROUTING -s {{ private_cidr }} -o {{ frontend_public_iface }} -j MASQUERADE
+        iptables -C FORWARD -s {{ private_cidr }} -o {{ frontend_public_iface }} -j ACCEPT 2>/dev/null \
+          || iptables -A FORWARD -s {{ private_cidr }} -o {{ frontend_public_iface }} -j ACCEPT
+        iptables -C FORWARD -d {{ private_cidr }} -i {{ frontend_public_iface }} -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null \
+          || iptables -A FORWARD -d {{ private_cidr }} -i {{ frontend_public_iface }} -m state --state RELATED,ESTABLISHED -j ACCEPT
+      args: { executable: /bin/bash }
+      changed_when: false
+      tags: [bootstrap_nat_temp]
+
+    # -------- keys --------
     - name: Reuse or create the front key pair
       shell: |
         umask 077
         test -f /etc/wireguard/front.key || wg genkey > /etc/wireguard/front.key
         wg pubkey < /etc/wireguard/front.key > /etc/wireguard/front.pub
-      args: { creates: "{{ '/nonexistent' if wg_force_regenerate_keys | default(false) | bool else '/etc/wireguard/front.pub' }}" }
+      args: { creates: "{{ '/nonexistent' if wg_force_regenerate_keys | bool else '/etc/wireguard/front.pub' }}" }
 
     - name: Reuse or create the back key pair
       shell: |
         umask 077
         test -f /etc/wireguard/back.key || wg genkey > /etc/wireguard/back.key
         wg pubkey < /etc/wireguard/back.key > /etc/wireguard/back.pub
-      args: { creates: "{{ '/nonexistent' if wg_force_regenerate_keys | default(false) | bool else '/etc/wireguard/back.pub' }}" }
+      args: { creates: "{{ '/nonexistent' if wg_force_regenerate_keys | bool else '/etc/wireguard/back.pub' }}" }
 
     - name: Read the key material
       slurp: { src: "/etc/wireguard/{{ item }}" }
@@ -46,14 +78,6 @@
         wg_back_private: "{{ (wg_keys.results[2].content | b64decode) | trim }}"
         wg_back_public: "{{ (wg_keys.results[3].content | b64decode) | trim }}"
 
-    - name: IPv4 forwarding stays on
-      sysctl:
-        name: net.ipv4.ip_forward
-        value: "1"
-        sysctl_set: true
-        state: present
-        reload: true
-
     - name: Does wg0.conf already exist?
       stat: { path: /etc/wireguard/wg0.conf }
       register: front_wg_conf
@@ -64,7 +88,7 @@
         dest: /etc/wireguard/wg0.conf
         mode: "0600"
         backup: true
-      when: not front_wg_conf.stat.exists or (wg_force_rewrite_config | default(false) | bool)
+      when: not front_wg_conf.stat.exists or (wg_force_rewrite_config | bool)
       notify: restart wg-front
 
     - name: wg-quick@wg0 enabled and running
@@ -81,13 +105,118 @@
   vars:
     wg_back_private: "{{ hostvars[groups['frontend'][0]].wg_back_private }}"
     wg_front_public: "{{ hostvars[groups['frontend'][0]].wg_front_public }}"
+  pre_tasks:
+    - import_tasks: ../../tasks/infra_defaults.yml
   tasks:
-    - name: WireGuard must already be installed (no apt here — it has no internet yet)
+    - name: Is WireGuard installed?
       command: which wg
       register: wg_bin
       changed_when: false
-      failed_when: wg_bin.rc != 0
+      failed_when: false
 
+    # -------- fresh server: install wireguard over the temporary private NAT --------
+    - name: Temporary default route via pp-front (only while WireGuard is missing)
+      command: "ip route replace default via {{ frontend_private_ip }} dev {{ backend_private_iface }}"
+      when: wg_bin.rc != 0
+      changed_when: true
+
+    - name: resolved / networkd / wg-quick drop-in directories
+      file: { path: "{{ item }}", state: directory, mode: "0755" }
+      loop:
+        - /etc/systemd/resolved.conf.d
+        - /etc/systemd/networkd.conf.d
+        - /etc/systemd/system/wg-quick@wg0.service.d
+
+    - name: Temporary resolver so apt can resolve names
+      copy:
+        dest: /etc/systemd/resolved.conf.d/pp.conf
+        mode: "0644"
+        content: |
+          [Resolve]
+          DNS={{ backend_dns }}
+          FallbackDNS={{ backend_fallback_dns }}
+      when: wg_bin.rc != 0
+
+    - name: systemd-resolved running
+      systemd: { name: systemd-resolved, enabled: true, state: restarted }
+      when: wg_bin.rc != 0
+
+    - name: Install WireGuard on pp-back
+      apt:
+        name: [wireguard, wireguard-tools]
+        state: present
+        update_cache: true
+      when: wg_bin.rc != 0
+      register: back_wg_pkgs
+      retries: 3
+      delay: 5
+      until: back_wg_pkgs is succeeded
+
+    # -------- permanent fix for the vanishing policy routing --------
+    - name: networkd must not delete our foreign routes and rules
+      copy:
+        dest: /etc/systemd/networkd.conf.d/10-pp-keep-foreign-routes.conf
+        mode: "0644"
+        content: |
+          # Managed by Ansible ({{ app_name }}).
+          # Without this, systemd-networkd wipes the wg0 default route in table {{ nat_table }} and the
+          # ip rules on every reload (netplan apply, package install, DHCP renew).
+          [Network]
+          ManageForeignRoutes=no
+          ManageForeignRoutingPolicyRules=no
+      register: networkd_dropin
+
+    - name: Reload systemd-networkd so the drop-in applies
+      command: networkctl reload
+      when: networkd_dropin is changed
+      changed_when: true
+      failed_when: false
+
+    - name: Install the route guard script
+      template:
+        src: ../../templates/pp-wg-routes.sh.j2
+        dest: /usr/local/sbin/pp-wg-routes
+        mode: "0755"
+
+    - name: Install the route guard service
+      template:
+        src: ../../templates/pp-wg-route-guard.service.j2
+        dest: /etc/systemd/system/pp-wg-route-guard.service
+        mode: "0644"
+      notify: reload systemd
+
+    - name: Install the route guard timer
+      template:
+        src: ../../templates/pp-wg-route-guard.timer.j2
+        dest: /etc/systemd/system/pp-wg-route-guard.timer
+        mode: "0644"
+      notify: reload systemd
+
+    - name: wg-quick drop-in — re-apply the routing right after the tunnel starts
+      copy:
+        dest: /etc/systemd/system/wg-quick@wg0.service.d/10-pp-routes.conf
+        mode: "0644"
+        content: |
+          # Managed by Ansible ({{ app_name }}).
+          [Service]
+          ExecStartPost=/usr/local/sbin/pp-wg-routes
+      notify: reload systemd
+
+    - name: apt hook — restore the routing after every package operation
+      copy:
+        dest: /etc/apt/apt.conf.d/99-pp-wg-routes
+        mode: "0644"
+        content: |
+          // Managed by Ansible ({{ app_name }}) — package installs must never leave the host offline.
+          DPkg::Post-Invoke { "/usr/local/sbin/pp-wg-routes || true"; };
+
+    - name: Flush handlers so the units exist before we start them
+      meta: flush_handlers
+
+    - name: Route guard timer enabled
+      systemd: { name: pp-wg-route-guard.timer, enabled: true, state: started, daemon_reload: true }
+
+    # -------- tunnel config --------
     - name: Does wg0.conf already exist?
       stat: { path: /etc/wireguard/wg0.conf }
       register: back_wg_conf
@@ -98,7 +227,7 @@
         dest: /etc/wireguard/wg0.conf
         mode: "0600"
         backup: true
-      when: not back_wg_conf.stat.exists or (wg_force_rewrite_config | default(false) | bool)
+      when: not back_wg_conf.stat.exists or (wg_force_rewrite_config | bool)
       notify: restart wg-back
 
     - name: Assert the peer endpoint is the private address
@@ -114,13 +243,56 @@
     - name: wg-quick@wg0 enabled and running
       systemd: { name: "wg-quick@wg0", enabled: true, state: started }
 
+    - name: Flush handlers (apply a pending wg restart before we verify)
+      meta: flush_handlers
+
+    - name: Routing is in place
+      import_tasks: ../../tasks/wg_route_ensure.yml
+
+    - name: Drop the temporary private-network default route (the tunnel carries traffic now)
+      shell: |
+        if ip route show | grep -q "^default via {{ frontend_private_ip }} "; then
+          ip route del default via {{ frontend_private_ip }} dev {{ backend_private_iface }}
+          echo removed
+        fi
+      args: { executable: /bin/bash }
+      register: temp_route
+      changed_when: "'removed' in temp_route.stdout"
+
     - name: Outbound internet works through the tunnel
       command: curl -sS --max-time 15 https://ifconfig.me
       register: nat_check
       changed_when: false
+      retries: 3
+      delay: 5
+      until: nat_check.rc == 0
       failed_when: nat_check.stdout | trim != frontend_public_ip
       tags: [verify]
 
   handlers:
+    - name: reload systemd
+      systemd: { daemon_reload: true }
     - name: restart wg-back
       systemd: { name: "wg-quick@wg0", state: restarted }
+
+- name: Remove the temporary private NAT from pp-front
+  hosts: frontend
+  become: true
+  tags: [gateway, cleanup]
+  pre_tasks:
+    - import_tasks: ../../tasks/infra_defaults.yml
+  tasks:
+    - name: Delete the temporary MASQUERADE for the private network (keep it with -e keep_private_nat=true)
+      shell: |
+        while iptables -t nat -C POSTROUTING -s {{ private_cidr }} -o {{ frontend_public_iface }} -j MASQUERADE 2>/dev/null; do
+          iptables -t nat -D POSTROUTING -s {{ private_cidr }} -o {{ frontend_public_iface }} -j MASQUERADE
+        done
+        while iptables -C FORWARD -s {{ private_cidr }} -o {{ frontend_public_iface }} -j ACCEPT 2>/dev/null; do
+          iptables -D FORWARD -s {{ private_cidr }} -o {{ frontend_public_iface }} -j ACCEPT
+        done
+        while iptables -C FORWARD -d {{ private_cidr }} -i {{ frontend_public_iface }} -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null; do
+          iptables -D FORWARD -d {{ private_cidr }} -i {{ frontend_public_iface }} -m state --state RELATED,ESTABLISHED -j ACCEPT
+        done
+      args: { executable: /bin/bash }
+      when: not (keep_private_nat | default(false) | bool)
+      changed_when: false

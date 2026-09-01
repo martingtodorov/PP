@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodically restore the WireGuard policy routing for {{ app_name }}
+
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec={{ wg_guard_interval_sec }}s
+AccuracySec=1s
+Unit=pp-wg-route-guard.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,31 @@
+#!/bin/bash
+# Managed by Ansible ({{ app_name }}) — do not edit by hand.
+#
+# Restores the WireGuard policy routing on pp-back. systemd-networkd removes "foreign" routes and
+# routing policy rules on every reload (netplan apply, package install, DHCP renew, cloud-init), so
+# wg0 keeps handshaking while table {{ nat_table }} and the ip rules vanish -> no internet, no DNS.
+#
+# Run by: wg-quick@wg0 ExecStartPost, pp-wg-route-guard.timer (every {{ wg_guard_interval_sec }}s)
+# and the apt Post-Invoke hook.
+set -u
+
+TABLE={{ nat_table }}
+PRIO={{ nat_rule_priority }}
+PRIV_PRIO={{ nat_rule_priority | int - 10 }}
+PRIV_CIDR={{ private_cidr }}
+
+if ! ip -o link show wg0 >/dev/null 2>&1; then
+  systemctl start wg-quick@wg0 >/dev/null 2>&1 || exit 0
+  sleep 2
+fi
+
+ip route show table "$TABLE" | grep -q '^default .*dev wg0' \
+  || ip route replace default dev wg0 table "$TABLE"
+
+ip rule show | grep -q "^$PRIO:.*lookup $TABLE" \
+  || ip rule add from all lookup "$TABLE" priority "$PRIO"
+
+ip rule show | grep -q "^$PRIV_PRIO:.*$PRIV_CIDR.*lookup main" \
+  || ip rule add to "$PRIV_CIDR" lookup main priority "$PRIV_PRIO"
+
+exit 0

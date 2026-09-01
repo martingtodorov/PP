@@ -333,3 +333,53 @@ Domains & languages
   `backend/tests/test_requirements_portable.py`.
 - The dev test suite and old test reports still contain the preview admin password → rotate
   `ADMIN_PASSWORD` before going live.
+
+## 2026-06 — Ansible/Hetzner deployment fixed in the repo (no local patches any more)
+### Root cause of the recurring "handshake OK but no internet" outage
+systemd-networkd deletes routes and routing-policy rules it does not manage
+(`ManageForeignRoutes` / `ManageForeignRoutingPolicyRules` default to `yes`). Any networkd reload
+(netplan apply, package install, DHCP renew, cloud-init) wiped `default dev wg0 table 100` + both
+`ip rule` entries added by wg-quick PostUp, while wg0 itself kept handshaking → `ping 1.1.1.1`
+"Network is unreachable" and DNS failures (1.1.1.1/8.8.8.8 are only reachable through wg0).
+That is also why `bootstrap_backend_base.yml` died on the MongoDB apt key.
+
+### Repo-level fixes (all committed)
+- `ansible/tasks/wg_route_ensure.yml` — idempotent in-band repair; imported by `preflight.yml`,
+  `deploy_backend.yml` and around every package stage of the bootstrap playbooks. Never restarts a
+  healthy tunnel, never touches keys/config.
+- `bootstrap_nat.yml` now installs the permanent fix on pp-back: networkd drop-in
+  (`ManageForeignRoutes=no`, `ManageForeignRoutingPolicyRules=no`), `/usr/local/sbin/pp-wg-routes`,
+  `pp-wg-route-guard.timer` (30 s), a `wg-quick@wg0` drop-in (`ExecStartPost`) and an apt
+  `DPkg::Post-Invoke` hook.
+- Fresh-server chicken-and-egg solved: temporary MASQUERADE for 10.0.0.0/16 on pp-front + temporary
+  default route via 10.0.0.2 on pp-back → `apt install wireguard` → tunnel up → temporary path removed
+  (`-e keep_private_nat=true` keeps it).
+- `ansible/tasks/infra_defaults.yml` — every non-secret infra var has a central default;
+  `frontend_public_ip` is derived from `hostvars[groups['frontend'][0]].ansible_host`. Fixes the
+  undefined `frontend_public_ip` / `ssl_cert_path` / `ssl_key_path` in preflight. Imported by every
+  play. Offline check: `playbooks/selftest_defaults.yml`.
+- New `bootstrap/bootstrap_frontend_base.yml` (nginx + Node/yarn + web root + TLS dir) — a fresh
+  server never needs a manual `apt install nginx`. `deploy_frontend.yml` installs nothing any more,
+  it only asserts the toolchain and points at the bootstrap playbook.
+- `bootstrap_firewall.yml`: added `ufw routed policy allow` + WireGuard subnet, and a backend egress
+  re-check after the firewall change.
+- `ansible.cfg` was never committed (untracked) — now in the repo, and the removed
+  `community.general.yaml` stdout callback replaced with `stdout_callback=default` + `result_format=yaml`
+  (ansible-core ≥ 2.19 refused to start otherwise). `requirements.yml` added for community.general +
+  ansible.posix.
+- `wg0-front.conf.j2` uses `wg_subnet` instead of an inline regex.
+- WireGuard endpoint stays `10.0.0.2:51820` (asserted in `infra_defaults.yml` and in the tests).
+- `site.yml` is still application-only: preflight → backend → frontend → nginx.
+
+### Desired flow (documented in deploy/hetzner/README.md)
+`git pull` → `ansible-playbook playbooks/preflight.yml` → `ansible-playbook playbooks/site.yml -e ref=main`.
+No local edits, no stash, no manual routes/nginx. One-time on the live pair: run
+`playbooks/bootstrap/bootstrap_nat.yml` to install the route guard.
+
+### Tests
+`backend/tests/test_deploy_config.py` (36 static guards: routine playbooks install nothing, every play
+imports infra_defaults, guard + temp-NAT + networkd fix present, all templates render with
+StrictUndefined) and `backend/tests/test_wg_route_guard.py` (2 functional tests with faked `ip`/
+`systemctl`: repairs the exact production state, no-ops when healthy). All 38 pass.
+`ansible-playbook --syntax-check` clean for every playbook; `selftest_defaults.yml` passes with no
+`group_vars/all.yml` at all.

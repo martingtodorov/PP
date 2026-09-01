@@ -1,8 +1,21 @@
 ---
-# BOOTSTRAP — only for a brand new pair of servers. On the running production hosts these steps are
-# already done; run the individual plays instead if you really need to touch infrastructure.
+# FULL BOOTSTRAP — for a brand new pair of servers, end to end:
+#
+#   ansible-playbook -i inventory.ini playbooks/bootstrap/bootstrap_all.yml --ask-vault-pass
+#
+# Order matters:
+#   1. frontend base  — nginx + Node toolchain (pp-front has public internet)
+#   2. NAT/WireGuard  — builds a temporary NAT path over the private network so a fresh pp-back can
+#                       install the wireguard package, brings the tunnel up, installs the permanent
+#                       route guard, then removes the temporary path
+#   3. DNS            — persistent systemd-resolved configuration on pp-back
+#   4. backend base   — OS packages, MongoDB, directory layout, media disk, backups
+#   5. firewall       — ufw on pp-front (last: it is the only step that can lock us out)
+#
+# Re-running it on the live servers is safe: keys are reused, wg0.conf is not rewritten, the media
+# directory is never wiped and secrets are not rotated.
+- import_playbook: bootstrap_frontend_base.yml
 - import_playbook: bootstrap_nat.yml
 - import_playbook: bootstrap_dns.yml
 - import_playbook: bootstrap_backend_base.yml
-# firewall last, and only if it is not configured yet
 - import_playbook: bootstrap_firewall.yml

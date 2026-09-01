@@ -1,0 +1,7 @@
+---
+# Ansible collections used by the playbooks. Install once per workstation:
+#   ansible-galaxy install -r requirements.yml
+# (the full "ansible" pip package already bundles both; ansible-core does not)
+collections:
+  - name: community.general      # ufw
+  - name: ansible.posix          # synchronize

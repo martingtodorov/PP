@@ -1,10 +1,12 @@
 ---
 # BOOTSTRAP ONLY — the firewall on pp-front. Never run automatically: enabling ufw with the wrong
-# rule set locks us out and drops the WireGuard listener.
+# rule set locks us out and drops the WireGuard listener. All rules are idempotent.
 - name: Firewall on pp-front
   hosts: frontend
   become: true
   tags: [firewall]
+  pre_tasks:
+    - import_tasks: ../../tasks/infra_defaults.yml
   tasks:
     - name: Allow SSH, HTTP, HTTPS and WireGuard
       ufw: { rule: allow, port: "{{ item.port }}", proto: "{{ item.proto }}" }
@@ -17,6 +19,12 @@
     - name: Allow the Hetzner private network (Ansible jump + backend proxying)
       ufw: { rule: allow, src: "{{ private_cidr }}" }
 
+    - name: Allow the WireGuard subnet
+      ufw: { rule: allow, src: "{{ wg_subnet }}" }
+
+    - name: Forwarded traffic must keep flowing (the backend NATs through this host)
+      ufw: { direction: routed, policy: allow }
+
     - name: Default deny incoming
       ufw: { direction: incoming, policy: deny }
 
@@ -28,3 +36,21 @@
       delegate_to: localhost
       become: false
       tags: [verify]
+
+- name: The backend still reaches the internet after the firewall change
+  hosts: backend
+  become: true
+  tags: [firewall, verify]
+  pre_tasks:
+    - import_tasks: ../../tasks/infra_defaults.yml
+  tasks:
+    - import_tasks: ../../tasks/wg_route_ensure.yml
+
+    - name: Egress still exits through pp-front
+      command: curl -sS --max-time 15 https://ifconfig.me
+      register: egress
+      changed_when: false
+      retries: 3
+      delay: 5
+      until: egress.rc == 0
+      failed_when: egress.stdout | trim != frontend_public_ip
