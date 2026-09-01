@@ -277,3 +277,34 @@ Domains & languages
   Favicons/manifest icons stay in `public/` (browser-level, fixed paths).
 - Verified: iteration_20.json — backend 9/9, frontend 100% (prefetch speed, dial dropdown, drawer item,
   image negotiation, hero from storage, no Shopify CDN left).
+
+## 2026-09-01 (session 2, part 3) — Cookie consent + self-hosted deploy package
+### Cookie consent
+- `frontend/src/components/CookieConsent.jsx` + `frontend/src/i18n/cookies.js`: Shopify-identical wording
+  („Ние ценим вашата поверителност" / „Използваме бисквитки, за да подобрим вашето изживяване…"),
+  buttons Персонализиране / Отхвърляне на всички / Приемам всички, preferences panel with 4 categories
+  (necessary locked, functional, analytics, marketing). Translated into all 11 locales.
+- Stored in `pp_cookie_consent_v1` (localStorage) + `pp_consent` cookie (180 days); emits a `pp:consent`
+  window event for future analytics wiring. z-index 58 → below the checkout modal (60); the sticky buy bar
+  is hidden while the banner is open (`body.pp-consent-open .pp-buybar { display: none }`).
+
+### Self-hosted deploy (Hetzner, systemd + venv + nginx, no Docker)
+- `deploy/README.md`, `deploy/hetzner/README.md`, `deploy/requirements-prod.txt`
+  (portable — `emergentintegrations` stripped; guarded by `backend/tests/test_requirements_portable.py`).
+- `deploy/hetzner/ansible/`: `ansible.cfg`, `inventory.ini.example`, `group_vars/all.yml.example`,
+  playbooks `deploy_nat.yml` (WireGuard NAT gateway), `deploy_backend.yml`, `deploy_frontend.yml`,
+  `deploy_nginx.yml`, `site.yml`, templates `backend.env.j2`, `purepeptide-backend.service.j2`,
+  `nginx-purepeptide.conf.j2`, `wg0-front.conf.j2`, `wg0-back.conf.j2`.
+- Hosts: `pp-front` 2.28.79.24 / 10.0.0.2 (nginx, TLS, static build, NAT gateway) and `pp-back` 10.0.0.3
+  (FastAPI :8001, MongoDB localhost, media disk). Domains: purepeptide.bg (canonical), .eu, .ro, .gr,
+  purepeptide-labs.com — a single build, `REACT_APP_BACKEND_URL` empty.
+- **Media is now local-disk-first**: `MEDIA_ROOT` (preview: `backend/.media`, server:
+  `/var/lib/purepeptide/media`). `storage.py` reads the disk, falls back to the managed storage and mirrors
+  what it fetches; `export_media_to_disk.py` pulls everything once (79 files, 13.9 MB) — after that the
+  shop is fully self-hosted. Boot-critical env vars: `MONGO_URL`, `DB_NAME`, `MEDIA_ROOT`.
+- One uvicorn worker only (abandoned-cart sweeper + AI translation jobs run in-process).
+
+### Verified
+- iteration_21.json — backend 5/5; frontend 6/7 → the reported buy-bar/banner overlap was fixed and
+  re-verified manually (banner open → buy bar hidden; after consent → buy bar returns).
+- All Ansible YAML parses and every Jinja template renders against `group_vars/all.yml.example`.

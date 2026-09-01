@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration-21 tested the cookie consent popup (11 locales, preferences panel, localStorage persistence, checkout-modal stacking) and the local-media-disk regression (WebP/JPEG negotiation, admin upload, mirroring to MEDIA_ROOT, COD checkout end-to-end). Backend pytest: 5/5 PASS (test_iteration21_cookies_media.py, ~3s). Frontend Playwright: 6/7 UI scenarios PASS. One design/spec issue: on a product page the cookie banner (z-index:58, position:fixed bottom:0, ~361px tall on 390-wide mobile) sits ABOVE .pp-buybar (z-index:45, position:fixed bottom:0), so once the sticky buy bar is triggered its controls are visually covered by the banner — this contradicts the explicit requirement 'the banner also must not hide the sticky buy bar controls on a product page.' The checkout modal (.pc-modal, z-index:60) is correctly above the banner and remains clickable (verified via elementFromPoint on data-testid=pc-continue, which returned the actual button, not the banner).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "CookieConsent vs StickyBuyBar",
+        "issue": "On product pages the cookie banner (z-index 58, position:fixed bottom:0, ~361px tall in mobile) covers the sticky buy bar (.pp-buybar, z-index 45, position:fixed bottom:0). Requirement was: banner must NOT hide the sticky buy bar controls on a product page. Suggested fix: either bump .pp-buybar z-index above the banner (e.g. 65) and add a bottom offset to the banner while the buybar is visible, OR hide/collapse the banner when .pp-buybar has class 'pp-buybar--in', OR make the banner a small floating chip on product pages.",
+        "selector": ".pp-cookie / .pp-buybar",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration21_cookies_media.py",
+    "/app/test_reports/pytest/iteration21.xml"
+  ],
+  "action_items": [
+    "Resolve the .pp-cookie (z:58) vs .pp-buybar (z:45) stacking: keep the buy-bar controls reachable while the banner is visible (raise buybar z-index above banner and shift the banner up by the buybar height, or dismiss/miniaturise the banner on product pages when the buy-bar activates)."
+  ],
+  "critical_code_review_comments": [
+    "CookieConsent.jsx: preferences panel `prefs` state is initialised only from useState({functional:true,analytics:true,marketing:true}) — if the user previously saved partial consent and clears it via a browser flow that re-shows the banner, the panel defaults to all-on rather than reading from any existing pp_cookie_consent_v1. Non-blocking (banner only appears when no consent record exists).",
+    "storage.py: MEDIA_ROOT is loaded via os.environ['MEDIA_ROOT'] at import time (KeyError if not set). Fine for containerised deploys but will crash the app on a plain 'python server.py' if the env is missing — consider a default or a clear ImportError message.",
+    "storage.py get_object: when a 404 comes back from the managed storage the code re-inits the storage key and retries once; that's good, but on a genuine remote 404 (deleted asset) the retry will also 404 and raise_for_status will raise a bare HTTPError — the caller in server.py catches Exception and turns it into 404 which is fine, but the log line is `log.warning(\"Image variant failed\")` only, not the storage miss; add a specific log for remote-miss so ops can distinguish disk-vs-remote issues.",
+    "server.py serve_file: image variant cache key is derived from the raw storage path but does NOT include the source file's mtime/size — if an admin ever re-uploads the same path (unlikely today because paths are uuid-based) the cache would return the stale variant. Non-blocking today.",
+    "index.css .pp-cookie z-index 58 vs .pp-buybar 45 — this is the source of the buy-bar overlap bug reported above."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration21_cookies_media.py"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "6/7 scenarios — banner appearance, BG wording, privacy link, accept/reject/customize+save persistence, reload-hide, en/ro/gr localisation, checkout-modal above banner all PASS; buy-bar coverage FAIL"},
+  "test_credentials": "admin@purepeptide.bg / Admin@PurePeptide2026",
+  "seed_data_creation": "One COD checkout order created via /api/checkout on preview URL (customer_email test_iter21@example.com) to prove the checkout regression path is intact.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Cookie banner selectors: data-testid=cookie-banner|cookie-title|cookie-privacy-link|cookie-accept|cookie-reject|cookie-customize|cookie-preferences|cookie-toggle-{necessary,functional,analytics,marketing}|cookie-save. localStorage key: pp_cookie_consent_v1 (JSON with necessary/functional/analytics/marketing/at). Clear via localStorage.removeItem before each banner assertion. Locale routes: / (bg), /en, /fr, /de, /cz, /hu, /pl, /sk, /si, /gr, /ro — each supported and verified for en/ro/gr in this iteration. Banner z=58, checkout modal z=60 (OK), buybar z=45 (NOT OK — banner hides it). Regression test: /app/backend/tests/test_iteration21_cookies_media.py (5 tests, ~3s). Product used for e2e: /products/21-retatrutide-5, add-to-cart button label 'Към количка' (no dedicated data-testid, use role=button + name).",
+  "rca of the issue": "Banner and buy-bar are both position:fixed;bottom:0. index.css lines 1329-1330 set .pp-buybar z-index:45; line 1662 sets .pp-cookie z-index:58. Because 58 > 45 and both anchor at the bottom of the viewport, the ~361px tall banner card (mobile) paints over the buy-bar and prevents the user from tapping the buy-bar CTA. Mitigation options in priority order: (a) raise .pp-buybar to z-index:70 AND push the banner up with `bottom: calc(var(--buybar-h) + 12px)` when body has class pp-buybar-active; (b) collapse the banner to a small pill (accept-only icon) on mobile product pages; (c) programmatically call decide({functional:false,...}) when the buybar becomes visible (worst — silently opts users out)."
+}

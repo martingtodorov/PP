@@ -1,7 +1,7 @@
 import axios from "axios";
 import { LOCALES, DEFAULT_LOCALE } from "../i18n/locales";
 
-export const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+export const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
 
 export const currentLocale = () => {

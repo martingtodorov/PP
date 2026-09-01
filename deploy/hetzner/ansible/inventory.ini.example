@@ -1,0 +1,10 @@
+; copy to inventory.ini (gitignored) and adjust
+[frontend]
+pp-front ansible_host=2.28.79.24 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_ed25519
+
+[backend]
+pp-back ansible_host=10.0.0.3 ansible_user=deploy ansible_ssh_private_key_file=~/.ssh/id_ed25519 ansible_ssh_common_args='-o IdentitiesOnly=yes -J root@2.28.79.24'
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
+backend_private_ip=10.0.0.3

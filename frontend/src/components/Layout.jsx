@@ -13,6 +13,7 @@ import { LOCALES, LOCALE_META } from "../i18n/locales";
 import { api, fmtEUR, fmtBGN, showsBGN, formatErr, img } from "../lib/api";
 import { toast } from "sonner";
 import PreCheckoutModal from "./PreCheckoutModal";
+import CookieConsent from "./CookieConsent";
 import { prefetchCheckout } from "../lib/checkoutPrefetch";
 
 const Price = ({ eur, className = "" }) => (
@@ -752,6 +753,7 @@ export default function Layout({ children }) {
       <Header collections={collections} settings={settings} />
       <main id="main-content" className="flex-1">{children}</main>
       <Footer collections={collections} articles={articles} settings={settings} />
+      <CookieConsent />
     </div>
   );
 }

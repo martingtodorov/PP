@@ -1,0 +1,28 @@
+[Unit]
+Description={{ app_name }} FastAPI backend
+After=network-online.target mongod.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ backend_service_user }}
+Group={{ backend_service_user }}
+WorkingDirectory={{ app_dir }}/current/backend
+EnvironmentFile={{ env_dir }}/backend.env
+# ONE worker only: the abandoned-cart sweeper and the AI translation jobs run in-process
+ExecStart={{ app_dir }}/venv/bin/uvicorn server:app --host 0.0.0.0 --port 8001 --workers 1 --proxy-headers --forwarded-allow-ips='*'
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ media_dir }} {{ app_dir }}/current/backend/.image_cache
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

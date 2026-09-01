@@ -1,0 +1,5 @@
+---
+# Full deploy: backend first (the API must answer before nginx starts proxying), then the SPA, then nginx.
+- import_playbook: deploy_backend.yml
+- import_playbook: deploy_frontend.yml
+- import_playbook: deploy_nginx.yml

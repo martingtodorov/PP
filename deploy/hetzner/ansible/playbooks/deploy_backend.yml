@@ -1,0 +1,202 @@
+---
+- name: PurePeptide backend (FastAPI + MongoDB) on pp-back
+  hosts: backend
+  become: true
+  vars:
+    release_stamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+    release_dir: "{{ app_dir }}/releases/{{ ref }}-{{ release_stamp }}"
+
+  tasks:
+    # ---------------- base ----------------
+    - name: Install OS packages
+      apt:
+        name: [git, python3-venv, python3-pip, python3-dev, build-essential, curl, gnupg,
+               libjpeg-dev, zlib1g-dev, libwebp-dev, rsync]
+        update_cache: true
+        state: present
+      tags: [base]
+
+    - name: Create directories
+      file: { path: "{{ item }}", state: directory, owner: root, group: "{{ backend_service_user }}", mode: "0755" }
+      loop:
+        - "{{ app_dir }}"
+        - "{{ app_dir }}/releases"
+        - "{{ env_dir }}"
+        - "{{ backup_dir }}"
+      tags: [base]
+
+    - name: Create the persistent media directory (never wiped by a deploy)
+      file:
+        path: "{{ media_dir }}"
+        state: directory
+        owner: "{{ backend_service_user }}"
+        group: "{{ backend_service_user }}"
+        mode: "0755"
+      tags: [base, media]
+
+    # ---------------- mongodb ----------------
+    - name: MongoDB apt key
+      get_url:
+        url: "https://pgp.mongodb.com/server-{{ mongo_major }}.asc"
+        dest: /etc/apt/trusted.gpg.d/mongodb.asc
+        mode: "0644"
+      tags: [mongo]
+
+    - name: MongoDB repository
+      apt_repository:
+        repo: "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu {{ ansible_distribution_release }}/mongodb-org/{{ mongo_major }} multiverse"
+        filename: mongodb-org
+        state: present
+      tags: [mongo]
+
+    - name: Install mongodb-org
+      apt: { name: mongodb-org, update_cache: true, state: present }
+      tags: [mongo]
+
+    - name: Bind MongoDB to localhost only
+      lineinfile:
+        path: /etc/mongod.conf
+        regexp: '^\s*bindIp:'
+        line: "  bindIp: 127.0.0.1"
+      notify: restart mongod
+      tags: [mongo]
+
+    - name: Enable mongod
+      systemd: { name: mongod, enabled: true, state: started }
+      tags: [mongo]
+
+    # ---------------- code ----------------
+    - name: Checkout the release
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ release_dir }}"
+        version: "{{ ref }}"
+        depth: 1
+        accept_hostkey: true
+      tags: [code]
+
+    - name: Create the virtualenv
+      command: "python3 -m venv {{ app_dir }}/venv"
+      args: { creates: "{{ app_dir }}/venv/bin/python" }
+      tags: [code]
+
+    - name: Upgrade pip
+      pip: { name: [pip, setuptools, wheel], state: latest, virtualenv: "{{ app_dir }}/venv" }
+      tags: [code]
+
+    - name: Install Python dependencies (portable list — no platform-only packages)
+      pip:
+        requirements: "{{ release_dir }}/deploy/requirements-prod.txt"
+        virtualenv: "{{ app_dir }}/venv"
+      tags: [code]
+
+    # ---------------- config ----------------
+    - name: Render backend.env
+      template:
+        src: ../templates/backend.env.j2
+        dest: "{{ env_dir }}/backend.env"
+        owner: root
+        group: "{{ backend_service_user }}"
+        mode: "0640"
+      notify: restart backend
+      tags: [config]
+
+    - name: Symlink backend.env into the release (local runs / management scripts)
+      file:
+        src: "{{ env_dir }}/backend.env"
+        dest: "{{ release_dir }}/backend/.env"
+        state: link
+        force: true
+      tags: [config]
+
+    - name: Image cache directory
+      file:
+        path: "{{ release_dir }}/backend/.image_cache"
+        state: directory
+        owner: "{{ backend_service_user }}"
+        group: "{{ backend_service_user }}"
+        mode: "0755"
+      tags: [config]
+
+    - name: Render the systemd unit
+      template:
+        src: ../templates/purepeptide-backend.service.j2
+        dest: "/etc/systemd/system/{{ app_name }}-backend.service"
+        mode: "0644"
+      notify: [reload systemd, restart backend]
+      tags: [service]
+
+    # ---------------- publish ----------------
+    - name: Point previous -> the currently live release
+      shell: |
+        if [ -L {{ app_dir }}/current ]; then
+          ln -sfn "$(readlink {{ app_dir }}/current)" {{ app_dir }}/previous
+        fi
+      changed_when: false
+      tags: [publish]
+
+    - name: Point current -> the new release
+      file: { src: "{{ release_dir }}", dest: "{{ app_dir }}/current", state: link, force: true }
+      notify: restart backend
+      tags: [publish]
+
+    - name: Own the release
+      file: { path: "{{ release_dir }}", owner: root, group: "{{ backend_service_user }}", recurse: true }
+      tags: [publish]
+
+    - name: Enable and start the backend
+      systemd: { name: "{{ app_name }}-backend", enabled: true, state: started, daemon_reload: true }
+      tags: [service, publish]
+
+    - name: Prune old releases
+      shell: "ls -1dt {{ app_dir }}/releases/*/ | tail -n +{{ (releases_kept | int) + 1 }} | xargs -r rm -rf"
+      changed_when: false
+      tags: [publish]
+
+    # ---------------- media ----------------
+    - name: Pull every stored image onto the local media disk (one-off / idempotent)
+      command: "{{ app_dir }}/venv/bin/python export_media_to_disk.py"
+      args: { chdir: "{{ app_dir }}/current/backend" }
+      become_user: "{{ backend_service_user }}"
+      register: media_export
+      changed_when: "'downloaded: 0' not in media_export.stdout"
+      tags: [media]
+
+    - name: Show the media export result
+      debug: { var: media_export.stdout_lines }
+      tags: [media]
+
+    # ---------------- backup ----------------
+    - name: Nightly mongodump (14 days retention)
+      cron:
+        name: "{{ app_name }} mongodump"
+        minute: "20"
+        hour: "3"
+        job: >-
+          /usr/bin/mongodump --db {{ db_name }} --archive={{ backup_dir }}/{{ db_name }}-$(date +\%F).gz --gzip
+          && find {{ backup_dir }} -name '{{ db_name }}-*.gz' -mtime +14 -delete
+      tags: [backup]
+
+    # ---------------- verify ----------------
+    - name: Health check
+      uri: { url: "http://127.0.0.1:8001/api/", status_code: 200 }
+      retries: 10
+      delay: 3
+      register: health
+      until: health.status == 200
+      tags: [verify, publish]
+
+    - name: Assert exactly one uvicorn worker
+      shell: "pgrep -fc 'uvicorn server:app'"
+      register: workers
+      changed_when: false
+      failed_when: workers.stdout | trim != '1'
+      tags: [verify]
+
+  handlers:
+    - name: reload systemd
+      systemd: { daemon_reload: true }
+    - name: restart mongod
+      systemd: { name: mongod, state: restarted }
+    - name: restart backend
+      systemd: { name: "{{ app_name }}-backend", state: restarted, daemon_reload: true }
