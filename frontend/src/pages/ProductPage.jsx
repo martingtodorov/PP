@@ -102,7 +102,9 @@ export default function ProductPage() {
   const allImages = p.images?.length ? p.images : [p.image];
   const images = variantGallery(allImages, p.variants || [], variantIdx);
   const out = !v || (v.stock || 0) <= 0;
-  const primaryCollection = data.collections?.[0];
+  const primaryCollection = (data.collections || []).find(
+    (c) => c.handle !== "2all-the-peptides-1" && c.title !== t("catalog") && !c.nav_hidden,
+  );
   const specs = p.specs || {};
 
   return (
