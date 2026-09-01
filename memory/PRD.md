@@ -456,3 +456,24 @@ Fix: both directories are frozen once with `set_fact` in `pre_tasks` (and printe
 finds `backend` layout + `deploy/requirements-prod.txt` (133 pins, correct header, corrected
 `nextcart_base_url`). GitHub main is complete — the repo was never the problem.
 Guard: `test_release_directories_are_frozen_with_set_fact`. 56 deploy tests + dryrun green.
+
+### 2026-06 — requirements-prod.txt rewritten as a MINIMAL list (py3.14 compatible)
+pp-back runs **Python 3.14**. The old file was a `pip freeze` of the dev pod (133 pins incl.
+google-*, litellm, openai, pandas, numpy, boto3, black, mypy, pytest, stripe) and pip failed with
+`ResolutionImpossible`: google-api-core[grpc] 2.30.2 needs grpcio-status>=1.75.1 on py3.14 while the
+freeze pinned 1.71.2. pymongo==4.5.0 also has no py3.14 wheel.
+New file: **19 top-level pins** — only what backend/*.py imports (fastapi, starlette, uvicorn,
+pydantic, email-validator, python-multipart, python-dotenv, motor==3.7.1, pymongo==4.15.5, PyJWT,
+bcrypt, httpx, requests, resend, anthropic, pillow, openpyxl, pywebpush) with transitive deps left to
+pip. Verified with `pip install --dry-run --python-version 3.14 --only-binary=:all:` (37 packages
+resolve; http-ece is source-only and builds with build-essential).
+Runtime verified: fresh venv with exactly this list boots the backend from a rendered production
+`backend.env`; 200 on settings/products/collections/articles/sitemap/robots/link-index/locales/pages,
+nextcart countries+config, admin login + orders/customers/analytics/settings/abandoned-carts/inventory,
+WebP image negotiation, `/api/cart/track`, `/api/track` and a **full COD order** (GYA41, cleaned up)
+— all on motor 3.7.1 / pymongo 4.15.5.
+`deploy_backend.yml`: the `backend/requirements.txt` fallback was REMOVED (installing the dev freeze
+would reintroduce the conflict); it now requires a `requirements-prod.txt` anywhere in the release and
+fails with a precise message. Tests: `test_requirements_portable.py` now derives the required packages
+from the actual imports, forbids the pip-freeze packages and caps the list at 25 pins. 58 deploy tests
++ full dryrun green. **No server change needed — do NOT downgrade Python on pp-back.**

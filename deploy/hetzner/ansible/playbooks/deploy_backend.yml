@@ -104,7 +104,7 @@
     - name: Search the whole release for a requirements file
       find:
         paths: "{{ release_dir }}"
-        patterns: ["requirements-prod.txt", "requirements.txt"]
+        patterns: ["requirements-prod.txt"]
         recurse: true
         depth: 4
         file_type: file
@@ -116,56 +116,24 @@
       register: release_tree
       tags: [code]
 
-    - name: Pick a requirements file — a *-prod.txt anywhere wins, then requirements.txt
+    - name: Pick the production requirements file
       set_fact:
         backend_requirements: >-
           {{ ((req_found.files | map(attribute='path') | select('search', 'requirements-prod.txt') | sort | first)
               | default('', true)) }}
-        dev_requirements_path: >-
-          {{ ((req_found.files | map(attribute='path') | select('search', 'backend/requirements.txt') | sort | first)
-              | default('', true)) }}
       tags: [code]
 
-    - name: Fail with a clear message when the release ships no requirements file at all
+    - name: Fail with a clear message when the release ships no production requirements file
       fail:
         msg: >-
-          No requirements file in {{ release_dir }} (ref '{{ ref }}').
-          Top level of the checkout: {{ release_tree.files | map(attribute='path') | map('basename') | sort | join(', ') }}.
-          Files found by the recursive search: {{ req_found.files | map(attribute='path') | join(', ') | default('none', true) }}.
-          Push deploy/requirements-prod.txt to '{{ ref }}' (generated with `pip freeze` minus
-          {{ platform_only_packages | join(', ') }}).
-      when:
-        - backend_requirements | length == 0
-        - dev_requirements_path | length == 0
-      tags: [code]
-
-    # backend/requirements.txt pins emergentintegrations, which only exists on the Emergent index.
-    # Stripping it produces exactly the same list as deploy/requirements-prod.txt.
-    - name: Derive a portable requirements file from backend/requirements.txt (fallback)
-      shell: |
-        set -o pipefail
-        tmp=$(mktemp)
-        grep -vEi '^({{ platform_only_packages | join("|") }})([=<>~!\[].*)?$' \
-          {{ dev_requirements_path }} > "$tmp"
-        if ! cmp -s "$tmp" {{ env_dir }}/requirements-prod.generated.txt; then
-          install -m 0644 "$tmp" {{ env_dir }}/requirements-prod.generated.txt
-          echo generated
-        fi
-        rm -f "$tmp"
-      args: { executable: /bin/bash }
-      register: generated_req
-      changed_when: "'generated' in generated_req.stdout"
-      when:
-        - backend_requirements | length == 0
-        - dev_requirements_path | length > 0
-      tags: [code]
-
-    - name: Use the derived file
-      set_fact:
-        backend_requirements: "{{ env_dir }}/requirements-prod.generated.txt"
-      when:
-        - backend_requirements | length == 0
-        - dev_requirements_path | length > 0
+          No requirements-prod.txt in {{ release_dir }} (ref '{{ ref }}').
+          Files found by the recursive search:
+          {{ req_found.files | map(attribute='path') | join(', ') | default('none', true) }}.
+          Push deploy/requirements-prod.txt to '{{ ref }}'. It is a MINIMAL list of the packages the
+          backend imports — never a `pip freeze` of the development environment, whose pins conflict
+          on the server's Python and include index-only packages
+          ({{ platform_only_packages | join(', ') }}).
+      when: backend_requirements | length == 0
       tags: [code]
 
     - name: Requirements file in use
