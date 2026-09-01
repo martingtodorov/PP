@@ -127,6 +127,12 @@ export default function ProductPage() {
               </div>
             )}
 
+            {v?.sku && (
+              <p className="text-xs text-slate-500" data-testid="product-sku">
+                SKU: <span className="font-mono text-slate-700">{v.sku}</span>
+              </p>
+            )}
+
             <div className="flex items-stretch gap-3">
               <div className="flex items-center border border-slate-300 rounded-md">
                 <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 py-2.5 text-slate-600" aria-label="-"><Minus className="h-4 w-4" /></button>

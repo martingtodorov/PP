@@ -481,7 +481,7 @@ const Header = ({ collections, settings }) => {
               width="220"
               height="44"
               className="h-9 w-auto"
-              fetchpriority="high"
+              fetchPriority="high"
               decoding="async"
             />
           </Link>
@@ -504,7 +504,7 @@ const Header = ({ collections, settings }) => {
         {/* ---------- desktop: one row, logo left of the nav, search next to cart ---------- */}
         <div className="hidden lg:flex max-w-7xl mx-auto px-6 xl:px-8 h-20 items-center gap-8" data-testid="desktop-header">
           <Link to={lp("/")} className="flex-shrink-0" aria-label="PurePeptide" data-testid="logo-link-desktop">
-            <img src="/logo-header.png" alt="PurePeptide" width="240" height="48" className="h-10 w-auto" fetchpriority="high" decoding="async" />
+            <img src="/logo-header.png" alt="PurePeptide" width="240" height="48" className="h-10 w-auto" fetchPriority="high" decoding="async" />
           </Link>
 
           <nav className="flex items-center gap-7" aria-label="Primary" data-testid="desktop-nav">
@@ -703,6 +703,7 @@ export default function Layout({ children }) {
   const [articles, setArticles] = useState([]);
   const [settings, setSettings] = useState({});
   const { locale } = useLocaleCtx();
+  const { pathname } = useLocation();
 
   useEffect(() => {
     Promise.all([api.get("/collections"), api.get("/articles"), api.get("/settings")]).then(
@@ -713,6 +714,15 @@ export default function Layout({ children }) {
       }
     );
   }, [locale]);
+
+  useEffect(() => {
+    let sid = sessionStorage.getItem("pp_sid");
+    if (!sid) {
+      sid = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random())).slice(0, 36);
+      sessionStorage.setItem("pp_sid", sid);
+    }
+    api.post("/track", { session_id: sid, path: pathname, referrer: document.referrer || "", locale }).catch(() => {});
+  }, [pathname, locale]);
 
   return (
     <div className="min-h-screen flex flex-col bg-white">

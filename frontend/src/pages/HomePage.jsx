@@ -157,7 +157,7 @@ export default function HomePage() {
 
       {/* CATEGORIES */}
       <section className="bg-white section--page-width section-resource-list py-5 sm:py-10 lg:py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="pp-wide">
           <div className="mb-3">
             <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight">{t("researchedFor")}</h2>
           </div>
@@ -167,7 +167,7 @@ export default function HomePage() {
 
       {/* BEST SELLERS */}
       <section className="bg-white section--page-width section-resource-list py-5 sm:py-10 lg:py-12" data-testid="product-list">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="pp-wide">
           <div className="flex flex-row justify-between items-baseline gap-3 mb-4 sm:mb-6">
             <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">{t("bestsellers")}</h2>
             <Link to={lp("/collections/all-peptides")}
@@ -182,7 +182,7 @@ export default function HomePage() {
 
       {/* TRUST PRINCIPLES */}
       <section className="bg-white py-5 sm:py-10 lg:py-12" data-testid="trust-principles">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="pp-wide grid grid-cols-1 lg:grid-cols-3 gap-5">
           {pick(TRUST_CARDS, locale).map(({ n, title, body }) => (
             <article key={n} className="trust-card" data-testid={`trust-${n}`}>
               <span className="trust-card__num">{n}</span>
@@ -195,14 +195,14 @@ export default function HomePage() {
 
       {/* ARTICLES */}
       <section id="articles" className="bg-white scroll-mt-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="pp-wide py-12">
           <div className="flex justify-between items-baseline mb-4">
             <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{t("articles")}</h2>
             <Link to={lp("/pages/articles")} className="text-sm font-medium text-slate-700 hover:text-coral-600">
               {t("viewAll")}
             </Link>
           </div>
-          <div className="grid grid-flow-col auto-cols-[68%] sm:auto-cols-[44%] lg:grid-flow-row lg:grid-cols-4 lg:auto-cols-auto gap-3 lg:gap-5 overflow-x-auto lg:overflow-visible no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 pb-2">
+          <div className="grid grid-flow-col auto-cols-[68%] sm:auto-cols-[44%] lg:grid-flow-row lg:grid-cols-5 lg:auto-cols-auto gap-3 lg:gap-5 overflow-x-auto lg:overflow-visible no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 pb-2">
             {articles.map((a) => (
               <Link key={a.handle} to={lp(`/articles/${a.handle}`)} className="article-card" data-testid={`article-${a.handle}`}>
                 <div className="article-card__media"><img src={a.image} alt={a.title} loading="lazy" /></div>
@@ -215,7 +215,7 @@ export default function HomePage() {
 
       {/* CALCULATOR */}
       <section className="bg-white pt-2 pb-6 sm:pt-4 sm:pb-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[860px] mx-auto px-4 sm:px-6">
           <PPCalculator />
         </div>
       </section>

@@ -9,7 +9,12 @@ load_dotenv(ROOT_DIR / ".env")
 import os
 import csv
 import io
+import re
+import secrets
+import sys
+import tempfile
 import asyncio
+import hashlib
 import logging
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -17,7 +22,7 @@ from typing import Optional, List, Dict, Any
 
 import bcrypt
 import jwt
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, UploadFile, File, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, UploadFile, File, Form, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -249,6 +254,8 @@ async def seed_admin():
 async def seed_catalog():
     """Seed / re-seed the catalog. A change of SEED_VERSION rebuilds the mirrored Shopify catalog."""
     current = await db.settings.find_one({"key": "site"})
+    if ((current or {}).get("value") or {}).get("catalog_imported"):
+        return
     seeded_version = (current or {}).get("value", {}).get("seed_version")
     stale = seeded_version != SEED_VERSION
 
@@ -416,9 +423,9 @@ async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
         raise HTTPException(404, "Колекцията не е намерена")
     base_handle = col["handle"]
     if base_handle == "all-peptides":
-        prods = await db.products.find({}, {"_id": 0}).to_list(500)
+        prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0}).to_list(500)
     else:
-        prods = await db.products.find({"collections": base_handle}, {"_id": 0}).to_list(500)
+        prods = await db.products.find({"collections": base_handle, "active": {"$ne": False}}, {"_id": 0}).to_list(500)
     siblings = await db.collections_cat.find(
         {"handle": {"$nin": [base_handle, "all-peptides"]}}, {"_id": 0}
     ).sort("sort_order", 1).to_list(50)
@@ -437,7 +444,7 @@ async def list_products(
     locale: str = Query(DEFAULT_LOCALE),
 ):
     loc = normalize_locale(locale)
-    q: Dict[str, Any] = {}
+    q: Dict[str, Any] = {"active": {"$ne": False}}
     if featured is not None:
         q["featured"] = featured
     if search:
@@ -544,9 +551,18 @@ async def get_settings():
 
 
 # ---------- Checkout / Orders ----------
+ORDER_CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+ORDER_CODE_DIGITS = "0123456789"
+
+
 async def _next_order_number() -> str:
-    count = await db.orders.count_documents({})
-    return f"PP-{1000 + count + 1}"
+    """Random 5-character order code: 3 letters + 2 digits (e.g. KTX48)."""
+    for _ in range(50):
+        code = "".join(secrets.choice(ORDER_CODE_LETTERS) for _ in range(3)) + \
+               "".join(secrets.choice(ORDER_CODE_DIGITS) for _ in range(2))
+        if not await db.orders.find_one({"order_number": code}):
+            return code
+    return "".join(secrets.choice(ORDER_CODE_LETTERS + ORDER_CODE_DIGITS) for _ in range(5))
 
 
 async def _resolve_discount(code: str, subtotal: float) -> Dict[str, Any]:
@@ -647,12 +663,18 @@ async def checkout(payload: CheckoutIn, request: Request):
     }
     await db.orders.insert_one(order.copy())
 
-    # decrement stock
+    # decrement stock + inventory log
     for li in line_items:
         await db.products.update_one(
             {"id": li["product_id"], "variants.sku": li["variant_sku"]},
             {"$inc": {"variants.$.stock": -li["quantity"]}},
         )
+        product = await db.products.find_one({"id": li["product_id"]}, {"_id": 0})
+        if product:
+            variant = next((v for v in product.get("variants", []) if v.get("sku") == li["variant_sku"]), {})
+            await log_inventory(product, variant.get("name", li.get("variant_name", "")),
+                                -li["quantity"], int(variant.get("stock") or 0),
+                                f"Поръчка {order['order_number']}", "checkout")
 
     # bank instructions
     bank = {
@@ -718,19 +740,163 @@ async def admin_stats(user=Depends(require_admin)):
     }
 
 
+def _order_view(o: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalise native checkout orders and Shopify-imported orders into one shape."""
+    info = o.get("customer_info") or {}
+    ship = o.get("shipping") or {}
+    raw_items = o.get("items") or o.get("line_items") or []
+    items = [{
+        "title": it.get("title", ""),
+        "variant": it.get("variant_name") or it.get("variant") or "",
+        "sku": it.get("variant_sku") or it.get("sku") or "",
+        "quantity": int(it.get("quantity") or 1),
+        "price_eur": float(it.get("price_eur") or 0),
+        "product_handle": it.get("product_handle") or "",
+    } for it in raw_items]
+    fulfillment = o.get("fulfillment_status")
+    if not fulfillment:
+        fulfillment = "fulfilled" if o.get("status") == "shipped" else (
+            "cancelled" if o.get("status") == "cancelled" else "unfulfilled")
+    tracking = o.get("tracking")
+    if not tracking and o.get("tracking_number"):
+        tracking = {"tracking_number": o["tracking_number"], "tracking_url": "", "carrier": ""}
+    return {
+        "id": o.get("id"),
+        "order_number": o.get("order_number"),
+        "created_at": o.get("created_at"),
+        "customer": {
+            "name": o.get("customer_name") or info.get("name") or "",
+            "email": o.get("customer_email") or info.get("email") or "",
+            "phone": o.get("customer_phone") or info.get("phone") or "",
+            "address": {
+                "line1": ship.get("line1") or info.get("address") or "",
+                "city": ship.get("city") or info.get("city") or "",
+                "zip": ship.get("postal_code") or info.get("zip") or "",
+                "country": ship.get("country") or info.get("country") or "",
+            },
+        },
+        "items": items,
+        "items_count": sum(i["quantity"] for i in items),
+        "subtotal_eur": round(float(o.get("subtotal_eur") or 0), 2),
+        "discount_eur": round(float(o.get("discount_eur") or 0), 2),
+        "shipping_eur": round(float(o.get("shipping_eur") or 0), 2),
+        "total_eur": round(float(o.get("total_eur") or 0), 2),
+        "payment_status": o.get("payment_status") or "awaiting_payment",
+        "fulfillment_status": fulfillment,
+        "shipping_method": o.get("shipping_method") or (tracking or {}).get("carrier") or "",
+        "payment_method": o.get("payment_method") or "",
+        "tracking": tracking,
+        "note": o.get("notes") or o.get("note") or "",
+        "source": o.get("source") or "storefront",
+        "currency": o.get("currency") or "EUR",
+    }
+
+
+ORDER_FILTERS = {
+    "unfulfilled": {"fulfillment_status": {"$nin": ["fulfilled", "shipped"]}, "status": {"$ne": "cancelled"}},
+    "unpaid": {"payment_status": {"$ne": "paid"}, "status": {"$ne": "cancelled"}},
+    "paid": {"payment_status": "paid"},
+    "awaiting_payment": {"payment_status": {"$in": ["awaiting_payment", "pending"]}},
+    "shipped": {"$or": [{"fulfillment_status": {"$in": ["shipped", "fulfilled"]}}, {"status": "shipped"}]},
+    "archived": {"$or": [{"status": "cancelled"}, {"payment_status": "paid", "fulfillment_status": {"$in": ["fulfilled", "shipped"]}}]},
+}
+
+
 @api.get("/admin/orders")
-async def admin_orders(status: Optional[str] = None, user=Depends(require_admin)):
-    q: Dict[str, Any] = {}
-    if status == "awaiting_payment":
-        q["payment_status"] = "awaiting_payment"
-    elif status == "paid":
-        q["payment_status"] = "paid"
-    elif status == "shipped":
-        q["fulfillment_status"] = "shipped"
-    elif status == "fulfilled":
-        q["fulfillment_status"] = {"$in": ["fulfilled", "shipped"]}
-    docs = await db.orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return {"orders": docs}
+async def admin_orders(
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0,
+    user=Depends(require_admin),
+):
+    q: Dict[str, Any] = dict(ORDER_FILTERS.get(status or "", {}))
+    if status == "open":
+        q = {"status": {"$ne": "cancelled"}}
+    if search:
+        rx = {"$regex": re.escape(search.strip()), "$options": "i"}
+        clauses = [{"$or": [
+            {"order_number": rx}, {"customer_email": rx}, {"customer_name": rx},
+            {"customer_info.email": rx}, {"customer_info.name": rx}, {"customer_info.phone": rx},
+        ]}]
+        if "$or" in q:
+            clauses.append({"$or": q.pop("$or")})
+        q["$and"] = clauses
+    total = await db.orders.count_documents(q)
+    docs = await db.orders.find(q, {"_id": 0}).sort("created_at", -1).skip(skip).limit(min(limit, 200)).to_list(200)
+    return {"orders": [_order_view(d) for d in docs], "total": total, "skip": skip}
+
+
+@api.get("/admin/orders/{order_id}")
+async def admin_order_detail(order_id: str, user=Depends(require_admin)):
+    o = await db.orders.find_one({"$or": [{"id": order_id}, {"order_number": order_id}]}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Поръчката не е намерена")
+    view = _order_view(o)
+    handles = [i["product_handle"] for i in view["items"] if i["product_handle"]]
+    skus = [i["sku"] for i in view["items"] if i["sku"]]
+    prods = await db.products.find(
+        {"$or": [{"handle": {"$in": handles}}, {"variants.sku": {"$in": skus}}]}, {"_id": 0}
+    ).to_list(50)
+    by_handle = {p["handle"]: p for p in prods}
+    by_sku = {v.get("sku"): p for p in prods for v in p.get("variants", []) if v.get("sku")}
+    for item in view["items"]:
+        p = by_handle.get(item["product_handle"]) or by_sku.get(item["sku"])
+        item["image"] = (p or {}).get("image", "")
+        item["handle"] = (p or {}).get("handle", item["product_handle"])
+    email = view["customer"]["email"]
+    if email:
+        others = await db.orders.count_documents({"$or": [{"customer_email": email}, {"customer_info.email": email}]})
+        spent = await db.orders.aggregate([
+            {"$match": {"$or": [{"customer_email": email}, {"customer_info.email": email}], "status": {"$ne": "cancelled"}}},
+            {"$group": {"_id": None, "sum": {"$sum": "$total_eur"}}},
+        ]).to_list(1)
+        view["customer"]["orders_count"] = others
+        view["customer"]["total_spent"] = round((spent[0]["sum"] if spent else 0) or 0, 2)
+    return {"order": view}
+
+
+@api.post("/admin/orders/{order_id}/fulfill")
+async def admin_fulfill_order(order_id: str, user=Depends(require_admin)):
+    res = await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"fulfillment_status": "fulfilled", "status": "shipped",
+                  "fulfilled_at": now_utc(), "updated_at": now_utc()}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Поръчката не е намерена")
+    await db.audit.insert_one({"id": str(uuid.uuid4()), "actor": user["email"], "action": "fulfill",
+                               "order_id": order_id, "at": now_utc()})
+    return {"ok": True}
+
+
+@api.post("/admin/orders/{order_id}/send-invoice")
+async def admin_send_invoice(order_id: str, user=Depends(require_admin)):
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Поръчката не е намерена")
+    view = _order_view(o)
+    if not view["customer"]["email"]:
+        raise HTTPException(400, "Поръчката няма имейл адрес")
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    bank = {
+        "name": os.environ.get("BANK_NAME", "UniCredit Bulbank"),
+        "iban": os.environ.get("BANK_IBAN", "BG18UNCR70001523456789"),
+        "bic": os.environ.get("BANK_BIC", "UNCRBGSF"),
+        "holder": os.environ.get("BANK_HOLDER", "PurePeptide EOOD"),
+        "reference": view["order_number"],
+        "amount_eur": view["total_eur"],
+    }
+    payload = {**o, "customer_email": view["customer"]["email"], "customer_name": view["customer"]["name"],
+               "items": [{"title": i["title"], "variant_name": i["variant"], "quantity": i["quantity"],
+                          "price_eur": i["price_eur"], "variant_sku": i["sku"]} for i in view["items"]],
+               "order_number": view["order_number"], "total_eur": view["total_eur"]}
+    try:
+        await email_service.send_order_confirmation(payload, bank, (s or {}).get("value", {}))
+    except Exception as ex:
+        log.exception("Invoice email failed")
+        raise HTTPException(502, f"Имейлът не беше изпратен: {ex}")
+    return {"ok": True, "sent_to": view["customer"]["email"]}
 
 
 @api.post("/admin/orders/{order_id}/mark-paid")
@@ -833,11 +999,33 @@ async def cancel_order(order_id: str, user=Depends(require_admin)):
 
 @api.get("/admin/customers")
 async def admin_customers(user=Depends(require_admin)):
+    imported = await db.customers.count_documents({})
+    if imported:
+        docs = await db.customers.find({}, {"_id": 0}).sort("total_spent", -1).to_list(5000)
+        return {"customers": docs, "total": imported}
     docs = await db.users.find({"role": "customer"}, {"_id": 0, "password_hash": 0}).to_list(500)
     # attach order counts
     for d in docs:
         d["orders_count"] = await db.orders.count_documents({"customer_id": d["id"]})
-    return {"customers": docs}
+    return {"customers": docs, "total": len(docs)}
+
+
+@api.get("/admin/customers/{email}/orders")
+async def admin_customer_orders(email: str, user=Depends(require_admin)):
+    docs = await db.orders.find(
+        {"$or": [{"customer_email": email.lower()}, {"customer_info.email": email.lower()}]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    spent = sum(d.get("total_eur", 0) for d in docs if d.get("status") != "cancelled")
+    return {"orders": docs, "orders_count": len(docs), "total_spent": round(spent, 2)}
+
+
+@api.patch("/admin/products/{product_id}/active")
+async def admin_toggle_product(product_id: str, payload: Dict[str, bool], user=Depends(require_admin)):
+    active = bool(payload.get("active", True))
+    res = await db.products.update_one({"id": product_id}, {"$set": {"active": active}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Продуктът не е намерен")
+    return {"ok": True, "active": active}
 
 
 @api.get("/admin/products")
@@ -973,6 +1161,110 @@ async def admin_import_products(file: UploadFile = File(...), user=Depends(requi
     return log_doc
 
 
+MATRIXIFY_STEPS = ["products", "collections", "pages", "articles", "redirects", "discounts", "customers", "orders", "spend"]
+
+
+async def _run_matrixify(job_id: str, storage_path: str, steps: List[str], skip_images: bool):
+    blob, _ = storage.get_object(storage_path)
+    work_dir = Path(tempfile.mkdtemp(prefix="matrixify-"))
+    xlsx = work_dir / "import.xlsx"
+    xlsx.write_bytes(blob)
+    cmd = [sys.executable, str(Path(__file__).parent / "matrixify_import.py"),
+           "--file", str(xlsx), "--only", ",".join(steps)]
+    if skip_images:
+        cmd.append("--skip-images")
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, cwd=str(Path(__file__).parent),
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+    )
+    lines: List[str] = []
+    assert proc.stdout
+    async for raw in proc.stdout:
+        line = raw.decode("utf-8", errors="ignore").rstrip()
+        if not line:
+            continue
+        lines.append(line)
+        if len(lines) % 5 == 0:
+            await db.import_jobs.update_one({"id": job_id}, {"$set": {"log": lines[-400:]}})
+    code = await proc.wait()
+    await db.import_jobs.update_one({"id": job_id}, {"$set": {
+        "log": lines[-400:],
+        "status": "completed" if code == 0 else "failed",
+        "exit_code": code,
+        "summary": [l.split("INFO ")[-1] for l in lines if "imported:" in l or "backfilled" in l],
+        "finished_at": now_utc(),
+    }})
+
+
+@api.post("/admin/import/matrixify")
+async def admin_import_matrixify(
+    file: UploadFile = File(...),
+    steps: str = Form("products,collections"),
+    skip_images: bool = Form(False),
+    user=Depends(require_admin),
+):
+    """Full Matrixify .xlsx import — runs in the background and streams progress into an import job."""
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in (".xlsx", ".xlsm"):
+        raise HTTPException(400, "Качете .xlsx файл (Matrixify Excel експорт)")
+    chosen = [s.strip() for s in steps.split(",") if s.strip() in MATRIXIFY_STEPS]
+    if not chosen:
+        raise HTTPException(400, "Изберете поне един тип данни за импорт")
+    if "orders" in chosen and "spend" not in chosen:
+        chosen.append("spend")
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "Файлът е празен")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    result = storage.put_object(
+        f"imports/matrixify-{stamp}.xlsx", data,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    storage_path = result.get("path", f"imports/matrixify-{stamp}.xlsx")
+    await db.files.insert_one({
+        "id": str(uuid.uuid4()),
+        "storage_path": storage_path,
+        "original_filename": file.filename,
+        "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "size": len(data),
+        "is_deleted": False,
+        "created_at": now_utc(),
+        "uploaded_by": user["email"],
+    })
+
+    job = {
+        "id": str(uuid.uuid4()),
+        "type": "matrixify",
+        "filename": file.filename,
+        "storage_path": storage_path,
+        "steps": chosen,
+        "skip_images": skip_images,
+        "status": "running",
+        "log": [],
+        "summary": [],
+        "actor": user["email"],
+        "at": now_utc(),
+    }
+    await db.import_jobs.insert_one(job.copy())
+    asyncio.create_task(_run_matrixify(job["id"], storage_path, chosen, skip_images))
+    return {"job_id": job["id"], "status": "running", "steps": chosen}
+
+
+@api.get("/admin/import/jobs")
+async def admin_import_jobs(user=Depends(require_admin)):
+    docs = await db.import_jobs.find({}, {"_id": 0, "log": 0}).sort("at", -1).to_list(20)
+    return {"jobs": docs}
+
+
+@api.get("/admin/import/jobs/{job_id}")
+async def admin_import_job(job_id: str, user=Depends(require_admin)):
+    doc = await db.import_jobs.find_one({"id": job_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Задачата не е намерена")
+    return {"job": doc}
+
+
 @api.get("/admin/imports")
 async def admin_imports_log(user=Depends(require_admin)):
     docs = await db.imports.find({}, {"_id": 0}).sort("at", -1).limit(50).to_list(50)
@@ -1030,18 +1322,29 @@ async def admin_upload(file: UploadFile = File(...), user=Depends(require_admin)
     return {"url": f"/api/files/{result['path']}", "path": result["path"]}
 
 
+IMAGE_CACHE = Path(__file__).parent / ".image_cache"
+IMAGE_CACHE.mkdir(exist_ok=True)
+
+
 @api.get("/files/{path:path}")
 async def serve_file(path: str):
     record = await db.files.find_one({"storage_path": path, "is_deleted": False})
     if not record:
         raise HTTPException(404, "Файлът не е намерен")
-    try:
-        data, content_type = storage.get_object(path)
-    except Exception:
-        raise HTTPException(404, "Файлът не е намерен")
+    content_type = record.get("content_type", "application/octet-stream")
+    cache_file = IMAGE_CACHE / hashlib.sha1(path.encode()).hexdigest()
+    if cache_file.exists():
+        data = cache_file.read_bytes()
+    else:
+        try:
+            data, storage_type = storage.get_object(path)
+            content_type = record.get("content_type") or storage_type
+            cache_file.write_bytes(data)
+        except Exception:
+            raise HTTPException(404, "Файлът не е намерен")
     return Response(
         content=data,
-        media_type=record.get("content_type", content_type),
+        media_type=content_type,
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
 
@@ -1190,6 +1493,224 @@ async def admin_translate_page(slug: str, payload: PageTranslateIn, user=Depends
     if not translated and failed:
         raise HTTPException(502, "Преводът се провали")
     return {"ok": True, "translated": translated, "failed": failed}
+
+
+# ---------- Traffic tracking + analytics ----------
+class TrackIn(BaseModel):
+    session_id: str
+    path: str = "/"
+    referrer: str = ""
+    locale: str = "bg"
+
+
+@api.post("/track")
+async def track_visit(payload: TrackIn, request: Request):
+    if not payload.session_id:
+        raise HTTPException(400, "Липсва сесия")
+    await db.visits.insert_one({
+        "session_id": payload.session_id[:64],
+        "path": payload.path[:300],
+        "referrer": payload.referrer[:300],
+        "locale": normalize_locale(payload.locale),
+        "ua": (request.headers.get("user-agent") or "")[:300],
+        "ts": now_utc(),
+    })
+    return {"ok": True}
+
+
+def _range_bounds(range_key: str, date_from: Optional[str], date_to: Optional[str]):
+    """Returns (start, end, prev_start, prev_end, bucket) as tz-aware datetimes."""
+    now = datetime.now(timezone.utc)
+    if range_key == "custom" and date_from and date_to:
+        start = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc)
+        end = datetime.fromisoformat(date_to).replace(tzinfo=timezone.utc) + timedelta(days=1)
+        bucket = "hour" if (end - start) <= timedelta(days=2) else "day"
+    elif range_key == "7d":
+        end = now
+        start = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+        bucket = "day"
+    elif range_key == "30d":
+        end = now
+        start = (now - timedelta(days=29)).replace(hour=0, minute=0, second=0, microsecond=0)
+        bucket = "day"
+    else:  # today
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = now
+        bucket = "hour"
+    span = end - start
+    return start, end, start - span, start, bucket
+
+
+def _bucket_key(iso: str, bucket: str) -> str:
+    return iso[:13] if bucket == "hour" else iso[:10]
+
+
+async def _period_stats(start: datetime, end: datetime, bucket: str) -> Dict[str, Any]:
+    s_iso, e_iso = start.isoformat(), end.isoformat()
+    visits = await db.visits.find(
+        {"ts": {"$gte": s_iso, "$lt": e_iso}}, {"_id": 0, "session_id": 1, "ts": 1}
+    ).to_list(200000)
+    orders = await db.orders.find(
+        {"created_at": {"$gte": s_iso, "$lt": e_iso}, "status": {"$ne": "cancelled"}},
+        {"_id": 0, "created_at": 1, "subtotal_eur": 1, "discount_eur": 1},
+    ).to_list(50000)
+
+    sessions = {v["session_id"] for v in visits}
+    sales = sum(max((o.get("subtotal_eur") or 0) - (o.get("discount_eur") or 0), 0) for o in orders)
+
+    buckets: Dict[str, Dict[str, float]] = {}
+    first_seen: Dict[str, str] = {}
+    for v in visits:
+        sid = v["session_id"]
+        if sid not in first_seen or v["ts"] < first_seen[sid]:
+            first_seen[sid] = v["ts"]
+    for sid, ts in first_seen.items():
+        b = buckets.setdefault(_bucket_key(ts, bucket), {"sessions": 0, "orders": 0, "sales": 0.0})
+        b["sessions"] += 1
+    for o in orders:
+        b = buckets.setdefault(_bucket_key(o["created_at"], bucket), {"sessions": 0, "orders": 0, "sales": 0.0})
+        b["orders"] += 1
+        b["sales"] += max((o.get("subtotal_eur") or 0) - (o.get("discount_eur") or 0), 0)
+
+    keys: List[str] = []
+    cursor = start
+    step = timedelta(hours=1) if bucket == "hour" else timedelta(days=1)
+    while cursor < end + step:
+        keys.append(_bucket_key(cursor.isoformat(), bucket))
+        cursor += step
+    series = [
+        {"t": k, **{m: round(buckets.get(k, {}).get(m, 0), 2) for m in ("sessions", "orders", "sales")}}
+        for k in keys
+    ]
+    return {
+        "sessions": len(sessions),
+        "orders": len(orders),
+        "sales": round(sales, 2),
+        "conversion": round(len(orders) / len(sessions) * 100, 2) if sessions else 0.0,
+        "series": series,
+    }
+
+
+@api.get("/admin/analytics")
+async def admin_analytics(
+    range: str = Query("today"),
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    user=Depends(require_admin),
+):
+    start, end, prev_start, prev_end, bucket = _range_bounds(range, date_from, date_to)
+    current = await _period_stats(start, end, bucket)
+    previous = await _period_stats(prev_start, prev_end, bucket)
+
+    live_since = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    live = await db.visits.distinct("session_id", {"ts": {"$gte": live_since}})
+
+    def delta(now_v: float, prev_v: float) -> Optional[float]:
+        if not prev_v:
+            return None
+        return round((now_v - prev_v) / prev_v * 100, 1)
+
+    return {
+        "range": range,
+        "bucket": bucket,
+        "from": start.isoformat(),
+        "to": end.isoformat(),
+        "live": len(live),
+        "current": current,
+        "previous": previous,
+        "deltas": {
+            "sessions": delta(current["sessions"], previous["sessions"]),
+            "orders": delta(current["orders"], previous["orders"]),
+            "sales": delta(current["sales"], previous["sales"]),
+            "conversion": delta(current["conversion"], previous["conversion"]),
+        },
+    }
+
+
+# ---------- Inventory tracking ----------
+class InventoryIn(BaseModel):
+    product_id: str
+    variant_name: str
+    stock: int
+    note: str = ""
+
+
+async def log_inventory(product: Dict[str, Any], variant_name: str, change: int, after: int, reason: str, actor: str = "system"):
+    await db.inventory_log.insert_one({
+        "id": str(uuid.uuid4()),
+        "product_id": product.get("id"),
+        "product_title": product.get("title"),
+        "handle": product.get("handle"),
+        "variant_name": variant_name,
+        "change": change,
+        "stock_after": after,
+        "reason": reason,
+        "actor": actor,
+        "created_at": now_utc(),
+    })
+
+
+@api.get("/admin/inventory")
+async def admin_inventory(user=Depends(require_admin)):
+    settings = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    threshold = int(((settings or {}).get("value") or {}).get("low_stock_threshold", 5))
+    docs = await db.products.find({}, {"_id": 0}).to_list(500)
+    items = []
+    for p in docs:
+        for v in p.get("variants", []):
+            stock = int(v.get("stock") or 0)
+            items.append({
+                "product_id": p["id"],
+                "handle": p["handle"],
+                "title": p["title"],
+                "image": p.get("image", ""),
+                "variant_name": v.get("name", ""),
+                "sku": v.get("sku", ""),
+                "price_eur": v.get("price_eur", 0),
+                "stock": stock,
+                "active": p.get("active", True),
+                "state": "out" if stock <= 0 else ("low" if stock <= threshold else "ok"),
+            })
+    items.sort(key=lambda x: x["stock"])
+    return {
+        "items": items,
+        "threshold": threshold,
+        "out_of_stock": sum(1 for i in items if i["state"] == "out"),
+        "low_stock": sum(1 for i in items if i["state"] == "low"),
+        "total_units": sum(i["stock"] for i in items),
+    }
+
+
+@api.put("/admin/inventory")
+async def admin_set_inventory(payload: InventoryIn, user=Depends(require_admin)):
+    product = await db.products.find_one({"id": payload.product_id})
+    if not product:
+        raise HTTPException(404, "Продуктът не е намерен")
+    variant = next((v for v in product.get("variants", []) if v.get("name") == payload.variant_name), None)
+    if variant is None:
+        raise HTTPException(404, "Вариантът не е намерен")
+    before = int(variant.get("stock") or 0)
+    new_stock = max(payload.stock, 0)
+    await db.products.update_one(
+        {"id": payload.product_id, "variants.name": payload.variant_name},
+        {"$set": {"variants.$.stock": new_stock}},
+    )
+    await log_inventory(product, payload.variant_name, new_stock - before, new_stock,
+                        payload.note or "Ръчна корекция", user["email"])
+    return {"ok": True, "stock": new_stock}
+
+
+@api.get("/admin/inventory/log")
+async def admin_inventory_log(limit: int = 100, user=Depends(require_admin)):
+    docs = await db.inventory_log.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return {"log": docs}
+
+
+@api.put("/admin/inventory/threshold")
+async def admin_set_threshold(payload: Dict[str, int], user=Depends(require_admin)):
+    value = max(int(payload.get("threshold", 5)), 0)
+    await db.settings.update_one({"key": "site"}, {"$set": {"value.low_stock_threshold": value}})
+    return {"ok": True, "threshold": value}
 
 
 # ---------- AI translation ----------
