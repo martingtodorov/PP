@@ -117,13 +117,14 @@ export default function HomePage() {
   });
 
   const logos = settings.brand_logos || [];
+  const heroBg = settings.media?.hero || HERO_BG;
 
   return (
     <Layout>
       {/* HERO */}
       <section className="bg-white pt-2 pb-0 sm:pt-5 lg:pt-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:max-w-none lg:px-0">
-          <div className="pp-hero pp-hero--bleed" style={{ "--bg": `url('${HERO_BG}')` }} data-testid="hero-section">
+          <div className="pp-hero pp-hero--bleed" style={{ "--bg": `url('${heroBg}')` }} data-testid="hero-section">
             <div className="pp-hero__bg" />
             <div className="pp-hero__overlay" />
             <div className="pp-hero__inner">

@@ -1622,6 +1622,18 @@ button.bg-coral-600:disabled { box-shadow: none; }
 }
 .nc2-combo:focus-within { border-color: #fe6f61; box-shadow: 0 0 0 3px rgba(254, 111, 97, 0.14); }
 .nc2-combo-inp { flex: 1 1 auto; min-width: 0; font-size: 14px; color: #0f172a; background: transparent; outline: none; }
+.nc2-dial-select {
+  height: 44px;
+  border: 1px solid #dde3ea;
+  border-radius: 10px;
+  padding: 0 4px;
+  font-size: 14px;
+  color: #475569;
+  background: #f8fafc;
+  max-width: 118px;
+  transition: border-color 0.18s ease;
+}
+.nc2-dial-select:focus { outline: none; border-color: #fe6f61; }
 .nc2-dial-badge {
   display: inline-flex;
   align-items: center;

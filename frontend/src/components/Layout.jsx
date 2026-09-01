@@ -13,6 +13,7 @@ import { LOCALES, LOCALE_META } from "../i18n/locales";
 import { api, fmtEUR, fmtBGN, showsBGN, formatErr, img } from "../lib/api";
 import { toast } from "sonner";
 import PreCheckoutModal from "./PreCheckoutModal";
+import { prefetchCheckout } from "../lib/checkoutPrefetch";
 
 const Price = ({ eur, className = "" }) => (
   <span className={className}>
@@ -202,6 +203,16 @@ const NavDrawer = ({ open, setOpen, collections }) => {
           </button>
           {shopOpen && (
             <ul className="pp-drawer__sub" data-testid="drawer-shop-submenu">
+              <li>
+                <Link
+                  to={lp("/collections/2all-the-peptides-1")}
+                  onClick={close}
+                  className="pp-drawer__sublink"
+                  data-testid="drawer-collection-all"
+                >
+                  {t("allPeptides")}
+                </Link>
+              </li>
               {menu.map((c) => (
                 <li key={c.handle}>
                   <Link
@@ -247,6 +258,11 @@ const CartDrawer = () => {
   const [noteOpen, setNoteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
+
+  // warm up the accelerated checkout while the customer reviews the cart
+  useEffect(() => {
+    if (open) prefetchCheckout();
+  }, [open]);
 
   const submitCode = async () => {
     if (!code.trim()) return;

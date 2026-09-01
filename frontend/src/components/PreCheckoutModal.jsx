@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { X, Minus, Plus, Trash2, Loader2, Check, Search } from "lucide-react";
 import { toast } from "sonner";
 import { api, fmtEUR, fmtBGN, showsBGN, img, formatErr } from "../lib/api";
+import { loadSaved, saveCheckout, pfBank, pfCountries, pfGeo, pfConfig, pfPickups } from "../lib/checkoutPrefetch";
 import { useCart } from "../context/CartContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 
@@ -61,24 +62,7 @@ const dedupeCity = (city, text) => {
   return `${city} — ${text}`;
 };
 
-/** Checkout details are remembered for 90 days so returning customers order in one tap. */
-const STORE_KEY = "pp_checkout_v1";
-const NINETY_DAYS = 90 * 24 * 60 * 60 * 1000;
-
-const loadSaved = () => {
-  try {
-    const raw = JSON.parse(window.localStorage.getItem(STORE_KEY) || "null");
-    if (raw && raw.saved_at && Date.now() - raw.saved_at < NINETY_DAYS) return raw;
-  } catch (e) { /* ignore */ }
-  return null;
-};
-
-const saveCheckout = (data) => {
-  try {
-    window.localStorage.setItem(STORE_KEY, JSON.stringify({ ...data, saved_at: Date.now() }));
-    document.cookie = `pp_checkout_seen=1;max-age=${NINETY_DAYS / 1000};path=/;SameSite=Lax`;
-  } catch (e) { /* ignore */ }
-};
+/** Checkout details are remembered for 90 days (see lib/checkoutPrefetch.js). */
 
 /** Searchable dropdown over the full pickup list (Econt offices / BoxNow lockers / GLS points). */
 const PickupSelect = ({ options, value, onChange, placeholder, loading, geoCity }) => {
@@ -285,9 +269,9 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   useEffect(() => {
     if (!open) return;
     setErr("");
-    api.get("/bank-details").then(({ data }) => setBank(data)).catch(() => {});
-    api.get("/nextcart/countries").then(({ data }) => setCountries(data.countries || [])).catch(() => {});
-    api.get("/geo/country").then(({ data }) => setGeo(data)).catch(() => {});
+    pfBank().then(setBank).catch(() => {});
+    pfCountries().then((d) => setCountries(d.countries || [])).catch(() => {});
+    pfGeo().then(setGeo).catch(() => {});
     track("checkout_opened");
   }, [open]);
 
@@ -303,8 +287,8 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   useEffect(() => {
     if (!open) return;
     setCfg(null);
-    api.get("/nextcart/config", { params: { country: contact.country } })
-      .then(({ data }) => {
+    pfConfig(contact.country)
+      .then((data) => {
         setCfg(data);
         const list = data.delivery_methods || [];
         const remembered = list.find((m) => m.key === saved.current?.methodKey);
@@ -342,21 +326,39 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
     setPayment("cod");
   }, [contact.country]);
 
-  // country -> dial code
+  // country -> dial code (until the customer picks a different prefix himself)
+  const dialTouched = useRef(Boolean(saved.current?.dialTouched));
   useEffect(() => {
+    if (dialTouched.current) return;
     const own = countries.find((c) => c.iso2 === contact.country);
     const t = own?.dial ? own : (cfg?.precheckout_phone_territories || []).find((x) => x.iso2 === contact.country);
     if (t?.dial) setContact((c) => (c.dial === t.dial ? c : { ...c, dial: t.dial }));
   }, [cfg, countries, contact.country]);
 
+  /** Every prefix the courier platform knows, so a Bulgarian phone can ship to Greece. */
+  const dialOptions = useMemo(() => {
+    const src = (cfg?.precheckout_phone_territories || []).length
+      ? cfg.precheckout_phone_territories : countries;
+    const seen = new Set();
+    const list = [];
+    (src || []).forEach((x) => {
+      const key = `${x.iso2}-${x.dial}`;
+      if (!x.dial || seen.has(key)) return;
+      seen.add(key);
+      list.push({ iso2: x.iso2, dial: String(x.dial), name: x.name || x.iso2 });
+    });
+    if (!list.some((x) => x.dial === contact.dial)) {
+      list.unshift({ iso2: contact.country, dial: contact.dial, name: contact.country });
+    }
+    return list;
+  }, [cfg, countries, contact.dial, contact.country]);
+
   // full pickup list for the chosen method
   useEffect(() => {
     if (!needsPickup || !method) { setPickups([]); return; }
     setLoadingPickups(true);
-    api.get("/nextcart/pickups", {
-      params: { provider_key: method.provider_key, destination_type: method.destination_type, country: contact.country },
-    })
-      .then(({ data }) => {
+    pfPickups(method.provider_key, method.destination_type, contact.country)
+      .then((data) => {
         const list = data.pickups || [];
         setPickups(list);
         setPickup((cur) => {
@@ -398,7 +400,8 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   // remember everything for 90 days
   useEffect(() => {
     if (!open || !cfg) return;
-    saveCheckout({ contact, methodKey: method?.key || methodKey, provider, pickup, addr, payment });
+    saveCheckout({ contact, methodKey: method?.key || methodKey, provider, pickup, addr, payment,
+                   dialTouched: dialTouched.current });
   }, [open, cfg, contact, method, methodKey, provider, pickup, addr, payment]);
 
   // abandoned cart capture — as soon as we have a usable email
@@ -508,7 +511,13 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                     ))}
                   </select>
                   <div className="nc2-phone">
-                    <span className="nc2-dial-badge" data-testid="pc-dial">+{contact.dial}</span>
+                    <select className="nc2-dial-select" value={contact.dial} aria-label="Код на страната"
+                      onChange={(e) => { dialTouched.current = true; setContact({ ...contact, dial: e.target.value }); }}
+                      data-testid="pc-dial">
+                      {dialOptions.map((d) => (
+                        <option key={`${d.iso2}-${d.dial}`} value={d.dial}>+{d.dial} {d.iso2}</option>
+                      ))}
+                    </select>
                     <input className="nc2-inp" placeholder="Телефон" autoComplete="tel" value={contact.phone}
                       onChange={(e) => setContact({ ...contact, phone: e.target.value })}
                       onBlur={(e) => setContact((c) => ({ ...c, phone: e.target.value }))}
