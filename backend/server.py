@@ -53,8 +53,8 @@ api = APIRouter(prefix="/api")
 
 JWT_ALG = "HS256"
 JWT_SECRET = os.environ["JWT_SECRET"]
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@purepeptide.bg")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Admin@PurePeptide2026")
+ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 log = logging.getLogger("purepeptide")

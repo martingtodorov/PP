@@ -44,3 +44,11 @@ def test_backend_modules_do_not_import_platform_packages(module):
     src = (ROOT / "backend" / f"{module}.py").read_text()
     for pkg in PLATFORM_ONLY:
         assert pkg not in src, f"{module}.py imports {pkg}, which cannot be installed on the server"
+
+
+def test_no_hardcoded_admin_credentials():
+    """Admin credentials must come from the environment only — the repo may end up on GitHub."""
+    src = (ROOT / "backend" / "server.py").read_text()
+    for var in ("ADMIN_PASSWORD", "ADMIN_EMAIL", "JWT_SECRET"):
+        assert f'os.environ.get("{var}"' not in src, f"{var} must not have a default value"
+        assert f'os.environ["{var}"]' in src, f"{var} must be read with os.environ[...]"

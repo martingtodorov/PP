@@ -322,3 +322,14 @@ Domains & languages
   hreflang stay on `purepeptide.bg` instead of falling back to preview-style prefixes.
   `revorder.DOMAIN_ALIASES` maps the alias to the `purepeptide.bg` credentials. Deploy `site_domains`
   updated (was purepeptide-labs.com).
+
+## 2026-09-01 — Secret audit before GitHub push
+- Full scan of the working tree and git history: **no API keys committed** (no Anthropic, Resend, RevOrder,
+  Stripe, SSH keys, `.pem`, no `.env`). `.env*`, `inventory.ini`, `group_vars/all.yml`,
+  `memory/test_credentials.md`, `backend/.media/` are gitignored; `test_reports/` added to `.gitignore`.
+- **Fixed**: `server.py` had `ADMIN_EMAIL` / `ADMIN_PASSWORD` fallback defaults (the preview admin password
+  was therefore in the repo). Both are now `os.environ[...]` — the backend refuses to boot without them,
+  same as `JWT_SECRET` / `MONGO_URL` / `DB_NAME` / `MEDIA_ROOT`. Guarded by a new test in
+  `backend/tests/test_requirements_portable.py`.
+- The dev test suite and old test reports still contain the preview admin password → rotate
+  `ADMIN_PASSWORD` before going live.
