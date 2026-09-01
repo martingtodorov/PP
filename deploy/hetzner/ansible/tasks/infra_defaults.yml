@@ -57,6 +57,9 @@
     backend_rel_path: "{{ backend_rel_path | default('backend', true) }}"
     node_major: "{{ node_major | default(20, true) }}"
     mongo_major: "{{ mongo_major | default('7.0', true) }}"
+    # MongoDB does not publish packages for every Ubuntu release — fall back to the newest LTS it has
+    mongo_supported_codenames: "{{ mongo_supported_codenames | default(['focal', 'jammy', 'noble'], true) }}"
+    mongo_repo_fallback_codename: "{{ mongo_repo_fallback_codename | default('noble', true) }}"
     site_domains: "{{ site_domains | default(['purepeptide.bg'], true) }}"
   tags: [always]
 

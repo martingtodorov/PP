@@ -61,9 +61,25 @@
       until: mongo_key is succeeded
       tags: [mongo]
 
+    - name: MongoDB repository codename
+      set_fact:
+        mongo_repo_codename: >-
+          {{ ansible_distribution_release
+             if ansible_distribution_release in mongo_supported_codenames
+             else mongo_repo_fallback_codename }}
+      tags: [mongo]
+
+    - name: Which MongoDB repository will be used
+      debug:
+        msg: >-
+          {{ ansible_distribution }} {{ ansible_distribution_version }}
+          ({{ ansible_distribution_release }}) → mongodb-org {{ mongo_major }} repo for
+          '{{ mongo_repo_codename }}'
+      tags: [mongo]
+
     - name: MongoDB repository
       apt_repository:
-        repo: "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu {{ ansible_distribution_release }}/mongodb-org/{{ mongo_major }} multiverse"
+        repo: "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu {{ mongo_repo_codename }}/mongodb-org/{{ mongo_major }} multiverse"
         filename: mongodb-org
         state: present
       tags: [mongo]
@@ -91,6 +107,30 @@
     - name: Enable mongod
       systemd: { name: mongod, enabled: true, state: started }
       tags: [mongo]
+
+    - name: Flush handlers so a pending mongod restart happens before we verify
+      meta: flush_handlers
+      tags: [mongo]
+
+    - name: MongoDB accepts connections on 127.0.0.1:27017
+      block:
+        - name: Wait for the MongoDB port
+          wait_for: { host: 127.0.0.1, port: 27017, timeout: 90 }
+      rescue:
+        - name: mongod journal
+          command: journalctl -u mongod -n 60 --no-pager
+          register: mongod_journal
+          changed_when: false
+          failed_when: false
+
+        - name: Report why MongoDB is not running
+          fail:
+            msg: |
+              MongoDB is installed but not accepting connections on 127.0.0.1:27017.
+              The backend cannot start without it.
+              --- journalctl -u mongod ---
+              {{ mongod_journal.stdout | default('(no output)') }}
+      tags: [mongo, verify]
 
     # ---------------- backups ----------------
     - name: Nightly mongodump (14 days retention)
