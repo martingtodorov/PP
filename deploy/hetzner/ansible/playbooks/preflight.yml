@@ -66,6 +66,20 @@
         - "{{ env_dir }}"
         - "{{ media_dir }}"
 
+    - name: MongoDB is running (the backend refuses to start without it)
+      wait_for: { host: 127.0.0.1, port: 27017, timeout: 10 }
+      register: mongo_port
+      ignore_errors: true
+
+    - name: Fail with the bootstrap command when MongoDB is down
+      fail:
+        msg: >-
+          MongoDB is not listening on 127.0.0.1:27017 on {{ inventory_hostname }}, so the backend
+          cannot start. Install/repair it with:
+          ansible-playbook -i inventory.ini playbooks/bootstrap/bootstrap_backend_base.yml --tags mongo
+          Then check: sudo systemctl status mongod
+      when: mongo_port is failed
+
 - name: Preflight — frontend prerequisites
   hosts: frontend
   gather_facts: false

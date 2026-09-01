@@ -222,12 +222,36 @@
       tags: [media]
 
     # ---------------- verify ----------------
+    # NB: there is no GET /api/ route — use a real endpoint, otherwise the health check 404s forever.
     - name: Health check
-      uri: { url: "http://127.0.0.1:8001/api/", status_code: 200 }
-      retries: 10
-      delay: 3
-      register: health
-      until: health.status == 200
+      block:
+        - name: Wait for the API to answer
+          uri: { url: "http://127.0.0.1:8001/api/settings", status_code: 200 }
+          retries: 10
+          delay: 3
+          register: health
+          until: health.status | default(0) == 200
+      rescue:
+        - name: Service status
+          command: "systemctl status {{ app_name }}-backend --no-pager -l"
+          register: svc_status
+          changed_when: false
+          failed_when: false
+
+        - name: Last 60 journal lines
+          command: "journalctl -u {{ app_name }}-backend -n 60 --no-pager"
+          register: svc_journal
+          changed_when: false
+          failed_when: false
+
+        - name: Report why the backend is not answering
+          fail:
+            msg: |
+              The backend did not answer on http://127.0.0.1:8001/api/settings.
+              --- systemctl status ---
+              {{ svc_status.stdout | default('(no output)') }}
+              --- journal ---
+              {{ svc_journal.stdout | default('(no output)') }}
       tags: [verify, publish]
 
     - name: Assert exactly one uvicorn worker

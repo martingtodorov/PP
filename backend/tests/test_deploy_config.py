@@ -377,3 +377,30 @@ def test_release_directories_are_frozen_with_set_fact():
         assert key not in play_vars, f"{name}: {key} must be set with set_fact, not vars:"
         pre = yaml.dump(play.get("pre_tasks") or [])
         assert key in pre and "set_fact" in pre, f"{name}: {key} must be frozen in pre_tasks"
+
+
+def test_health_check_uses_a_real_endpoint_and_reports_the_journal():
+    """There is no GET /api/ route in server.py — checking it 404s forever."""
+    text = (PLAYBOOKS / "deploy_backend.yml").read_text()
+    assert '127.0.0.1:8001/api/"' not in text
+    assert "127.0.0.1:8001/api/settings" in text
+    assert "journalctl -u {{ app_name }}-backend" in text   # diagnostics on failure
+    server = (ROOT / "backend" / "server.py").read_text()
+    assert '@api.get("/settings")' in server or '@api_router.get("/settings")' in server
+
+
+def test_mongodb_is_checked_before_the_app_is_deployed():
+    pre = (PLAYBOOKS / "preflight.yml").read_text()
+    assert "port: 27017" in pre
+    assert "bootstrap_backend_base.yml --tags mongo" in pre
+
+
+def test_mongo_repository_falls_back_to_a_supported_codename():
+    """MongoDB does not publish packages for every Ubuntu release."""
+    boot = (BOOTSTRAP / "bootstrap_backend_base.yml").read_text()
+    assert "mongo_repo_codename" in boot
+    assert "ansible_distribution_release }}/mongodb-org" not in boot
+    assert "journalctl -u mongod" in boot          # diagnostics when it will not start
+    assert "port: 27017" in boot                   # verified after install
+    defaults = (TASKS / "infra_defaults.yml").read_text()
+    assert "mongo_supported_codenames" in defaults and "mongo_repo_fallback_codename" in defaults

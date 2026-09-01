@@ -477,3 +477,19 @@ would reintroduce the conflict); it now requires a `requirements-prod.txt` anywh
 fails with a precise message. Tests: `test_requirements_portable.py` now derives the required packages
 from the actual imports, forbids the pip-freeze packages and caps the list at 25 pins. 58 deploy tests
 + full dryrun green. **No server change needed — do NOT downgrade Python on pp-back.**
+
+### 2026-06 — backend crash-loop cause: MongoDB was never installed/started on pp-back
+Journal showed `pymongo.errors.ServerSelectionTimeoutError: localhost:27017 Connection refused` in
+`on_startup → ensure_indexes()`, so uvicorn exited and the health check got "Connection refused".
+MongoDB had never come up because the earlier `bootstrap_backend_base.yml` run died at the MongoDB
+apt key (the WireGuard routing bug).
+Changes:
+- `preflight.yml` now waits for 127.0.0.1:27017 on pp-back and fails with the exact command
+  (`bootstrap_backend_base.yml --tags mongo`) instead of letting the deploy crash-loop later.
+- `bootstrap_backend_base.yml`: the MongoDB apt repo codename is resolved through
+  `mongo_supported_codenames` (focal/jammy/noble) with `mongo_repo_fallback_codename: noble`, prints
+  which repo it uses, waits for port 27017 after starting mongod and dumps `journalctl -u mongod` when
+  it does not come up.
+- `deploy_backend.yml` health check now hits `/api/settings` (there is no `GET /api/` route — the old
+  check would 404 forever) and on failure prints `systemctl status` + 60 journal lines.
+47 deploy-config tests green.
