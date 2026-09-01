@@ -77,31 +77,31 @@
           {{ ([ansible_distribution_release] + mongo_supported_codenames) | unique | list }}
       tags: [mongo]
 
-    - name: Probe which mongodb-org repositories exist
-      uri:
-        url: "https://repo.mongodb.org/apt/ubuntu/dists/{{ item.1 }}/mongodb-org/{{ item.0 }}/Release"
-        method: HEAD
-        status_code: [200, 403, 404]
+    # A repository can exist and still be useless: dists/resolute/mongodb-org/8.0 ships only
+    # mongodb-database-tools, with no mongodb-org-server. So check the package index itself.
+    - name: Probe which mongodb-org repositories actually ship the server package
+      shell: >-
+        curl -fsS --max-time 30
+        "https://repo.mongodb.org/apt/ubuntu/dists/{{ item.1 }}/mongodb-org/{{ item.0 }}/multiverse/binary-amd64/Packages"
+        | grep -c '^Package: mongodb-org-server$' || true
+      args: { executable: /bin/bash }
       loop: "{{ mongo_major_candidates | product(mongo_repo_candidates) | list }}"
       loop_control: { label: "{{ item.0 }} / {{ item.1 }}" }
       register: mongo_probe
       changed_when: false
-      retries: 3
-      delay: 5
-      until: mongo_probe is not failed
       tags: [mongo]
 
     - name: Select the newest MongoDB version that has packages for this release
       set_fact:
         mongo_selected: >-
-          {{ (mongo_probe.results | selectattr('status', 'equalto', 200)
+          {{ (mongo_probe.results | rejectattr('stdout', 'search', '^0$')
               | map(attribute='item') | list | first) | default([], true) }}
       tags: [mongo]
 
     - name: Fail when MongoDB publishes nothing usable
       fail:
         msg: >-
-          No mongodb-org repository exists for {{ ansible_distribution }}
+          No mongodb-org repository ships mongodb-org-server for {{ ansible_distribution }}
           {{ ansible_distribution_version }} ({{ ansible_distribution_release }}). Probed:
           {{ mongo_major_candidates | join(', ') }} against
           {{ ([ansible_distribution_release] + mongo_supported_codenames) | unique | join(', ') }}.
@@ -152,11 +152,28 @@
       tags: [mongo]
 
     - name: Install mongodb-org
-      apt: { name: mongodb-org, update_cache: true, state: present }
-      register: mongo_pkgs
-      retries: 3
-      delay: 10
-      until: mongo_pkgs is succeeded
+      block:
+        - name: apt install mongodb-org
+          apt: { name: mongodb-org, update_cache: true, state: present }
+          register: mongo_pkgs
+          retries: 3
+          delay: 10
+          until: mongo_pkgs is succeeded
+      rescue:
+        - name: What apt would do (unmet dependencies show up here)
+          command: apt-get install -s mongodb-org
+          register: apt_sim
+          changed_when: false
+          failed_when: false
+
+        - name: Report why mongodb-org cannot be installed
+          fail:
+            msg: |
+              mongodb-org {{ mongo_major }} from the '{{ mongo_repo_codename }}' repository cannot be
+              installed on {{ ansible_distribution_release }}.
+              --- apt-get install -s mongodb-org ---
+              {{ apt_sim.stdout | default('(no output)') }}
+              {{ apt_sim.stderr | default('') }}
       tags: [mongo]
 
     - name: Routing survived the MongoDB installation

@@ -398,8 +398,7 @@ def test_mongodb_is_checked_before_the_app_is_deployed():
 def test_mongo_repository_is_probed_not_guessed():
     """MongoDB 7.0 has no 'noble' packages and new Ubuntu releases have none at all — probe first."""
     boot = (BOOTSTRAP / "bootstrap_backend_base.yml").read_text()
-    assert "repo.mongodb.org/apt/ubuntu/dists/" in boot   # HEAD probe before adding the repo
-    assert "method: HEAD" in boot
+    assert "repo.mongodb.org/apt/ubuntu/dists/" in boot   # probed before adding the repo
     assert "mongo_selected" in boot and "mongo_repo_codename" in boot
     assert "ansible_distribution_release }}/mongodb-org" not in boot
     assert "server-{{ mongo_major }}.asc" in boot          # key fetched for the selected version
@@ -416,3 +415,11 @@ def test_stale_mongodb_repo_is_removed_before_any_apt_update():
     assert "/etc/apt/sources.list.d/mongodb-org.list" in boot
     assert boot.index("Drop any previously added mongodb-org source list") < boot.index("Probe which mongodb-org")
     assert "update_cache: false" in boot   # adding the repo must not trigger a cache update
+
+
+def test_mongo_probe_checks_the_package_index_not_just_the_repo():
+    """dists/resolute/mongodb-org/8.0 exists but ships only mongodb-database-tools."""
+    boot = (BOOTSTRAP / "bootstrap_backend_base.yml").read_text()
+    assert "multiverse/binary-amd64/Packages" in boot
+    assert "Package: mongodb-org-server" in boot
+    assert "apt-get install -s mongodb-org" in boot   # unmet deps are reported, not hidden by retries
