@@ -135,7 +135,7 @@ export default function HomePage() {
       </section>
 
       {/* LOGO MARQUEE */}
-      <section className="mt-3 sm:mt-8" data-testid="logo-marquee">
+      <section className="mt-3 sm:mt-5" data-testid="logo-marquee">
         <div className="pp-logo-cloud">
           <div className="pp-marquee">
             <div className="pp-track">
@@ -155,7 +155,7 @@ export default function HomePage() {
       </section>
 
       {/* CATEGORIES */}
-      <section className="bg-white section--page-width section-resource-list py-5 sm:py-10 lg:py-12">
+      <section className="bg-white section--page-width section-resource-list py-4 sm:py-6 lg:py-7">
         <div className="pp-wide">
           <div className="mb-3">
             <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight">{t("researchedFor")}</h2>
@@ -165,7 +165,7 @@ export default function HomePage() {
       </section>
 
       {/* BEST SELLERS */}
-      <section className="bg-white section--page-width section-resource-list py-5 sm:py-10 lg:py-12" data-testid="product-list">
+      <section className="bg-white section--page-width section-resource-list py-4 sm:py-6 lg:py-7" data-testid="product-list">
         <div className="pp-wide">
           <div className="flex flex-row justify-between items-baseline gap-3 mb-4 sm:mb-6">
             <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">{t("bestsellers")}</h2>
@@ -180,7 +180,7 @@ export default function HomePage() {
       </section>
 
       {/* TRUST PRINCIPLES */}
-      <section className="bg-white py-5 sm:py-10 lg:py-12" data-testid="trust-principles">
+      <section className="bg-white py-4 sm:py-6 lg:py-7" data-testid="trust-principles">
         <div className="pp-wide grid grid-cols-1 lg:grid-cols-3 gap-5">
           {pick(TRUST_CARDS, locale).map(({ n, title, body }) => (
             <article key={n} className="trust-card" data-testid={`trust-${n}`}>
@@ -194,7 +194,7 @@ export default function HomePage() {
 
       {/* ARTICLES */}
       <section id="articles" className="bg-white scroll-mt-24">
-        <div className="pp-wide py-12">
+        <div className="pp-wide py-4 sm:py-6 lg:py-7">
           <div className="flex justify-between items-baseline mb-4">
             <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{t("articles")}</h2>
             <Link to={lp("/pages/articles")} className="text-sm font-medium text-slate-700 hover:text-coral-600">
@@ -213,7 +213,7 @@ export default function HomePage() {
       </section>
 
       {/* CALCULATOR */}
-      <section className="bg-white pt-2 pb-6 sm:pt-4 sm:pb-12">
+      <section className="bg-white pt-1 pb-5 sm:pt-2 sm:pb-8">
         <div className="max-w-[860px] mx-auto px-4 sm:px-6">
           <PPCalculator />
         </div>
@@ -221,7 +221,7 @@ export default function HomePage() {
 
       {/* FAQ */}
       <section id="faq" className="bg-slate-50 border-t border-slate-200 scroll-mt-24">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-7 sm:py-14">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-7 sm:py-10">
           <h2 className="text-3xl sm:text-5xl font-extrabold text-slate-900 text-center mb-6 sm:mb-9 leading-[1.1] tracking-tight">
             {t("faq")}
           </h2>
