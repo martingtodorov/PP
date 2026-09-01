@@ -19,12 +19,13 @@ export default function CollectionPage() {
   }, [handle, locale]);
 
   const c = data.collection;
+  const descText = (c?.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   const alternates = {};
   if (c?.handles) LOCALES.forEach((l) => { alternates[l] = `/collections/${c.handles[l]}`; });
 
   useSeo({
     title: c ? `${c.title} | PurePeptide` : "PurePeptide",
-    description: c?.description || "",
+    description: descText,
     locale,
     path: `/collections/${handle}`,
     alternates,
@@ -32,7 +33,7 @@ export default function CollectionPage() {
       "@context": "https://schema.org",
       "@type": "CollectionPage",
       name: c.title,
-      description: c.description,
+      description: descText,
       hasPart: (data.products || []).slice(0, 20).map((p) => ({ "@type": "Product", name: p.title })),
     },
   });
@@ -55,7 +56,10 @@ export default function CollectionPage() {
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-4" data-testid="collection-title">
           {c?.title || handle}
         </h1>
-        {c?.description && <p className="text-slate-600 mt-3 max-w-2xl leading-relaxed">{c.description}</p>}
+        {c?.description && (
+          <div className="pp-rte text-slate-600 mt-3 max-w-3xl leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: c.description }} data-testid="collection-description" />
+        )}
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

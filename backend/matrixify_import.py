@@ -189,6 +189,24 @@ def strip_html(value: Optional[str], limit: int = 200) -> str:
     return text[:limit]
 
 
+def norm_text(value: str) -> str:
+    return re.sub(r"[^0-9a-zа-я]+", "", (value or "").lower())
+
+
+def clean_body(html: str, title: str = "", drop_leading_h1: bool = True) -> str:
+    """Remove the Shopify body's own H1 (the page already renders a title) and demote the rest to H2."""
+    if not html:
+        return ""
+    out = html.strip()
+    if drop_leading_h1:
+        m = re.match(r"\s*<h1[^>]*>.*?</h1>", out, flags=re.I | re.S)
+        if m:
+            out = out[m.end():].lstrip()
+    out = re.sub(r"<h1(\s[^>]*)?>", "<h2>", out, flags=re.I)
+    out = re.sub(r"</h1>", "</h2>", out, flags=re.I)
+    return out.strip()
+
+
 # ---------- importers ----------
 def import_collections() -> Dict[str, str]:
     rows = sheet("Custom Collections")
@@ -214,7 +232,7 @@ def import_collections() -> Dict[str, str]:
             "menu_title": menu_title,
             "menu_order": sort_order,
             "sort_order": sort_order,
-            "description": rewrite_body_images(body),
+            "description": clean_body(rewrite_body_images(body), top.get("Title") or ""),
             "seo_title": top.get("Metafield: title_tag [string]") or "",
             "seo_description": top.get("Metafield: description_tag [string]") or "",
             "image": store_image(top.get("Image Src")),
@@ -236,7 +254,7 @@ def import_products() -> None:
     imported = 0
     for handle, group in groups.items():
         top = group[0]
-        body = rewrite_body_images(top.get("Body HTML"))
+        body = clean_body(rewrite_body_images(top.get("Body HTML")), top.get("Title") or handle)
         images: List[str] = []
         seen = set()
         for r in sorted(group, key=lambda x: num(x.get("Image Position"), 99)):
@@ -302,7 +320,7 @@ def import_pages() -> None:
             {
                 "$set": {
                     "title": r.get("Title") or slug,
-                    "html": rewrite_body_images(body),
+                    "html": clean_body(rewrite_body_images(body), r.get("Title") or ""),
                     "faq_items": [],
                     "seo_title": r.get("Metafield: title_tag [string]") or "",
                     "seo_description": r.get("Metafield: description_tag [string]") or "",
@@ -340,7 +358,7 @@ def import_articles() -> None:
             "handle": handle,
             "title": title,
             "excerpt": strip_html(top.get("Summary HTML") or body, 220),
-            "body": rewrite_body_images(body),
+            "body": clean_body(rewrite_body_images(body), title),
             "image": store_image(top.get("Image Src")),
             "author": top.get("Author") or "PurePeptide",
             "published": str(top.get("Published")) in ("True", "true", "1"),
