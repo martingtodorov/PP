@@ -511,3 +511,12 @@ before probing, refreshes the cache, adds the probed repo with `update_cache: fa
 cache in a separate retried task. 48 deploy-config tests green.
 NOTE: the owner ran an older checkout (error at line 80 with 7.0/noble) — the fixes only reach the
 server after "Save to GitHub" + `git pull` on the Mac.
+
+### 2026-06 — MongoDB probe now checks the PACKAGE INDEX, not just the repo
+`dists/resolute/mongodb-org/8.0/Release` returns 200 but that component ships only
+`mongodb-database-tools` — no `mongodb-org-server` — so `apt install mongodb-org` failed. The probe now
+greps `.../multiverse/binary-amd64/Packages` for `^Package: mongodb-org-server$` and picks the first
+repo that really has the server. Verified live: resolute → **8.0 / noble** (noble 8.0 has 28 server
+builds; deps libssl3t64/libcurl4t64 exist on 24.04+). `Install mongodb-org` got a rescue that prints
+`apt-get install -s mongodb-org` so unmet dependencies are visible instead of hidden behind retries.
+49 deploy-config tests green.
