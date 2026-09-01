@@ -38,14 +38,7 @@ export default function CollectionPage() {
     },
   });
 
-  const sorted = [...data.products].sort((a, b) => {
-    const ap = Math.min(...(a.variants || [{ price_eur: 0 }]).map((v) => v.price_eur));
-    const bp = Math.min(...(b.variants || [{ price_eur: 0 }]).map((v) => v.price_eur));
-    if (sort === "price-asc") return ap - bp;
-    if (sort === "price-desc") return bp - ap;
-    if (sort === "title") return a.title.localeCompare(b.title, locale === "bg" ? "bg" : "en");
-    return 0;
-  });
+  const sorted = data.products;
 
   return (
     <Layout>
@@ -81,13 +74,6 @@ export default function CollectionPage() {
 
         <div className="flex justify-between items-center mb-6 text-sm">
           <span className="text-slate-500" data-testid="collection-count">{sorted.length} {t("productsCount")}</span>
-          <select value={sort} onChange={(e) => setSort(e.target.value)}
-            className="border border-slate-300 rounded-md px-3 py-2 bg-white" data-testid="sort-select">
-            <option value="featured">{t("sortFeatured")}</option>
-            <option value="price-asc">{t("sortPriceAsc")}</option>
-            <option value="price-desc">{t("sortPriceDesc")}</option>
-            <option value="title">{t("sortTitle")}</option>
-          </select>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-2 sm:gap-x-3 gap-y-6">
