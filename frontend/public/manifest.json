@@ -1,0 +1,14 @@
+{
+  "id": "/",
+  "name": "PurePeptide",
+  "short_name": "PurePeptide",
+  "start_url": "/admin",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#fe6f61",
+  "icons": [
+    { "src": "/logo192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/logo512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

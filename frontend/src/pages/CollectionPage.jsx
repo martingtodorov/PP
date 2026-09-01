@@ -7,6 +7,7 @@ import { api } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { LOCALES } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
+import { graph, itemListLd, breadcrumbLd, organizationLd } from "../lib/schema";
 
 export default function CollectionPage() {
   const { handle = "all-peptides" } = useParams();
@@ -24,18 +25,26 @@ export default function CollectionPage() {
   if (c?.handles) LOCALES.forEach((l) => { alternates[l] = `/collections/${c.handles[l]}`; });
 
   useSeo({
-    title: c ? `${c.title} | PurePeptide` : "PurePeptide",
-    description: descText,
+    title: c ? (c.seo_title || `${c.title} | PurePeptide`) : "PurePeptide",
+    description: c?.seo_description || descText,
     locale,
     path: `/collections/${handle}`,
     alternates,
-    jsonLd: c && {
-      "@context": "https://schema.org",
-      "@type": "CollectionPage",
-      name: c.title,
-      description: descText,
-      hasPart: (data.products || []).slice(0, 20).map((p) => ({ "@type": "Product", name: p.title })),
-    },
+    jsonLd: c && graph(
+      {
+        "@type": "CollectionPage",
+        name: c.title,
+        description: c.seo_description || descText,
+        url: `${window.location.origin}/collections/${handle}`,
+        isPartOf: { "@id": `${window.location.origin}/#website` },
+        mainEntity: itemListLd(data.products || [], (p) => `/products/${p.handle}`),
+      },
+      breadcrumbLd([
+        { name: "Начало", path: "/" },
+        { name: c.title, path: `/collections/${handle}` },
+      ]),
+      organizationLd(),
+    ),
   });
 
   const sorted = data.products;

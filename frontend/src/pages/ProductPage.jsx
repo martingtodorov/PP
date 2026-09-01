@@ -10,6 +10,7 @@ import { useCart } from "../context/CartContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { PRODUCT_BLOCKS, pick, LOCALES } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
+import { graph, productLd, breadcrumbLd, organizationLd } from "../lib/schema";
 
 export default function ProductPage() {
   const { handle } = useParams();
@@ -33,27 +34,23 @@ export default function ProductPage() {
   if (p?.handles) LOCALES.forEach((l) => { alternates[l] = `/products/${p.handles[l]}`; });
 
   useSeo({
-    title: p ? `${p.title} | PurePeptide` : "PurePeptide",
-    description: p ? (p.description || "").replace(/<[^>]+>/g, "").slice(0, 155) : "",
+    title: p ? (p.seo_title || `${p.title} | PurePeptide`) : "PurePeptide",
+    description: p
+      ? p.seo_description || (p.description || "").replace(/<[^>]+>/g, "").slice(0, 155)
+      : "",
     locale,
     path: `/products/${handle}`,
     alternates,
     image: p?.image,
-    jsonLd: p && {
-      "@context": "https://schema.org",
-      "@type": "Product",
-      name: p.title,
-      image: p.images || [p.image],
-      description: (p.description || "").replace(/<[^>]+>/g, "").slice(0, 300),
-      sku: v?.sku,
-      brand: { "@type": "Brand", name: "PurePeptide" },
-      offers: (p.variants || []).map((va) => ({
-        "@type": "Offer",
-        price: va.price_eur,
-        priceCurrency: "EUR",
-        availability: (va.stock || 0) > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-      })),
-    },
+    jsonLd: p && graph(
+      productLd({ product: p, variant: v, path: `/products/${handle}` }),
+      breadcrumbLd([
+        { name: "Начало", path: "/" },
+        { name: "Всички пептиди", path: "/collections/all-peptides" },
+        { name: p.title, path: `/products/${handle}` },
+      ]),
+      organizationLd(),
+    ),
   });
 
   if (!p) return <Layout><div className="max-w-7xl mx-auto px-4 py-20 text-slate-500">{t("loading")}</div></Layout>;

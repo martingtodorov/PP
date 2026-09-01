@@ -36,7 +36,13 @@ export function useSeo({ title, description, locale = DEFAULT_LOCALE, path = "/"
     setMeta("property", "og:title", full);
     setMeta("property", "og:description", description);
     setMeta("property", "og:type", "website");
-    if (image) setMeta("property", "og:image", image);
+    const origin = window.location.origin;
+    const ogImage = image
+      ? (image.startsWith("http") ? image : `${origin}${image}`)
+      : `${origin}/logo512.png`;
+    setMeta("property", "og:image", ogImage);
+    setMeta("property", "og:site_name", "PurePeptide");
+    setMeta("name", "twitter:image", ogImage);
     setMeta("name", "twitter:card", "summary_large_image");
 
     const onProd = window.location.host.includes("purepeptide.");

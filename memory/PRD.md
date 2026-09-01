@@ -114,6 +114,29 @@ Domains & languages
 - `/api/files/{path}` now disk-caches images (fast repeat loads).
 - Tested: `/app/backend/tests/test_iteration9.py` (35 cases) + iteration_9.json — all pass.
 
+## 2026-06 (Sept-preview session, part 2) — Storefront polish, contact form, push, SEO
+- Homepage/desktop: `.pp-wide` near-full-bleed sections, halved vertical paddings, 6 category tiles,
+  5.35 product cards, 5 articles per row, calculator ≤860px; article images `scale(1.08) translateY(20px)`.
+- Product page: coral package pills (`.pp-variant`, always visible, equal-width, only the active one coral,
+  6px radius like the cart button), SKU of the selected variant, coral shadow + hover lift on all coral buttons.
+- Product cards: centred coral quick-add (`quick-add-{handle}`) aligned across a row, 0px image→title gap.
+- All assets are self-hosted: hero → `/hero-home.png`, marquee logos → object storage, 0 cdn.shopify.com refs.
+- Imported HTML cleaned: duplicate `<h1>` removed / demoted to `<h2>` (22 products, 7 collections, 8 pages, 2 articles).
+- Manual merchandising: customer sort dropdown removed; `/admin/collections` reorders products per collection
+  (`product_order`), "Подреди по продажби" sorts by units sold (all-peptides drives the homepage bestsellers).
+- NAD+ and Bacteriostatic water deactivated (`active: false`).
+- Contact form (`ContactForm.jsx` on /pages/contacts) → `POST /api/contact`, stored in `contact_messages`,
+  emailed (HTML-escaped) to `CONTACT_EMAIL=contact@purepeptide.bg`, admin inbox at `/admin/messages`.
+- Web Push (VAPID, pywebpush): `push_service.py`, `/api/push/*`, admin opt-in card in Настройки,
+  `/service-worker.js` + `manifest.json` (standalone, logo192/512) — a push is sent on every new order
+  and every contact enquiry, fire-and-forget so checkout never blocks. iOS needs Add to Home Screen.
+- SEO: real meta titles/descriptions from the live store for every product / collection / page / article
+  (Matrixify metafields + `fetch_live_meta.py` scrape for the gaps), absolute og:image with /logo512.png default,
+  and full schema.org via `lib/schema.js`: Product+AggregateOffer, CollectionPage+ItemList, FAQPage,
+  BlogPosting (Person author), BreadcrumbList, Organization, WebSite+SearchAction.
+- Fixed: blank storefront caused by an f-string SyntaxError in server.py (backend crash on reload).
+- Tested: iteration_10.json and iteration_11.json — all pass.
+
 ## Backlog
 - ~~P0: real Matrixify import~~ **DONE (this session)**
 - P1: Speedy API integration with real credentials; admin payment verification workflow

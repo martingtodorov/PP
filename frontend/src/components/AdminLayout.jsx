@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, Package, ShoppingBag, Users, Upload, Settings, LogOut, Globe, Link2Off, FileText, Menu, X, LineChart, Boxes, ListOrdered } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Users, Upload, Settings, LogOut, Globe, Link2Off, FileText, Menu, X, LineChart, Boxes, ListOrdered, MessageSquare } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const NAV = [
@@ -11,6 +11,7 @@ const NAV = [
   { to: "/admin/collections", label: "Подредба на колекции", icon: ListOrdered },
   { to: "/admin/inventory", label: "Наличности", icon: Boxes },
   { to: "/admin/customers", label: "Клиенти", icon: Users },
+  { to: "/admin/messages", label: "Запитвания", icon: MessageSquare },
   { to: "/admin/import", label: "Импорт", icon: Upload },
   { to: "/admin/locales", label: "Езици и URL", icon: Globe },
   { to: "/admin/pages", label: "Страници по език", icon: FileText },

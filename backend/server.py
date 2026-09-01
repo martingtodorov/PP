@@ -8,6 +8,7 @@ load_dotenv(ROOT_DIR / ".env")
 
 import os
 import csv
+import html as html_lib
 import io
 import re
 import secrets
@@ -37,6 +38,7 @@ from i18n import (
 from pages_seed import PAGE_SLUGS, PAGE_LABELS, DEFAULT_PAGES
 import storage
 import email_service
+import push_service
 
 # ---------- App + DB ----------
 mongo_url = os.environ["MONGO_URL"]
@@ -704,6 +706,37 @@ async def checkout(payload: CheckoutIn, request: Request):
         await email_service.send_order_confirmation(order_clean, bank, site_settings)
     except Exception:
         log.exception("Order confirmation email failed")
+    items_summary = ", ".join(
+        "{}{} ×{}".format(
+            li.get("title", ""),
+            " ({})".format(li["variant_name"]) if li.get("variant_name") else "",
+            li.get("quantity", 1),
+        )
+        for li in line_items
+    )[:180]
+    try:
+        await notify_admin_push_bg(
+            "Нова поръчка {} · {:.2f} €".format(order["order_number"], totals["total_eur"]),
+            "{} · {}".format(order.get("customer_name") or "", items_summary),
+            "/admin/orders/{}".format(order["id"]),
+            "order-{}".format(order["id"]),
+        )
+    except Exception:
+        log.exception("Order push notification failed")
+    try:
+        admin_to = os.environ.get("CONTACT_EMAIL") or os.environ["ADMIN_EMAIL"]
+        await email_service.send_email(
+            admin_to,
+            f"Нова поръчка {order['order_number']} — {totals['total_eur']:.2f} €",
+            f"<h2 style='font-family:system-ui'>Нова поръчка {order['order_number']}</h2>"
+            f"<p style='font-family:system-ui'>{order.get('customer_name') or ''} · {order.get('customer_email') or ''} · "
+            f"{order.get('customer_phone') or ''}</p>"
+            f"<p style='font-family:system-ui'>Сума: <strong>{totals['total_eur']:.2f} €</strong><br>"
+            f"Артикули: {items_summary}</p>",
+            site_settings,
+        )
+    except Exception:
+        log.exception("Admin order email failed")
     return {"order": order_clean, "bank_transfer": bank}
 
 
@@ -1331,6 +1364,36 @@ async def admin_set_collection_order(handle: str, payload: Dict[str, List[str]],
     return {"ok": True, "count": len(handles)}
 
 
+@api.post("/admin/collections/{handle}/order/by-sales")
+async def admin_order_by_sales(handle: str, user=Depends(require_admin)):
+    """Sort a collection by units sold (best seller first), using order history."""
+    col = await db.collections_cat.find_one({"handle": handle}, {"_id": 0})
+    if not col:
+        raise HTTPException(404, "Колекцията не е намерена")
+
+    sold: Dict[str, int] = {}
+    async for o in db.orders.find({"status": {"$ne": "cancelled"}},
+                                  {"_id": 0, "items": 1, "line_items": 1}):
+        for it in (o.get("items") or []) + (o.get("line_items") or []):
+            h = it.get("product_handle")
+            if h:
+                sold[h] = sold.get(h, 0) + int(it.get("quantity") or 1)
+
+    q = {} if handle == "all-peptides" else {"collections": handle}
+    prods = await db.products.find(q, {"_id": 0, "handle": 1, "title": 1}).to_list(500)
+    ordered = sorted(prods, key=lambda p: (-sold.get(p["handle"], 0), p.get("title", "")))
+    handles = [p["handle"] for p in ordered]
+    await db.collections_cat.update_one(
+        {"handle": handle},
+        {"$set": {"product_order": handles, "order_updated_at": now_utc()}},
+    )
+    return {
+        "ok": True,
+        "handles": handles,
+        "sold": {p["handle"]: sold.get(p["handle"], 0) for p in ordered},
+    }
+
+
 @api.get("/admin/collections")
 async def admin_collections(user=Depends(require_admin)):
     docs = await db.collections_cat.find({}, {"_id": 0}).sort("sort_order", 1).to_list(100)
@@ -1412,6 +1475,8 @@ def _page_out(doc: Dict[str, Any]) -> Dict[str, Any]:
         "title": doc.get("title", ""),
         "html": doc.get("html", ""),
         "faq_items": doc.get("faq_items", []),
+        "seo_title": doc.get("seo_title", ""),
+        "seo_description": doc.get("seo_description", ""),
         "updated_at": doc.get("updated_at"),
     }
 
@@ -1755,6 +1820,173 @@ async def admin_set_threshold(payload: Dict[str, int], user=Depends(require_admi
     value = max(int(payload.get("threshold", 5)), 0)
     await db.settings.update_one({"key": "site"}, {"$set": {"value.low_stock_threshold": value}})
     return {"ok": True, "threshold": value}
+
+
+# ---------- Contact form + Web Push notifications ----------
+class ContactIn(BaseModel):
+    name: str
+    email: str
+    phone: str = ""
+    message: str
+    locale: str = DEFAULT_LOCALE
+
+
+class PushKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class PushSubscriptionIn(BaseModel):
+    endpoint: str
+    keys: PushKeys
+    expirationTime: Optional[int] = None
+
+
+async def _admin_subscriptions() -> List[Dict[str, Any]]:
+    return await db.push_subscriptions.find({}, {"_id": 0}).to_list(100)
+
+
+async def notify_admin_push(title: str, body: str, url: str = "/admin/orders", tag: str = "pp"):
+    subs = await _admin_subscriptions()
+    if not subs:
+        return {"sent": [], "gone": [], "failed": []}
+    result = await push_service.send_to_subscriptions(subs, {
+        "title": title, "body": body, "url": url, "tag": tag,
+    })
+    for endpoint in result["gone"]:
+        await db.push_subscriptions.delete_one({"endpoint": endpoint})
+    await db.push_log.insert_one({
+        "id": str(uuid.uuid4()), "title": title, "body": body, "url": url,
+        "sent": len(result["sent"]), "failed": len(result["failed"]), "gone": len(result["gone"]),
+        "at": now_utc(),
+    })
+    return result
+
+
+async def notify_admin_push_bg(title: str, body: str, url: str = "/admin/orders", tag: str = "pp"):
+    """Fire-and-forget push so a slow push service never delays the API response."""
+    async def runner():
+        try:
+            await asyncio.wait_for(notify_admin_push(title, body, url, tag), timeout=20)
+        except Exception:
+            log.exception("Background push failed")
+
+    asyncio.create_task(runner())
+
+
+@api.post("/contact")
+async def contact_form(payload: ContactIn, request: Request):
+    if not payload.name.strip() or "@" not in payload.email or not payload.message.strip():
+        raise HTTPException(400, "Моля попълнете име, валиден имейл и съобщение")
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": payload.name.strip()[:120],
+        "email": payload.email.strip().lower()[:160],
+        "phone": payload.phone.strip()[:40],
+        "message": payload.message.strip()[:4000],
+        "locale": normalize_locale(payload.locale),
+        "status": "new",
+        "ip": (request.headers.get("x-forwarded-for") or "").split(",")[0][:60],
+        "created_at": now_utc(),
+    }
+    await db.contact_messages.insert_one(doc.copy())
+
+    settings = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    to = os.environ.get("CONTACT_EMAIL") or os.environ["ADMIN_EMAIL"]
+    safe = {k: html_lib.escape(str(v)) for k, v in doc.items()}
+    body_html = (
+        f"<h2 style='font-family:system-ui'>Ново запитване от сайта</h2>"
+        f"<p style='font-family:system-ui'><strong>Име:</strong> {safe['name']}<br>"
+        f"<strong>Имейл:</strong> {safe['email']}<br>"
+        f"<strong>Телефон:</strong> {safe['phone'] or '—'}<br>"
+        f"<strong>Език:</strong> {safe['locale']}</p>"
+        f"<p style='font-family:system-ui;white-space:pre-line;background:#f8fafc;padding:14px;border-radius:8px'>{safe['message']}</p>"
+    )
+    email_ok = True
+    try:
+        await email_service.send_email(to, f"Ново запитване от {safe['name']}", body_html,
+                                       (settings or {}).get("value", {}))
+    except Exception as ex:
+        email_ok = False
+        log.exception("Contact email failed: %s", ex)
+
+    await notify_admin_push_bg(
+        "Ново запитване",
+        f"{doc['name']} · {doc['phone'] or doc['email']}",
+        "/admin/messages",
+        f"contact-{doc['id']}",
+    )
+    return {"ok": True, "email_sent": email_ok}
+
+
+@api.get("/admin/messages")
+async def admin_messages(status: Optional[str] = None, user=Depends(require_admin)):
+    q = {"status": status} if status else {}
+    docs = await db.contact_messages.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    new_count = await db.contact_messages.count_documents({"status": "new"})
+    return {"messages": docs, "new_count": new_count}
+
+
+@api.patch("/admin/messages/{message_id}")
+async def admin_update_message(message_id: str, payload: Dict[str, str], user=Depends(require_admin)):
+    status = payload.get("status", "handled")
+    res = await db.contact_messages.update_one(
+        {"id": message_id}, {"$set": {"status": status, "updated_at": now_utc()}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Запитването не е намерено")
+    return {"ok": True, "status": status}
+
+
+@api.get("/push/public-key")
+async def push_public_key():
+    return {"public_key": os.environ["VAPID_PUBLIC_KEY"]}
+
+
+@api.post("/push/subscriptions")
+async def push_subscribe(payload: PushSubscriptionIn, user=Depends(require_admin)):
+    await db.push_subscriptions.update_one(
+        {"endpoint": payload.endpoint},
+        {
+            "$set": {
+                "endpoint": payload.endpoint,
+                "keys": payload.keys.model_dump(),
+                "expiration_time": payload.expirationTime,
+                "admin_email": user["email"],
+                "updated_at": now_utc(),
+            },
+            "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now_utc()},
+        },
+        upsert=True,
+    )
+    total = await db.push_subscriptions.count_documents({})
+    return {"ok": True, "subscriptions": total}
+
+
+@api.delete("/push/subscriptions")
+async def push_unsubscribe(payload: Dict[str, str], user=Depends(require_admin)):
+    await db.push_subscriptions.delete_one({"endpoint": payload.get("endpoint", "")})
+    return {"ok": True}
+
+
+@api.get("/admin/push/status")
+async def push_status(user=Depends(require_admin)):
+    subs = await db.push_subscriptions.find({}, {"_id": 0, "keys": 0}).to_list(100)
+    last = await db.push_log.find({}, {"_id": 0}).sort("at", -1).to_list(10)
+    return {"subscriptions": subs, "log": last, "public_key": os.environ["VAPID_PUBLIC_KEY"]}
+
+
+@api.post("/admin/push/test")
+async def push_test(user=Depends(require_admin)):
+    result = await notify_admin_push(
+        "Тестова нотификация",
+        "Push нотификациите за PurePeptide работят.",
+        "/admin/orders",
+        "pp-test",
+    )
+    if not result["sent"]:
+        raise HTTPException(400, "Няма активни абонаменти за нотификации на това устройство")
+    return {"ok": True, "sent": len(result["sent"])}
 
 
 # ---------- AI translation ----------
