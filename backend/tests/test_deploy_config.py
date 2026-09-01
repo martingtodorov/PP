@@ -286,3 +286,34 @@ def test_all_templates_render_and_the_route_script_is_valid_bash(tmp_path):
     script = tmp_path / "pp-wg-routes"
     script.write_text(rendered["pp-wg-routes.sh.j2"])
     assert subprocess.run(["bash", "-n", str(script)]).returncode == 0
+
+
+# ---------------------------------------------------------------- requirements discovery
+
+
+def test_requirements_path_is_discovered_not_hardcoded():
+    text = (PLAYBOOKS / "deploy_backend.yml").read_text()
+    assert "prod_requirements_candidates" in text
+    assert "requirements: \"{{ backend_requirements }}\"" in text
+    assert "release_dir }}/deploy/requirements-prod.txt\n" not in text  # no hardcoded pip path
+    for candidate in ["deploy/requirements-prod.txt", "backend/requirements-prod.txt",
+                      "requirements-prod.txt"]:
+        assert candidate in text
+    assert "No requirements file in" in text            # clear failure message
+    assert "requirements-prod.generated.txt" in text    # fallback derived from backend/requirements.txt
+
+
+def test_fallback_filter_reproduces_requirements_prod(tmp_path):
+    """The shell fallback must produce exactly deploy/requirements-prod.txt."""
+    import re as _re
+    import subprocess
+
+    playbook = (PLAYBOOKS / "deploy_backend.yml").read_text()
+    pattern = _re.search(r"grep -vEi '(\^\(.*?\).*?)'", playbook).group(1)
+    dev = ROOT / "backend" / "requirements.txt"
+    out = subprocess.run(["grep", "-vEi", pattern.replace("{{ platform_only_packages | join(\"|\") }}",
+                                                          "emergentintegrations"), str(dev)],
+                         capture_output=True, text=True)
+    produced = [l for l in out.stdout.splitlines() if l.strip()]
+    expected = [l for l in (ROOT / "deploy" / "requirements-prod.txt").read_text().splitlines() if l.strip()]
+    assert produced == expected
