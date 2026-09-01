@@ -110,16 +110,14 @@ export default function ProductPage() {
               {showsBGN() && <span className="text-base font-normal text-slate-500 ml-2">({fmtBGN(v?.price_eur || 0)})</span>}
             </div>
 
-            {p.variants.length > 1 && (
+            {p.variants.length > 0 && (
               <div>
                 <p className="text-sm text-slate-600 mb-2">{t("package")}:</p>
-                <div className="flex flex-wrap gap-2" data-testid="variant-selector">
+                <div className="pp-variants" data-testid="variant-selector">
                   {p.variants.map((va, i) => (
-                    <button key={va.sku} type="button" onClick={() => setVariantIdx(i)}
-                      className={`px-4 py-2 rounded-md border text-sm font-medium transition-colors ${
-                        i === variantIdx ? "border-coral-600 bg-coral-50 text-coral-700" : "border-slate-300 text-slate-700 hover:border-slate-500"
-                      }`}
-                      data-testid={`variant-${va.sku}`}>
+                    <button key={va.sku || va.name} type="button" onClick={() => setVariantIdx(i)}
+                      className={`pp-variant${i === variantIdx ? " pp-variant--active" : ""}${(va.stock || 0) <= 0 ? " pp-variant--out" : ""}`}
+                      data-testid={`variant-${va.sku || va.name}`}>
                       {va.name}
                     </button>
                   ))}
