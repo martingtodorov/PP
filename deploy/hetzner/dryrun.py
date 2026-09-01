@@ -39,6 +39,7 @@ def render():
         "nginx_http2_directive": "http2on",
         "wg_subnet": "10.99.0.0/24",
         "ansible_distribution_release": "jammy",
+        "backend_rel_path": "backend",
     })
     OUT.mkdir(parents=True, exist_ok=True)
     files = {}
