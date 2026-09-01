@@ -415,3 +415,17 @@ Guarded by a test, and `deploy_backend.yml` now verifies `/api/nextcart/countrie
 `/api/products?locale=bg` after the restart, so a wrong value fails the deploy instead of the shop.
 ⚠️ The owner's local (gitignored) `group_vars/all.yml` must be checked for the same wrong value.
 Deploy test suite: 52 pytest cases green.
+
+### 2026-06 — requirements file: committed + release-wide search
+- `deploy/requirements-prod.txt` regenerated with a documented header (133 pinned packages,
+  `backend/requirements.txt` minus `emergentintegrations`) so it is part of the next commit and lands
+  on GitHub `main`. It was already tracked (commit a596773) — the failing server checkout means the
+  pushed ref did not contain it.
+- `deploy_backend.yml`: the requirements lookup is now a recursive `find` over the whole release
+  (`requirements-prod.txt` wins anywhere, then `backend/requirements.txt` → portable copy), it asserts
+  `backend/server.py` exists right after the checkout (detects a wrong repo layout immediately) and the
+  failure message prints the top level of the checkout plus everything the search found.
+- Verified locally with ansible-playbook for 4 layouts: prod file in `deploy/`, prod file nested in
+  `app/deploy/`, only `backend/requirements.txt` (portable copy generated, idempotent) and an empty
+  checkout (clear failure listing `docs, frontend`). New pytest guards: file is tracked by git, every
+  dependency pinned, no platform-only package, core packages present. 54 deploy tests green.

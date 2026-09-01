@@ -314,8 +314,9 @@ def test_fallback_filter_reproduces_requirements_prod(tmp_path):
     out = subprocess.run(["grep", "-vEi", pattern.replace("{{ platform_only_packages | join(\"|\") }}",
                                                           "emergentintegrations"), str(dev)],
                          capture_output=True, text=True)
-    produced = [l for l in out.stdout.splitlines() if l.strip()]
-    expected = [l for l in (ROOT / "deploy" / "requirements-prod.txt").read_text().splitlines() if l.strip()]
+    produced = sorted(l for l in out.stdout.splitlines() if l.strip() and not l.startswith("#"))
+    expected = sorted(l for l in (ROOT / "deploy" / "requirements-prod.txt").read_text().splitlines()
+                      if l.strip() and not l.startswith("#"))
     assert produced == expected
 
 
@@ -340,3 +341,27 @@ def test_deploy_verifies_the_public_apis_after_restart():
     text = (PLAYBOOKS / "deploy_backend.yml").read_text()
     assert "/api/nextcart/countries" in text   # couriers / checkout
     assert "/api/products?locale=bg" in text   # catalog
+
+
+def test_requirements_prod_is_tracked_by_git_and_installable():
+    """The deploy fails if this file is not in the pushed ref — keep it committed."""
+    import subprocess
+
+    r = subprocess.run(["git", "ls-files", "--error-unmatch", "deploy/requirements-prod.txt"],
+                       cwd=str(ROOT), capture_output=True, text=True)
+    assert r.returncode == 0, "deploy/requirements-prod.txt is NOT tracked by git"
+    body = (ROOT / "deploy" / "requirements-prod.txt").read_text().splitlines()
+    pins = [l for l in body if l.strip() and not l.startswith("#")]
+    assert len(pins) > 100
+    assert all("==" in l for l in pins), "every dependency must be pinned"
+    assert not any(l.lower().startswith("emergentintegrations") for l in pins)
+    for pkg in ["fastapi", "uvicorn", "motor", "pymongo", "pydantic", "python-dotenv", "resend",
+                "anthropic", "pillow", "pywebpush", "bcrypt"]:
+        assert any(l.lower().startswith(pkg) for l in pins), f"{pkg} missing from requirements-prod.txt"
+
+
+def test_deploy_backend_searches_the_whole_release_and_reports_the_tree():
+    text = (PLAYBOOKS / "deploy_backend.yml").read_text()
+    assert "recurse: true" in text
+    assert "Top level of the checkout" in text
+    assert "backend/server.py" in text  # wrong repo layout is detected immediately

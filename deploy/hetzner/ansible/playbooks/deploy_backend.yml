@@ -42,39 +42,54 @@
         accept_hostkey: true
       tags: [code]
 
+    - name: The checkout must contain the backend application
+      stat: { path: "{{ release_dir }}/backend/server.py" }
+      register: app_entry
+      failed_when: not app_entry.stat.exists
+      tags: [code]
+
     - name: Create the virtualenv (kept between releases)
       command: "python3 -m venv {{ app_dir }}/venv"
       args: { creates: "{{ app_dir }}/venv/bin/python" }
       tags: [code]
 
     # ---------------- requirements: find the real file, never assume one path ----------------
-    - name: Look for a production requirements file in the release
-      stat: { path: "{{ release_dir }}/{{ item }}" }
-      register: req_candidates
-      loop: "{{ prod_requirements_candidates }}"
+    - name: Search the whole release for a requirements file
+      find:
+        paths: "{{ release_dir }}"
+        patterns: ["requirements-prod.txt", "requirements.txt"]
+        recurse: true
+        depth: 4
+        file_type: file
+      register: req_found
       tags: [code]
 
-    - name: Pick the first requirements file that actually exists
+    - name: What did the checkout actually deliver? (diagnostics)
+      find: { paths: "{{ release_dir }}", file_type: any, depth: 1 }
+      register: release_tree
+      tags: [code]
+
+    - name: Pick a requirements file — a *-prod.txt anywhere wins, then requirements.txt
       set_fact:
-        backend_requirements: "{{ (req_candidates.results | selectattr('stat.exists') | map(attribute='stat.path') | list | first) | default('', true) }}"
-      tags: [code]
-
-    - name: Is the dev requirements file there as a fallback?
-      stat: { path: "{{ release_dir }}/backend/requirements.txt" }
-      register: dev_requirements
-      when: backend_requirements | length == 0
+        backend_requirements: >-
+          {{ ((req_found.files | map(attribute='path') | select('search', 'requirements-prod.txt') | sort | first)
+              | default('', true)) }}
+        dev_requirements_path: >-
+          {{ ((req_found.files | map(attribute='path') | select('search', 'backend/requirements.txt') | sort | first)
+              | default('', true)) }}
       tags: [code]
 
     - name: Fail with a clear message when the release ships no requirements file at all
       fail:
         msg: >-
-          No requirements file in {{ release_dir }}. Looked for
-          {{ prod_requirements_candidates | join(', ') }} and backend/requirements.txt.
-          Push deploy/requirements-prod.txt to '{{ ref }}' (it is generated with
-          `pip freeze` minus {{ platform_only_packages | join(', ') }}).
+          No requirements file in {{ release_dir }} (ref '{{ ref }}').
+          Top level of the checkout: {{ release_tree.files | map(attribute='path') | map('basename') | sort | join(', ') }}.
+          Files found by the recursive search: {{ req_found.files | map(attribute='path') | join(', ') | default('none', true) }}.
+          Push deploy/requirements-prod.txt to '{{ ref }}' (generated with `pip freeze` minus
+          {{ platform_only_packages | join(', ') }}).
       when:
         - backend_requirements | length == 0
-        - not (dev_requirements.stat.exists | default(false))
+        - dev_requirements_path | length == 0
       tags: [code]
 
     # backend/requirements.txt pins emergentintegrations, which only exists on the Emergent index.
@@ -84,7 +99,7 @@
         set -o pipefail
         tmp=$(mktemp)
         grep -vEi '^({{ platform_only_packages | join("|") }})([=<>~!\[].*)?$' \
-          {{ release_dir }}/backend/requirements.txt > "$tmp"
+          {{ dev_requirements_path }} > "$tmp"
         if ! cmp -s "$tmp" {{ env_dir }}/requirements-prod.generated.txt; then
           install -m 0644 "$tmp" {{ env_dir }}/requirements-prod.generated.txt
           echo generated
@@ -95,7 +110,7 @@
       changed_when: "'generated' in generated_req.stdout"
       when:
         - backend_requirements | length == 0
-        - dev_requirements.stat.exists | default(false)
+        - dev_requirements_path | length > 0
       tags: [code]
 
     - name: Use the derived file
@@ -103,7 +118,7 @@
         backend_requirements: "{{ env_dir }}/requirements-prod.generated.txt"
       when:
         - backend_requirements | length == 0
-        - dev_requirements.stat.exists | default(false)
+        - dev_requirements_path | length > 0
       tags: [code]
 
     - name: Requirements file in use
