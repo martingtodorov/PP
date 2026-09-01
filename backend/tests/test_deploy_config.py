@@ -317,3 +317,26 @@ def test_fallback_filter_reproduces_requirements_prod(tmp_path):
     produced = [l for l in out.stdout.splitlines() if l.strip()]
     expected = [l for l in (ROOT / "deploy" / "requirements-prod.txt").read_text().splitlines() if l.strip()]
     assert produced == expected
+
+
+# ---------------------------------------------------------------- runtime config sanity
+
+
+def test_nextcart_base_url_matches_the_working_api_host():
+    """client.nextcartmanager.com answers 404 — deploying it breaks couriers/checkout with 502."""
+    assert EXAMPLE_VARS["nextcart_base_url"] == "https://api.nextcartmanager.com"
+
+
+def test_backend_env_template_covers_every_required_env_var():
+    tpl = (TEMPLATES / "backend.env.j2").read_text()
+    keys = {l.split("=", 1)[0] for l in tpl.splitlines() if "=" in l and not l.startswith("#")}
+    required = set()
+    for py in (ROOT / "backend").glob("*.py"):
+        required |= set(re.findall(r'os\.environ\[\s*[\'"]([A-Z0-9_]+)[\'"]\s*\]', py.read_text()))
+    assert not (required - keys), f"backend.env.j2 misses {sorted(required - keys)}"
+
+
+def test_deploy_verifies_the_public_apis_after_restart():
+    text = (PLAYBOOKS / "deploy_backend.yml").read_text()
+    assert "/api/nextcart/countries" in text   # couriers / checkout
+    assert "/api/products?locale=bg" in text   # catalog
