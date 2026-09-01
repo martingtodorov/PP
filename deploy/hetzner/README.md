@@ -212,6 +212,7 @@ Logs: `journalctl -fu purepeptide-backend`, `journalctl -fu nginx`, `journalctl 
 | DNS fails on pp-back | almost always the same routing problem — 1.1.1.1 is only reachable through wg0. Check the routing first, not the resolver |
 | pp-back has no internet | wg endpoint changed to the public IP, or `wg-quick@wg0` down |
 | `apt` on pp-back dies with *Temporary failure in name resolution* | route guard not installed → run `bootstrap_nat.yml` once |
+| `Could not open requirements file: .../deploy/requirements-prod.txt` | the checked-out ref does not contain that file. `deploy_backend.yml` now searches `deploy/requirements-prod.txt`, `backend/requirements-prod.txt`, `requirements-prod.txt`, `deploy/hetzner/requirements-prod.txt` and, as a last resort, derives a portable list from `backend/requirements.txt` (minus `emergentintegrations`) into `/etc/purepeptide/requirements-prod.generated.txt` |
 | `couldn't resolve module/action 'ufw'` | `ansible-galaxy install -r requirements.yml` |
 | `pip install` hangs on pp-back | tunnel MTU — must stay `1370` |
 | uvicorn dies instantly | `MONGO_URL`, `DB_NAME` or `MEDIA_ROOT` missing from `backend.env` |

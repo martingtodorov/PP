@@ -7,6 +7,14 @@
   vars:
     release_stamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
     release_dir: "{{ app_dir }}/releases/{{ ref }}-{{ release_stamp }}"
+    # searched in order; the first one present in the checkout wins
+    prod_requirements_candidates:
+      - deploy/requirements-prod.txt
+      - backend/requirements-prod.txt
+      - requirements-prod.txt
+      - deploy/hetzner/requirements-prod.txt
+    # only available on the Emergent package index — must never be installed on the server
+    platform_only_packages: [emergentintegrations]
 
   pre_tasks:
     - import_tasks: ../tasks/infra_defaults.yml
@@ -39,9 +47,73 @@
       args: { creates: "{{ app_dir }}/venv/bin/python" }
       tags: [code]
 
+    # ---------------- requirements: find the real file, never assume one path ----------------
+    - name: Look for a production requirements file in the release
+      stat: { path: "{{ release_dir }}/{{ item }}" }
+      register: req_candidates
+      loop: "{{ prod_requirements_candidates }}"
+      tags: [code]
+
+    - name: Pick the first requirements file that actually exists
+      set_fact:
+        backend_requirements: "{{ (req_candidates.results | selectattr('stat.exists') | map(attribute='stat.path') | list | first) | default('', true) }}"
+      tags: [code]
+
+    - name: Is the dev requirements file there as a fallback?
+      stat: { path: "{{ release_dir }}/backend/requirements.txt" }
+      register: dev_requirements
+      when: backend_requirements | length == 0
+      tags: [code]
+
+    - name: Fail with a clear message when the release ships no requirements file at all
+      fail:
+        msg: >-
+          No requirements file in {{ release_dir }}. Looked for
+          {{ prod_requirements_candidates | join(', ') }} and backend/requirements.txt.
+          Push deploy/requirements-prod.txt to '{{ ref }}' (it is generated with
+          `pip freeze` minus {{ platform_only_packages | join(', ') }}).
+      when:
+        - backend_requirements | length == 0
+        - not (dev_requirements.stat.exists | default(false))
+      tags: [code]
+
+    # backend/requirements.txt pins emergentintegrations, which only exists on the Emergent index.
+    # Stripping it produces exactly the same list as deploy/requirements-prod.txt.
+    - name: Derive a portable requirements file from backend/requirements.txt (fallback)
+      shell: |
+        set -o pipefail
+        tmp=$(mktemp)
+        grep -vEi '^({{ platform_only_packages | join("|") }})([=<>~!\[].*)?$' \
+          {{ release_dir }}/backend/requirements.txt > "$tmp"
+        if ! cmp -s "$tmp" {{ env_dir }}/requirements-prod.generated.txt; then
+          install -m 0644 "$tmp" {{ env_dir }}/requirements-prod.generated.txt
+          echo generated
+        fi
+        rm -f "$tmp"
+      args: { executable: /bin/bash }
+      register: generated_req
+      changed_when: "'generated' in generated_req.stdout"
+      when:
+        - backend_requirements | length == 0
+        - dev_requirements.stat.exists | default(false)
+      tags: [code]
+
+    - name: Use the derived file
+      set_fact:
+        backend_requirements: "{{ env_dir }}/requirements-prod.generated.txt"
+      when:
+        - backend_requirements | length == 0
+        - dev_requirements.stat.exists | default(false)
+      tags: [code]
+
+    - name: Requirements file in use
+      debug:
+        msg: "pip -r {{ backend_requirements }}"
+      tags: [code]
+
     - name: Install Python dependencies (portable list — no platform-only packages)
       pip:
-        requirements: "{{ release_dir }}/deploy/requirements-prod.txt"
+        requirements: "{{ backend_requirements }}"
         virtualenv: "{{ app_dir }}/venv"
       tags: [code]
 

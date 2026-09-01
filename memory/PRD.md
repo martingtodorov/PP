@@ -383,3 +383,13 @@ StrictUndefined) and `backend/tests/test_wg_route_guard.py` (2 functional tests 
 `systemctl`: repairs the exact production state, no-ops when healthy). All 38 pass.
 `ansible-playbook --syntax-check` clean for every playbook; `selftest_defaults.yml` passes with no
 `group_vars/all.yml` at all.
+
+### 2026-06 — pip stage: requirements path is discovered, not assumed
+`deploy_backend.yml` no longer hardcodes `deploy/requirements-prod.txt` (the deployed `main` did not
+contain it → `Errno 2`). It now stats `prod_requirements_candidates`
+(`deploy/requirements-prod.txt`, `backend/requirements-prod.txt`, `requirements-prod.txt`,
+`deploy/hetzner/requirements-prod.txt`), uses the first that exists, and otherwise derives a portable
+list from `backend/requirements.txt` minus `platform_only_packages` (`emergentintegrations`) into
+`{{ env_dir }}/requirements-prod.generated.txt` — byte-identical to `deploy/requirements-prod.txt`.
+If nothing is found it fails with the exact paths it looked for. Verified locally with ansible-playbook
+(both branches + idempotent rerun) and by 2 new pytest cases (40 deploy tests total).
