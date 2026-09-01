@@ -272,12 +272,42 @@
       tags: [verify]
 
     - name: Courier / checkout API answers (catches a wrong NEXTCART_BASE_URL)
-      uri: { url: "http://127.0.0.1:8001/api/nextcart/countries", status_code: 200 }
-      register: couriers
-      retries: 3
-      delay: 3
-      until: couriers.status == 200
-      failed_when: couriers.status != 200 or (couriers.json.countries | default([]) | length) == 0
+      block:
+        - name: Wait for the courier endpoint
+          uri: { url: "http://127.0.0.1:8001/api/nextcart/countries", status_code: 200 }
+          register: couriers
+          retries: 3
+          delay: 3
+          until: couriers.status | default(0) == 200 and (couriers.json.countries | default([]) | length) > 0
+      rescue:
+        - name: Which upstream is configured
+          shell: "grep -E '^NEXTCART_' {{ env_dir }}/backend.env | sed 's/=.*KEY.*/=***/'"
+          register: nextcart_conf
+          changed_when: false
+          failed_when: false
+
+        - name: Can the server reach that upstream at all?
+          shell: |
+            url=$(grep -m1 '^NEXTCART_BASE_URL=' {{ env_dir }}/backend.env | cut -d= -f2-)
+            shop=$(grep -m1 '^NEXTCART_SHOP=' {{ env_dir }}/backend.env | cut -d= -f2-)
+            echo "GET $url (shop=$shop)"
+            curl -s -o /dev/null -w 'upstream http status: %{http_code}\n' --max-time 20 "$url" || true
+          args: { executable: /bin/bash }
+          register: nextcart_probe
+          changed_when: false
+          failed_when: false
+
+        - name: Report the courier failure
+          fail:
+            msg: |
+              /api/nextcart/countries did not return couriers, so the checkout would be broken.
+              --- {{ env_dir }}/backend.env ---
+              {{ nextcart_conf.stdout | default('(no NEXTCART_* lines)') }}
+              --- upstream reachability ---
+              {{ nextcart_probe.stdout | default('') }}
+              NOTE: the working host is https://api.nextcartmanager.com —
+              https://client.nextcartmanager.com answers 404 and breaks every courier call.
+              Fix nextcart_base_url in group_vars/all.yml and re-run.
       tags: [verify, publish]
 
     - name: Catalog answers with products
