@@ -530,3 +530,12 @@ Upstream workaround, now applied by `bootstrap_backend_base.yml`:
 `Environment=GLIBC_TUNABLES=glibc.pthread.rseq=1` (rseq=0 causes memory corruption), followed by
 daemon-reload + restart when the drop-in changes. Guarded by
 `test_mongodb_kernel_workaround_is_applied`. 50 deploy-config tests green.
+
+### 2026-06 — single-worker assertion fixed + MongoDB running
+The backend deploy now gets past the health check (`/api/settings` answers). The old check
+`pgrep -fc 'uvicorn server:app'` always returned 2, because uvicorn with `--workers 1` runs a
+supervisor process plus one worker. It now reads `--workers` from the unit's ExecStart and counts the
+children of MainPID (`pgrep -P`), failing only on a real multi-worker setup. Verified with a simulated
+matrix (1/1, 1/0 pass; 1/4, 4/4 fail).
+MongoDB is `active` on pp-back after the rseq drop-in (kernel 7.0.0-30, Ubuntu 26.04 LTS).
+51 deploy-config tests green.

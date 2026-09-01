@@ -254,11 +254,21 @@
               {{ svc_journal.stdout | default('(no output)') }}
       tags: [verify, publish]
 
-    - name: Assert exactly one uvicorn worker
-      shell: "pgrep -fc 'uvicorn server:app'"
+    # uvicorn with --workers 1 runs a supervisor process PLUS one worker, so counting processes that
+    # match 'uvicorn server:app' always returns 2. Check the unit and the process tree instead.
+    - name: Assert the backend runs a single uvicorn worker
+      shell: |
+        set -o pipefail
+        main=$(systemctl show -p MainPID --value {{ app_name }}-backend)
+        conf=$(systemctl show -p ExecStart --value {{ app_name }}-backend \
+               | grep -o -- '--workers [0-9]*' | awk '{print $2}')
+        children=$(pgrep -P "$main" | wc -l)
+        echo "configured=${conf:-1} children=${children}"
+        test "${conf:-1}" = "1" || { echo "the unit asks for ${conf} workers" >&2; exit 1; }
+        test "${children}" -le 1 || { echo "$children worker processes" >&2; exit 1; }
+      args: { executable: /bin/bash }
       register: workers
       changed_when: false
-      failed_when: workers.stdout | trim != '1'
       tags: [verify]
 
     - name: Courier / checkout API answers (catches a wrong NEXTCART_BASE_URL)
