@@ -42,11 +42,48 @@
         accept_hostkey: true
       tags: [code]
 
-    - name: The checkout must contain the backend application
-      stat: { path: "{{ release_dir }}/backend/server.py" }
-      register: app_entry
-      failed_when: not app_entry.stat.exists
-      tags: [code]
+    - name: Diagnostics — the first two levels of the checkout
+      find: { paths: "{{ release_dir }}", file_type: any, recurse: true, depth: 2 }
+      register: release_tree
+      tags: [code, config, service, media]
+
+    - name: Locate the backend application (server.py) in the checkout
+      find:
+        paths: "{{ release_dir }}"
+        patterns: "server.py"
+        recurse: true
+        depth: 4
+        file_type: file
+      register: server_py
+      tags: [code, config, service, media]
+
+    - name: Fail with the checkout listing when the application is not in the ref
+      fail:
+        msg: >-
+          '{{ ref }}' of {{ repo_url }} contains no backend/server.py, so there is nothing to deploy.
+          {{ release_dir }} contains:
+          {{ release_tree.files | map(attribute='path') | map('regex_replace', '^' ~ release_dir ~ '/', '')
+             | sort | join(', ') | default('(empty)', true) }}.
+          Push the application (backend/, frontend/, deploy/) to '{{ ref }}' and re-run.
+      when: server_py.files | length == 0
+      tags: [code, config, service, media]
+
+    - name: Derive the application paths from the real checkout layout
+      set_fact:
+        backend_src_dir: >-
+          {{ ((server_py.files | map(attribute='path') | select('search', '/backend/server.py') | sort | first)
+              | default((server_py.files | map(attribute='path') | sort | first), true)) | dirname }}
+      tags: [code, config, service, media]
+
+    - name: Application subdirectory inside the repository
+      set_fact:
+        backend_rel_path: "{{ backend_src_dir | regex_replace('^' ~ release_dir ~ '/?', '') }}"
+      tags: [code, config, service, media]
+
+    - name: Layout summary
+      debug:
+        msg: "backend code lives in '{{ backend_rel_path }}' of the repository"
+      tags: [code, config, service, media]
 
     - name: Create the virtualenv (kept between releases)
       command: "python3 -m venv {{ app_dir }}/venv"
@@ -147,14 +184,14 @@
     - name: Symlink backend.env into the release (management scripts read it)
       file:
         src: "{{ env_dir }}/backend.env"
-        dest: "{{ release_dir }}/backend/.env"
+        dest: "{{ backend_src_dir }}/.env"
         state: link
         force: true
       tags: [config]
 
     - name: Image cache directory
       file:
-        path: "{{ release_dir }}/backend/.image_cache"
+        path: "{{ backend_src_dir }}/.image_cache"
         state: directory
         owner: "{{ backend_service_user }}"
         group: "{{ backend_service_user }}"
@@ -199,7 +236,7 @@
     # ---------------- optional, never automatic ----------------
     - name: Import media from the managed storage (only with -e run_media_import=true)
       command: "{{ app_dir }}/venv/bin/python export_media_to_disk.py"
-      args: { chdir: "{{ app_dir }}/current/backend" }
+      args: { chdir: "{{ app_dir }}/current/{{ backend_rel_path }}" }
       become_user: "{{ backend_service_user }}"
       register: media_import
       changed_when: "'downloaded: 0' not in media_import.stdout"

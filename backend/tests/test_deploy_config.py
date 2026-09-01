@@ -275,6 +275,7 @@ def test_all_templates_render_and_the_route_script_is_valid_bash(tmp_path):
         "ansible_distribution_release": "jammy",
         "wg_subnet": "10.99.0.0/24",
         "wg_guard_interval_sec": 30,
+        "backend_rel_path": "backend",
     })
     rendered = {}
     for tpl in TEMPLATES.glob("*.j2"):
@@ -365,3 +366,17 @@ def test_deploy_backend_searches_the_whole_release_and_reports_the_tree():
     assert "recurse: true" in text
     assert "Top level of the checkout" in text
     assert "backend/server.py" in text  # wrong repo layout is detected immediately
+
+
+def test_deploy_adapts_to_the_repository_layout():
+    back = (PLAYBOOKS / "deploy_backend.yml").read_text()
+    front = (PLAYBOOKS / "deploy_frontend.yml").read_text()
+    unit = (TEMPLATES / "purepeptide-backend.service.j2").read_text()
+    assert "backend_src_dir" in back and "backend_rel_path" in back
+    assert "contains no backend/server.py" in back      # clear failure with the checkout listing
+    assert "frontend_src_dir" in front and "contains no frontend/package.json" in front
+    assert "{{ app_dir }}/current/{{ backend_rel_path }}" in unit
+    assert "{{ release_dir }}/backend" not in back      # no hardcoded subdirectory left
+    assert "{{ src_dir }}/frontend" not in front
+    defaults = (TASKS / "infra_defaults.yml").read_text()
+    assert "backend_rel_path: \"{{ backend_rel_path | default('backend', true) }}\"" in defaults

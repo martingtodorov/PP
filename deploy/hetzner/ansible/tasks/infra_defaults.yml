@@ -54,6 +54,7 @@
     backend_dns: "{{ backend_dns | default('1.1.1.1 8.8.8.8', true) }}"
     backend_fallback_dns: "{{ backend_fallback_dns | default('9.9.9.9', true) }}"
     releases_kept: "{{ releases_kept | default(5, true) }}"
+    backend_rel_path: "{{ backend_rel_path | default('backend', true) }}"
     node_major: "{{ node_major | default(20, true) }}"
     mongo_major: "{{ mongo_major | default('7.0', true) }}"
     site_domains: "{{ site_domains | default(['purepeptide.bg'], true) }}"

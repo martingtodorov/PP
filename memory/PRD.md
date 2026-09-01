@@ -429,3 +429,17 @@ Deploy test suite: 52 pytest cases green.
   `app/deploy/`, only `backend/requirements.txt` (portable copy generated, idempotent) and an empty
   checkout (clear failure listing `docs, frontend`). New pytest guards: file is tracked by git, every
   dependency pinned, no platform-only package, core packages present. 54 deploy tests green.
+
+### 2026-06 — deploy adapts to the repository layout + hard diagnostics
+The server checkout of GitHub `main` contained **no `backend/server.py`** (the assert added in the
+previous step caught it). Since the app cannot be deployed from a ref that does not contain it:
+- `deploy_backend.yml` locates `server.py` recursively (depth 4) and derives `backend_src_dir` /
+  `backend_rel_path`; `.env` symlink, `.image_cache`, the media-import chdir and the systemd unit
+  (`WorkingDirectory`, `ReadWritePaths`) all use them, so a nested layout (`app/backend/…`) deploys too.
+  `backend_rel_path` defaults to `backend` in `tasks/infra_defaults.yml`.
+- `deploy_frontend.yml` does the same for `frontend/package.json` (`frontend_src_dir`, node_modules
+  filtered out).
+- When the app is not in the ref at all, the failure message now prints the **actual contents of the
+  checkout** (two levels) so the cause is obvious instead of "Unknown error".
+- Verified locally with ansible-playbook for: standard layout → `backend`, nested → `app/backend`,
+  empty repo → clear failure listing the files. 55 deploy tests + full dryrun green.

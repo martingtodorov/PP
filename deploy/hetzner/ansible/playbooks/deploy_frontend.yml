@@ -37,14 +37,47 @@
         accept_hostkey: true
       tags: [code]
 
+    - name: Locate the SPA (frontend/package.json) in the checkout
+      find:
+        paths: "{{ src_dir }}"
+        patterns: "package.json"
+        recurse: true
+        depth: 4
+        file_type: file
+      register: pkg_json
+      tags: [code, build]
+
+    - name: Fail with the checkout listing when the SPA is not in the ref
+      fail:
+        msg: >-
+          '{{ ref }}' of {{ repo_url }} contains no frontend/package.json.
+          {{ src_dir }} contains:
+          {{ lookup('pipe', 'ls -1 ' ~ src_dir) | replace('\n', ', ') | default('(empty)', true) }}.
+      when: (pkg_json.files | rejectattr('path', 'search', 'node_modules') | list | length) == 0
+      tags: [code, build]
+
+    - name: Derive the SPA directory from the real checkout layout
+      set_fact:
+        frontend_src_dir: >-
+          {{ ((pkg_json.files | map(attribute='path') | reject('search', 'node_modules')
+               | select('search', '/frontend/package.json') | sort | first)
+              | default((pkg_json.files | map(attribute='path') | reject('search', 'node_modules')
+                         | sort | first), true)) | dirname }}
+      tags: [code, build]
+
+    - name: Layout summary
+      debug:
+        msg: "SPA source at {{ frontend_src_dir }}"
+      tags: [code, build]
+
     - name: Install frontend dependencies
       command: yarn install --frozen-lockfile
-      args: { chdir: "{{ src_dir }}/frontend" }
+      args: { chdir: "{{ frontend_src_dir }}" }
       tags: [build]
 
     - name: Build the SPA
       command: yarn build
-      args: { chdir: "{{ src_dir }}/frontend" }
+      args: { chdir: "{{ frontend_src_dir }}" }
       environment:
         # MUST stay empty: CRA bakes it in, empty == same origin so ONE build serves every domain
         REACT_APP_BACKEND_URL: ""
@@ -60,7 +93,7 @@
 
     - name: Stage the new build
       synchronize:
-        src: "{{ src_dir }}/frontend/build/"
+        src: "{{ frontend_src_dir }}/build/"
         dest: "{{ web_root }}/build.new/"
         delete: true
       delegate_to: "{{ inventory_hostname }}"
