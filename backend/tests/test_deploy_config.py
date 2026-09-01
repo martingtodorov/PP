@@ -300,25 +300,9 @@ def test_requirements_path_is_discovered_not_hardcoded():
     for candidate in ["deploy/requirements-prod.txt", "backend/requirements-prod.txt",
                       "requirements-prod.txt"]:
         assert candidate in text
-    assert "No requirements file in" in text            # clear failure message
-    assert "requirements-prod.generated.txt" in text    # fallback derived from backend/requirements.txt
-
-
-def test_fallback_filter_reproduces_requirements_prod(tmp_path):
-    """The shell fallback must produce exactly deploy/requirements-prod.txt."""
-    import re as _re
-    import subprocess
-
-    playbook = (PLAYBOOKS / "deploy_backend.yml").read_text()
-    pattern = _re.search(r"grep -vEi '(\^\(.*?\).*?)'", playbook).group(1)
-    dev = ROOT / "backend" / "requirements.txt"
-    out = subprocess.run(["grep", "-vEi", pattern.replace("{{ platform_only_packages | join(\"|\") }}",
-                                                          "emergentintegrations"), str(dev)],
-                         capture_output=True, text=True)
-    produced = sorted(l for l in out.stdout.splitlines() if l.strip() and not l.startswith("#"))
-    expected = sorted(l for l in (ROOT / "deploy" / "requirements-prod.txt").read_text().splitlines()
-                      if l.strip() and not l.startswith("#"))
-    assert produced == expected
+    assert "No requirements-prod.txt in" in text        # clear failure message
+    # the dev pip-freeze must never be installed on the server: its pins conflict on Python 3.14
+    assert "backend/requirements.txt" not in text
 
 
 # ---------------------------------------------------------------- runtime config sanity
@@ -353,18 +337,18 @@ def test_requirements_prod_is_tracked_by_git_and_installable():
     assert r.returncode == 0, "deploy/requirements-prod.txt is NOT tracked by git"
     body = (ROOT / "deploy" / "requirements-prod.txt").read_text().splitlines()
     pins = [l for l in body if l.strip() and not l.startswith("#")]
-    assert len(pins) > 100
+    assert 10 < len(pins) <= 25, "minimal list of imported packages, not a pip freeze"
     assert all("==" in l for l in pins), "every dependency must be pinned"
     assert not any(l.lower().startswith("emergentintegrations") for l in pins)
     for pkg in ["fastapi", "uvicorn", "motor", "pymongo", "pydantic", "python-dotenv", "resend",
-                "anthropic", "pillow", "pywebpush", "bcrypt"]:
+                "anthropic", "pillow", "pywebpush", "bcrypt", "openpyxl", "httpx", "pyjwt"]:
         assert any(l.lower().startswith(pkg) for l in pins), f"{pkg} missing from requirements-prod.txt"
 
 
 def test_deploy_backend_searches_the_whole_release_and_reports_the_tree():
     text = (PLAYBOOKS / "deploy_backend.yml").read_text()
     assert "recurse: true" in text
-    assert "Top level of the checkout" in text
+    assert "Files found by the recursive search" in text
     assert "backend/server.py" in text  # wrong repo layout is detected immediately
 
 
