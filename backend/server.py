@@ -413,6 +413,14 @@ async def list_collections(locale: str = Query(DEFAULT_LOCALE)):
     return {"collections": localize_list(docs, loc)}
 
 
+def _apply_manual_order(prods: List[Dict[str, Any]], order: Optional[List[str]]) -> List[Dict[str, Any]]:
+    """Sort products by the manual order saved in the admin; unknown handles keep their position at the end."""
+    if not order:
+        return prods
+    index = {h: i for i, h in enumerate(order)}
+    return sorted(prods, key=lambda p: (index.get(p.get("handle"), len(index)), p.get("title", "")))
+
+
 @api.get("/collections/{handle}")
 async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
@@ -429,6 +437,7 @@ async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     siblings = await db.collections_cat.find(
         {"handle": {"$nin": [base_handle, "all-peptides"]}}, {"_id": 0}
     ).sort("sort_order", 1).to_list(50)
+    prods = _apply_manual_order(prods, col.get("product_order"))
     return {
         "collection": localize_doc(col, loc),
         "products": localize_list(prods, loc),
@@ -452,8 +461,11 @@ async def list_products(
             {"title": {"$regex": search, "$options": "i"}},
             {f"translations.{loc}.title": {"$regex": search, "$options": "i"}},
         ]
-    docs = await db.products.find(q, {"_id": 0}).limit(limit).to_list(limit)
-    return {"products": localize_list(docs, loc)}
+    docs = await db.products.find(q, {"_id": 0}).limit(500).to_list(500)
+    if not search:
+        all_col = await db.collections_cat.find_one({"handle": "all-peptides"}, {"_id": 0, "product_order": 1})
+        docs = _apply_manual_order(docs, (all_col or {}).get("product_order"))
+    return {"products": localize_list(docs[:limit], loc)}
 
 
 @api.get("/products/{handle}")
@@ -1285,6 +1297,38 @@ async def admin_update_collection(collection_id: str, payload: CollectionIn, use
     if res.matched_count == 0:
         raise HTTPException(404, "Колекцията не е намерена")
     return {"ok": True}
+
+
+@api.get("/admin/collections/{handle}/products")
+async def admin_collection_products(handle: str, user=Depends(require_admin)):
+    col = await db.collections_cat.find_one({"handle": handle}, {"_id": 0})
+    if not col:
+        raise HTTPException(404, "Колекцията не е намерена")
+    q = {} if handle == "all-peptides" else {"collections": handle}
+    prods = await db.products.find(q, {"_id": 0}).to_list(500)
+    prods = _apply_manual_order(prods, col.get("product_order"))
+    return {
+        "collection": {"handle": handle, "title": col.get("title", handle)},
+        "products": [{
+            "handle": p["handle"],
+            "title": p["title"],
+            "image": p.get("image", ""),
+            "active": p.get("active", True),
+            "price_eur": min([v.get("price_eur", 0) for v in p.get("variants", [])] or [0]),
+        } for p in prods],
+    }
+
+
+@api.put("/admin/collections/{handle}/order")
+async def admin_set_collection_order(handle: str, payload: Dict[str, List[str]], user=Depends(require_admin)):
+    handles = payload.get("handles") or []
+    res = await db.collections_cat.update_one(
+        {"handle": handle},
+        {"$set": {"product_order": handles, "order_updated_at": now_utc()}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Колекцията не е намерена")
+    return {"ok": True, "count": len(handles)}
 
 
 @api.get("/admin/collections")
