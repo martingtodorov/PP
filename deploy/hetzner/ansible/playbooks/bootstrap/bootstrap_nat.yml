@@ -1,0 +1,126 @@
+---
+# BOOTSTRAP ONLY — the tunnel already exists in production. Running this play is safe (idempotent),
+# but it is never imported by site.yml.
+#
+# Rules baked in:
+#   * existing WireGuard keys are reused; regenerating needs -e wg_force_regenerate_keys=true
+#   * an existing /etc/wireguard/wg0.conf is left alone unless -e wg_force_rewrite_config=true
+#   * the backend peer endpoint is the PRIVATE address ({{ wg_front_endpoint }}) — pp-back has no
+#     public route before the tunnel is up
+#   * no apt on pp-back (it would need the internet that this tunnel provides)
+
+- name: Gateway on pp-front
+  hosts: frontend
+  become: true
+  tags: [gateway]
+  tasks:
+    - name: WireGuard must already be installed
+      command: which wg
+      register: wg_bin
+      changed_when: false
+      failed_when: wg_bin.rc != 0
+
+    - name: Reuse or create the front key pair
+      shell: |
+        umask 077
+        test -f /etc/wireguard/front.key || wg genkey > /etc/wireguard/front.key
+        wg pubkey < /etc/wireguard/front.key > /etc/wireguard/front.pub
+      args: { creates: "{{ '/nonexistent' if wg_force_regenerate_keys | default(false) | bool else '/etc/wireguard/front.pub' }}" }
+
+    - name: Reuse or create the back key pair
+      shell: |
+        umask 077
+        test -f /etc/wireguard/back.key || wg genkey > /etc/wireguard/back.key
+        wg pubkey < /etc/wireguard/back.key > /etc/wireguard/back.pub
+      args: { creates: "{{ '/nonexistent' if wg_force_regenerate_keys | default(false) | bool else '/etc/wireguard/back.pub' }}" }
+
+    - name: Read the key material
+      slurp: { src: "/etc/wireguard/{{ item }}" }
+      register: wg_keys
+      loop: [front.key, front.pub, back.key, back.pub]
+
+    - name: Publish the keys as facts
+      set_fact:
+        wg_front_private: "{{ (wg_keys.results[0].content | b64decode) | trim }}"
+        wg_front_public: "{{ (wg_keys.results[1].content | b64decode) | trim }}"
+        wg_back_private: "{{ (wg_keys.results[2].content | b64decode) | trim }}"
+        wg_back_public: "{{ (wg_keys.results[3].content | b64decode) | trim }}"
+
+    - name: IPv4 forwarding stays on
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: "1"
+        sysctl_set: true
+        state: present
+        reload: true
+
+    - name: Does wg0.conf already exist?
+      stat: { path: /etc/wireguard/wg0.conf }
+      register: front_wg_conf
+
+    - name: Render wg0 (only when missing, or forced)
+      template:
+        src: ../../templates/wg0-front.conf.j2
+        dest: /etc/wireguard/wg0.conf
+        mode: "0600"
+        backup: true
+      when: not front_wg_conf.stat.exists or (wg_force_rewrite_config | default(false) | bool)
+      notify: restart wg-front
+
+    - name: wg-quick@wg0 enabled and running
+      systemd: { name: "wg-quick@wg0", enabled: true, state: started }
+
+  handlers:
+    - name: restart wg-front
+      systemd: { name: "wg-quick@wg0", state: restarted }
+
+- name: Tunnel client on pp-back
+  hosts: backend
+  become: true
+  tags: [client]
+  vars:
+    wg_back_private: "{{ hostvars[groups['frontend'][0]].wg_back_private }}"
+    wg_front_public: "{{ hostvars[groups['frontend'][0]].wg_front_public }}"
+  tasks:
+    - name: WireGuard must already be installed (no apt here — it has no internet yet)
+      command: which wg
+      register: wg_bin
+      changed_when: false
+      failed_when: wg_bin.rc != 0
+
+    - name: Does wg0.conf already exist?
+      stat: { path: /etc/wireguard/wg0.conf }
+      register: back_wg_conf
+
+    - name: Render wg0 (only when missing, or forced)
+      template:
+        src: ../../templates/wg0-back.conf.j2
+        dest: /etc/wireguard/wg0.conf
+        mode: "0600"
+        backup: true
+      when: not back_wg_conf.stat.exists or (wg_force_rewrite_config | default(false) | bool)
+      notify: restart wg-back
+
+    - name: Assert the peer endpoint is the private address
+      lineinfile:
+        path: /etc/wireguard/wg0.conf
+        regexp: '^\s*Endpoint\s*='
+        line: "Endpoint = {{ wg_front_endpoint }}"
+      check_mode: true
+      register: endpoint_check
+      failed_when: endpoint_check.changed
+      tags: [verify]
+
+    - name: wg-quick@wg0 enabled and running
+      systemd: { name: "wg-quick@wg0", enabled: true, state: started }
+
+    - name: Outbound internet works through the tunnel
+      command: curl -sS --max-time 15 https://ifconfig.me
+      register: nat_check
+      changed_when: false
+      failed_when: nat_check.stdout | trim != frontend_public_ip
+      tags: [verify]
+
+  handlers:
+    - name: restart wg-back
+      systemd: { name: "wg-quick@wg0", state: restarted }

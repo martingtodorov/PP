@@ -1,0 +1,8 @@
+---
+# BOOTSTRAP — only for a brand new pair of servers. On the running production hosts these steps are
+# already done; run the individual plays instead if you really need to touch infrastructure.
+- import_playbook: bootstrap_nat.yml
+- import_playbook: bootstrap_dns.yml
+- import_playbook: bootstrap_backend_base.yml
+# firewall last, and only if it is not configured yet
+- import_playbook: bootstrap_firewall.yml

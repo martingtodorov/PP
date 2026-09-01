@@ -1,0 +1,78 @@
+---
+# BOOTSTRAP ONLY — OS packages, MongoDB, the directory layout, the media disk and backups.
+# Not part of site.yml: it installs packages and restarts mongod.
+- name: Backend base layer
+  hosts: backend
+  become: true
+  tasks:
+    - name: OS packages
+      apt:
+        name: [git, python3-venv, python3-pip, python3-dev, build-essential, curl, gnupg,
+               libjpeg-dev, zlib1g-dev, libwebp-dev, rsync]
+        update_cache: true
+        state: present
+      tags: [base]
+
+    - name: Directory layout
+      file: { path: "{{ item }}", state: directory, owner: root, group: "{{ backend_service_user }}", mode: "0755" }
+      loop:
+        - "{{ app_dir }}"
+        - "{{ app_dir }}/releases"
+        - "{{ env_dir }}"
+        - "{{ backup_dir }}"
+      tags: [base]
+
+    - name: Persistent media directory (created once, never wiped)
+      file:
+        path: "{{ media_dir }}"
+        state: directory
+        owner: "{{ backend_service_user }}"
+        group: "{{ backend_service_user }}"
+        mode: "0755"
+      tags: [base, media]
+
+    # ---------------- mongodb ----------------
+    - name: MongoDB apt key
+      get_url:
+        url: "https://pgp.mongodb.com/server-{{ mongo_major }}.asc"
+        dest: /etc/apt/trusted.gpg.d/mongodb.asc
+        mode: "0644"
+      tags: [mongo]
+
+    - name: MongoDB repository
+      apt_repository:
+        repo: "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu {{ ansible_distribution_release }}/mongodb-org/{{ mongo_major }} multiverse"
+        filename: mongodb-org
+        state: present
+      tags: [mongo]
+
+    - name: Install mongodb-org
+      apt: { name: mongodb-org, update_cache: true, state: present }
+      tags: [mongo]
+
+    - name: Bind MongoDB to localhost only
+      lineinfile:
+        path: /etc/mongod.conf
+        regexp: '^\s*bindIp:'
+        line: "  bindIp: 127.0.0.1"
+      notify: restart mongod
+      tags: [mongo]
+
+    - name: Enable mongod
+      systemd: { name: mongod, enabled: true, state: started }
+      tags: [mongo]
+
+    # ---------------- backups ----------------
+    - name: Nightly mongodump (14 days retention)
+      cron:
+        name: "{{ app_name }} mongodump"
+        minute: "20"
+        hour: "3"
+        job: >-
+          /usr/bin/mongodump --db {{ db_name }} --archive={{ backup_dir }}/{{ db_name }}-$(date +\%F).gz --gzip
+          && find {{ backup_dir }} -name '{{ db_name }}-*.gz' -mtime +14 -delete
+      tags: [backup]
+
+  handlers:
+    - name: restart mongod
+      systemd: { name: mongod, state: restarted }

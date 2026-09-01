@@ -1,0 +1,42 @@
+---
+# BOOTSTRAP ONLY — persistent DNS for pp-back through systemd-resolved.
+# /etc/resolv.conf is never replaced with a static file.
+- name: Backend DNS
+  hosts: backend
+  become: true
+  tags: [dns]
+  tasks:
+    - name: resolved drop-in directory
+      file: { path: /etc/systemd/resolved.conf.d, state: directory, mode: "0755" }
+
+    - name: Render /etc/systemd/resolved.conf.d/pp.conf
+      copy:
+        dest: /etc/systemd/resolved.conf.d/pp.conf
+        mode: "0644"
+        content: |
+          [Resolve]
+          DNS={{ backend_dns }}
+          FallbackDNS={{ backend_fallback_dns }}
+      notify: restart resolved
+
+    - name: systemd-resolved enabled and running
+      systemd: { name: systemd-resolved, enabled: true, state: started }
+
+    - name: /etc/resolv.conf points at the stub resolver
+      stat: { path: /etc/resolv.conf }
+      register: resolv
+      changed_when: false
+
+    - name: Warn if resolv.conf is a static file
+      debug:
+        msg: "/etc/resolv.conf is not a symlink — leave it as it is, it is managed by hand"
+      when: not resolv.stat.islnk
+
+    - name: Resolution works
+      command: resolvectl query ifconfig.me
+      changed_when: false
+      tags: [verify]
+
+  handlers:
+    - name: restart resolved
+      systemd: { name: systemd-resolved, state: restarted }

@@ -1,5 +1,11 @@
 ---
-# Full deploy: backend first (the API must answer before nginx starts proxying), then the SPA, then nginx.
+# ROUTINE DEPLOY — application code only.
+#
+# Infrastructure (WireGuard/NAT, DNS, MongoDB, users, firewall, TLS files) is NEVER part of this run.
+# It lives in playbooks/bootstrap/ and must be started by a human, explicitly.
+#
+#   ansible-playbook -i inventory.ini playbooks/site.yml -e "ref=main" --ask-vault-pass
+- import_playbook: preflight.yml
 - import_playbook: deploy_backend.yml
 - import_playbook: deploy_frontend.yml
 - import_playbook: deploy_nginx.yml

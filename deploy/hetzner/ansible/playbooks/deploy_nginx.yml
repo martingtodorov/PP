@@ -1,27 +1,18 @@
 ---
-- name: nginx + TLS + firewall on pp-front
+# ROUTINE nginx DEPLOY — renders the site config and reloads. It never touches TLS files,
+# the firewall, users or networking.
+- name: nginx site config on pp-front
   hosts: frontend
   become: true
 
   tasks:
-    - name: Install nginx and ufw
-      apt: { name: [nginx, ufw], update_cache: true, state: present }
-      tags: [base]
-
-    - name: TLS directory
-      file: { path: "{{ ssl_dir }}", state: directory, owner: root, group: root, mode: "0700" }
-      tags: [base, config]
-
-    - name: Cloudflare Origin certificate must be uploaded manually
-      stat: { path: "{{ ssl_dir }}/{{ item }}" }
+    - name: Existing Cloudflare Origin certificate must be in place (never generated here)
+      stat: { path: "{{ item }}" }
       register: certs
       failed_when: not certs.stat.exists
-      loop: [cert.pem, key.pem]
-      tags: [config]
-
-    - name: Lock down the key permissions
-      file: { path: "{{ ssl_dir }}/{{ item }}", owner: root, group: root, mode: "0600" }
-      loop: [cert.pem, key.pem]
+      loop:
+        - "{{ ssl_cert_path }}"
+        - "{{ ssl_key_path }}"
       tags: [config]
 
     - name: Read the nginx version
@@ -41,6 +32,7 @@
         src: ../templates/nginx-purepeptide.conf.j2
         dest: "/etc/nginx/sites-available/{{ app_name }}.conf"
         mode: "0644"
+        backup: true
       notify: reload nginx
       tags: [config]
 
@@ -53,48 +45,17 @@
       notify: reload nginx
       tags: [config]
 
-    - name: Remove the default site
-      file: { path: /etc/nginx/sites-enabled/default, state: absent }
-      notify: reload nginx
-      tags: [config]
-
     - name: Validate the configuration
       command: nginx -t
       changed_when: false
       tags: [config, verify]
 
-    - name: Enable nginx
+    - name: Ensure nginx is running
       systemd: { name: nginx, enabled: true, state: started }
       tags: [service]
 
-    # ---------------- firewall ----------------
-    - name: Allow SSH, HTTP, HTTPS and WireGuard
-      ufw: { rule: allow, port: "{{ item.port }}", proto: "{{ item.proto }}" }
-      loop:
-        - { port: "{{ ssh_port }}", proto: tcp }
-        - { port: "80", proto: tcp }
-        - { port: "443", proto: tcp }
-        - { port: "{{ wg_port }}", proto: udp }
-      tags: [firewall]
-
-    - name: Allow the private network
-      ufw: { rule: allow, src: "{{ private_cidr }}" }
-      tags: [firewall]
-
-    - name: Default deny incoming
-      ufw: { direction: incoming, policy: deny }
-      tags: [firewall]
-
-    - name: Enable ufw
-      ufw: { state: enabled }
-      tags: [firewall]
-
-    # ---------------- verify ----------------
     - name: Public API smoke test
-      uri:
-        url: "https://{{ site_domains[0] }}/api/nextcart/countries"
-        status_code: 200
-        validate_certs: true
+      uri: { url: "https://{{ site_domains[0] }}/api/nextcart/countries", status_code: 200 }
       register: api_check
       retries: 5
       delay: 5

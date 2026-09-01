@@ -11,12 +11,16 @@ Everything needed to run the shop on our own hardware (Hetzner, no Docker: syste
 
 | Host | Address | Runs |
 |---|---|---|
-| `pp-front` | `2.28.79.24` public, `10.0.0.2` private | nginx, TLS, the static build, WireGuard NAT gateway |
-| `pp-back` | `10.0.0.3` private only | FastAPI on `:8001`, MongoDB on `127.0.0.1:27017`, media disk |
+| `pp-front` | `2.28.79.24` public, `10.0.0.2` private, `eth0` | nginx, TLS, the static build, WireGuard NAT gateway |
+| `pp-back` | `10.0.0.3` private only, `enp7s0` | FastAPI on `:8001`, MongoDB on `127.0.0.1:27017`, media disk |
 
-`pp-back` has no public IPv4 and reaches the internet through `pp-front` over a WireGuard tunnel
-(`deploy_nat.yml`). Everything public sits behind Cloudflare (Full Strict) with an Origin certificate
-installed on `pp-front`.
+**The running production infrastructure is authoritative.** `playbooks/site.yml` deploys application code
+only; everything that provisions infrastructure lives in `playbooks/bootstrap/` and is human-triggered.
+
+`pp-back` has no public IPv4 and reaches the internet through `pp-front` over a WireGuard tunnel whose
+backend peer endpoint is the **private** address `10.0.0.2:51820` (never `2.28.79.24:51820` — pp-back has no
+public route before the tunnel exists). Everything public sits behind Cloudflare (Full strict) with the
+Origin certificate at `/etc/ssl/cloudflare/origin.{pem,key}` on `pp-front`.
 
 ```bash
 ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes root@2.28.79.24                    # pp-front
@@ -42,6 +46,9 @@ binding `:8001`. They live in `/etc/purepeptide/backend.env` (0640 root:www-data
 
 ## Hard rules (each one has broken a deploy before)
 
+0. **Never re-provision infrastructure during a deploy.** `site.yml` must not touch WireGuard, DNS,
+   users, SSH keys, the firewall, TLS files, MongoDB installation, the media disk or any secret. See
+   `hetzner/README.md` for the full "never does" list.
 1. **One uvicorn worker.** The abandoned-cart sweeper and the AI bulk-translation jobs run in-process —
    two workers means two sweepers and duplicate recovery emails.
 2. **`/var/lib/purepeptide/media` is never touched by a deploy.** With `ProtectSystem=strict` it must be
