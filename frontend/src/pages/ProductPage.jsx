@@ -149,9 +149,17 @@ export default function ProductPage() {
               <p className="flex items-center gap-2 font-semibold"><Droplets className="h-4 w-4 text-coral-600" /> {t("withWater")}</p>
             </div>
 
-            <div className="text-2xl font-bold text-slate-900" data-testid="product-price">
-              {fmtEUR(v?.price_eur || 0)}
-              {showsBGN() && <span className="text-base font-normal text-slate-500 ml-2">({fmtBGN(v?.price_eur || 0)})</span>}
+            <div className="text-2xl font-bold text-slate-900 flex flex-wrap items-baseline gap-2" data-testid="product-price">
+              <span>{fmtEUR(v?.price_eur || 0)}</span>
+              {(v?.compare_at_eur || 0) > (v?.price_eur || 0) && (
+                <>
+                  <s className="text-lg font-normal text-slate-400" data-testid="product-compare-price">{fmtEUR(v.compare_at_eur)}</s>
+                  <span className="text-xs font-bold uppercase tracking-wide bg-coral-600 text-white rounded-md px-2 py-1" data-testid="product-sale-badge">
+                    −{Math.round(((v.compare_at_eur - v.price_eur) / v.compare_at_eur) * 100)}%
+                  </span>
+                </>
+              )}
+              {showsBGN() && <span className="text-base font-normal text-slate-500">({fmtBGN(v?.price_eur || 0)})</span>}
             </div>
 
             {p.variants.length > 0 && (

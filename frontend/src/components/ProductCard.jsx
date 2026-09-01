@@ -9,10 +9,15 @@ export default function ProductCard({ product, showAddToCart = false }) {
   const { lp, t } = useLocaleCtx();
   const { add } = useCart();
   const variants = product.variants || [];
-  const minPrice = variants.length ? Math.min(...variants.map((v) => v.price_eur)) : 0;
+  const cheapest = variants.length
+    ? variants.reduce((a, b) => (b.price_eur < a.price_eur ? b : a))
+    : null;
+  const minPrice = cheapest ? cheapest.price_eur : 0;
+  const compareAt = cheapest?.compare_at_eur || product.compare_at_price || 0;
   const totalStock = variants.reduce((s, v) => s + (v.stock || 0), 0);
   const out = totalStock <= 0;
-  const hasCompare = product.compare_at_price && product.compare_at_price > minPrice;
+  const hasCompare = compareAt > minPrice;
+  const off = hasCompare ? Math.round(((compareAt - minPrice) / compareAt) * 100) : 0;
 
   const images = product.images && product.images.length ? product.images : [product.image];
   const primary = images[0];
@@ -41,7 +46,9 @@ export default function ProductCard({ product, showAddToCart = false }) {
           )}
           <div className="product-badges product-badges--top-left">
             {hasCompare && !out && (
-              <span className="product-badges__badge product-badges__badge--rectangle product-badges__badge--sale">%</span>
+              <span className="product-badges__badge product-badges__badge--rectangle product-badges__badge--sale">
+                −{off}%
+              </span>
             )}
           </div>
           {out && (
@@ -58,6 +65,7 @@ export default function ProductCard({ product, showAddToCart = false }) {
         <div className="product-card__price">
           {variants.length > 1 && <span className="text-slate-500 mr-1">{t("from")}</span>}
           <span>{fmtEUR(minPrice)}</span>
+          {hasCompare && <s className="text-slate-400 font-normal ml-1.5">{fmtEUR(compareAt)}</s>}
           {showsBGN() && <span className="text-slate-500 ml-1.5 text-[12px]">({fmtBGN(minPrice)})</span>}
         </div>
       </Link>
