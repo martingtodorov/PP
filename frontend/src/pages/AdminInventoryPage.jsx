@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, PackageX, Boxes } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
-import { api, fmtEUR, formatErr } from "../lib/api";
+import { api, fmtEUR, formatErr, img } from "../lib/api";
 
 const STATE = {
   out: { label: "Изчерпан", cls: "bg-red-100 text-red-700" },
@@ -101,7 +101,7 @@ export default function AdminInventoryPage() {
                 <tr key={key(i)} className="border-t border-slate-100" data-testid={`inv-row-${i.sku || i.handle + i.variant_name}`}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      {i.image && <img src={i.image} alt="" className="w-9 h-9 object-contain bg-white border border-slate-200 rounded" />}
+                      {i.image && <img src={img(i.image, 80)} alt="" className="w-9 h-9 object-contain bg-white border border-slate-200 rounded" />}
                       <span className="font-medium">{i.title}</span>
                     </div>
                   </td>

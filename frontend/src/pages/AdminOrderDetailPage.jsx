@@ -3,7 +3,7 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Copy, Check, Truck, Clock, PackageCheck } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
-import { api, fmtEUR, fmtMoney, formatErr } from "../lib/api";
+import { api, fmtEUR, fmtMoney, formatErr, img } from "../lib/api";
 import { Badge, PAY_BADGE, FUL_BADGE } from "./AdminOrdersPage";
 
 const CopyField = ({ label, value, testId, multiline = false }) => {
@@ -104,7 +104,7 @@ export default function AdminOrderDetailPage() {
               {order.items.map((it, i) => (
                 <li key={i} className="flex gap-3" data-testid={`order-item-${i}`}>
                   {it.image ? (
-                    <img src={it.image} alt="" className="w-16 h-16 object-contain bg-slate-50 border border-slate-200 rounded-lg flex-shrink-0" />
+                    <img src={img(it.image, 160)} alt="" className="w-16 h-16 object-contain bg-slate-50 border border-slate-200 rounded-lg flex-shrink-0" />
                   ) : <div className="w-16 h-16 bg-slate-100 rounded-lg flex-shrink-0" />}
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-slate-900 leading-snug">

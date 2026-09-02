@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Plus, Pencil, Trash2, Languages, Sparkles, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import AdminLayout from "../components/AdminLayout";
-import { api, fmtEUR, formatErr } from "../lib/api";
+import { api, fmtEUR, formatErr, img } from "../lib/api";
 import { LOCALES } from "../i18n/locales";
 
 export default function AdminProductsPage() {
@@ -117,7 +117,7 @@ export default function AdminProductsPage() {
                 <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50" data-testid={`admin-product-${p.handle}`}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <img src={p.image} alt="" className="w-10 h-10 object-contain bg-white border border-slate-200 rounded" />
+                      <img src={img(p.image, 80)} alt="" className="w-10 h-10 object-contain bg-white border border-slate-200 rounded" />
                       <span className="font-medium">
                         {p.title}
                         {(p.variants || []).some((v) => v.sku) && (

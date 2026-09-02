@@ -1534,6 +1534,23 @@ button.bg-coral-600:disabled { box-shadow: none; }
 .nc2-courier:hover { transform: translateY(-2px); }
 .nc2-courier--on { border-color: #fe6f61; box-shadow: 0 0 0 3px rgba(254, 111, 97, 0.13); }
 .nc2-methods { display: flex; flex-direction: column; gap: 8px; }
+.nc2-locate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 2px;
+  padding: 8px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  cursor: pointer;
+  transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
+}
+.nc2-locate:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; transform: translateY(-1px); }
+.nc2-locate:disabled { opacity: .65; cursor: default; }
 .nc2-method {
   display: flex;
   align-items: center;

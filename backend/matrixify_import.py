@@ -311,9 +311,14 @@ def import_products() -> None:
             price = r.get("Variant Price")
             if not name or price is None:
                 continue
+            # the store sells through the Bulgarian market, where the "was" price lives
+            compare = r.get("Variant Compare At Price")
+            if compare is None:
+                compare = r.get("Compare At Price / Bulgaria")
             variants.append({
                 "name": str(name),
                 "price_eur": round(num(price), 2),
+                "compare_at_eur": round(num(compare), 2) if num(compare) > num(price) else 0.0,
                 "stock": int(num(r.get("Variant Inventory Qty"))),
                 "sku": r.get("Variant SKU") or "",
             })

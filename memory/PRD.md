@@ -781,3 +781,30 @@ broken image for up to a year.
 - 2 new guard tests (63 deploy tests green).
 **Owner action:** purge the Cloudflare cache (Caching → Configuration → Purge Everything) once, then
 deploy nginx + frontend + the catalog re-import.
+
+### 2026-06 — IP geo в чекаута: причината беше самият IP-град
+Собственик докладва: "в Созопол съм, показва офиси до Велико Търново".
+Измерено: `ipwho.is` **и** `ip-api.com` връщат `Sofia` (центроида на страната) за всеки български IP,
+независимо от ISP — city-level IP геолокацията у нас е безполезна, а грешният град е по-лош от липсващ.
+- `backend/geo.py`: `/geo/country` вече връща само държава + `city: ""` (и информативно `ip_city`).
+  `/geo/reverse` (Nominatim, fallback city→town→village→municipality) дава истинския град по
+  координати на устройството: 42.4185,27.6957 → `Созопол` 8130.
+- `frontend/src/lib/checkoutPrefetch.js`: нов `pfDeviceGeo({prompt})` — navigator.geolocation →
+  `/geo/reverse`, кеш 30 мин в `pp_geo_device_v1`.
+- `PreCheckoutModal.jsx`: `locate()` при отваряне; ако няма разрешение — градът остава ПРАЗЕН
+  (изборът на собственика) и се показва бутон `pc-locate-btn` "Намери най-близките до мен".
+- Проверено (iteration_27, 100%): Созопол → placeholder "най-близки до Созопол", първите 4 офиса са в
+  Созопол; Велико Търново → същото; без geo — нищо не се предполага.
+
+### 2026-06 — задрасканата цена на Ретатрутид
+Причина: Matrixify експортът държи "was" цената в market колоната **`Compare At Price / Bulgaria`**
+(`Variant Compare At Price` е празна), а импортът я игнорираше напълно.
+- `matrixify_import.py`: варианти вече четат `Variant Compare At Price` → fallback
+  `Compare At Price / Bulgaria` в `compare_at_eur`; съществуващата база е backfill-ната.
+- Резултат: 5mg 49/59 €, 10mg 89/99 €, 30mg 159/179 € — задраскана цена + процент отстъпка на
+  продуктовата страница, в StickyBuyBar и в картите в колекциите. Само Ретатрутид има такива цени в
+  експорта (проверени 40 продукта — без регресия).
+- Тестове: `backend/tests/test_iteration27_geo_and_compareat.py` (13 зелени).
+
+**Отворено (P1):** RevOrder webhook (чака URL от собственика), верификация на `purepeptide.bg` в
+Resend, UI низовете на чекаута за не-BG магазините.
