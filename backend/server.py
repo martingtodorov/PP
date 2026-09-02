@@ -20,6 +20,8 @@ import asyncio
 import hashlib
 import logging
 import uuid
+import random
+from urllib.parse import urlparse, unquote
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 
@@ -36,6 +38,7 @@ from translations_seed import COLLECTION_TR, PRODUCT_TR, ARTICLE_TR
 from i18n import (
     LOCALES, DEFAULT_LOCALE, LOCALE_META, SITE_ORIGINS,
     normalize_locale, localize_doc, localize_list, ai_translate, ai_translate_chunked, ai_translate_page,
+    ai_rewrite_html,
 )
 from pages_seed import PAGE_SLUGS, PAGE_LABELS, DEFAULT_PAGES
 import storage
@@ -474,6 +477,20 @@ def _apply_manual_order(prods: List[Dict[str, Any]], order: Optional[List[str]])
     return sorted(prods, key=lambda p: (index.get(p.get("handle"), len(index)), p.get("title", "")))
 
 
+def retired_handle(doc: Dict[str, Any], loc: str, requested: str) -> bool:
+    """A handle that was deliberately rotated away must 404 for that locale (delisted URL)."""
+    return any(r.get("locale") == loc and r.get("from") == requested for r in (doc.get("rotations") or []))
+
+
+async def catalog_handle(loc: str = DEFAULT_LOCALE) -> str:
+    """The "all peptides" collection handle as it is published right now for this locale."""
+    doc = await db.collections_cat.find_one({"$or": [{"link_key": "catalog"}, {"handle": ALL_COLLECTION}]},
+                                            {"_id": 0, "handle": 1, "translations": 1})
+    if not doc:
+        return ALL_COLLECTION
+    return ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc["handle"]
+
+
 @api.get("/collections/{handle}")
 async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
@@ -482,7 +499,7 @@ async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     query = ({"handle": {"$in": [ALL_COLLECTION, LEGACY_ALL]}} if handle == ALL_COLLECTION
              else {"$or": [{"handle": handle}, {f"translations.{loc}.handle": handle}]})
     col = await db.collections_cat.find_one(query, {"_id": 0})
-    if not col:
+    if not col or retired_handle(col, loc, handle):
         raise HTTPException(404, "Колекцията не е намерена")
     base_handle = col["handle"]
     if base_handle in (ALL_COLLECTION, LEGACY_ALL):
@@ -529,7 +546,7 @@ async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     p = await db.products.find_one(
         {"$or": [{"handle": handle}, {f"translations.{loc}.handle": handle}]}, {"_id": 0}
     )
-    if not p:
+    if not p or retired_handle(p, loc, handle):
         raise HTTPException(404, "Продуктът не е намерен")
     related = await db.products.find(
         {"handle": {"$ne": p["handle"]}, "collections": {"$in": p.get("collections", [])}},
@@ -621,6 +638,139 @@ async def delete_delisted_link(link_id: str, user=Depends(require_admin)):
     if res.deleted_count == 0:
         raise HTTPException(404, "Линкът не е намерен")
     return {"ok": True}
+
+
+# ---------- Content rotation ----------
+ROTATABLE = {"collections": ("collections_cat", "handle"), "products": ("products", "handle"),
+             "articles": ("articles", "handle")}
+URL_RE = re.compile(r"https?://[^\s<>\"'`,;)\]}]+|(?<![\w/])/[a-z0-9\-_%/\u0400-\u04FF]{3,}")
+
+
+def parse_link_list(text: str) -> List[str]:
+    """Split a pasted blob into URLs — newlines, spaces, commas or glued 'https://a...https://b...'."""
+    spaced = re.sub(r"(?<!^)(?=https?://)", "\n", text or "")
+    out, seen = [], set()
+    for raw in URL_RE.findall(spaced):
+        url = raw.strip().rstrip(".,;")
+        if url not in seen:
+            seen.add(url)
+            out.append(url)
+    return out
+
+
+def split_url(url: str) -> tuple:
+    """(kind, handle) for a storefront URL or path; ('', '') when it is not rotatable."""
+    path = urlparse(url).path if "://" in url else url
+    parts = [p for p in unquote(path).split("/") if p]
+    if len(parts) >= 2 and parts[0] in LOCALES:      # /en/collections/foo
+        parts = parts[1:]
+    if len(parts) >= 2 and parts[0] in ROTATABLE:
+        return parts[0], parts[1]
+    return "", ""
+
+
+def rotation_code(taken: set) -> str:
+    while True:
+        code = "".join(random.choices("abcdefghijklmnopqrstuvwxyz", k=3))
+        if code not in taken:
+            return code
+
+
+async def rotate_one(link: Dict[str, Any], user_email: str) -> Dict[str, Any]:
+    kind, handle = split_url(link["url"])
+    if not kind:
+        raise HTTPException(400, f"Не мога да ротирам този URL: {link['url']}")
+    loc = normalize_locale(link.get("locale") or DEFAULT_LOCALE)
+    coll = db[ROTATABLE[kind][0]]
+    doc = await coll.find_one({"$or": [{"handle": handle}, {f"translations.{loc}.handle": handle}]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, f"Няма съдържание с handle „{handle}“")
+
+    history = [r for r in (doc.get("rotations") or []) if r.get("locale") == loc]
+    base = history[0]["from"] if history else doc["handle"]
+    new_handle = f"{base}-{rotation_code({r.get('code') for r in (doc.get('rotations') or [])})}"
+
+    tr = dict(doc.get("translations") or {})
+    entry = dict(tr.get(loc) or {})
+    entry["handle"] = new_handle
+
+    rewritten = False
+    source_html = entry.get("description") or (doc.get("description") if loc == DEFAULT_LOCALE else "")
+    if source_html and len(source_html) > 40:
+        try:
+            entry["description"] = await ai_rewrite_html(
+                source_html, loc, context=f"{kind} „{entry.get('title') or doc.get('title')}“ — ротация на съдържание")
+            rewritten = True
+        except Exception as exc:            # a failed rewrite must not block the URL rotation
+            log.warning("rotation rewrite failed for %s: %s", handle, exc)
+    tr[loc] = entry
+
+    rotations = list(doc.get("rotations") or [])
+    rotations.append({"locale": loc, "from": handle, "to": new_handle, "code": new_handle.split("-")[-1],
+                      "rewritten": rewritten, "at": now_utc(), "by": user_email})
+    await coll.update_one({"handle": doc["handle"]}, {"$set": {"translations": tr, "rotations": rotations,
+                                                              "updated_at": now_utc()}})
+    _links_cache.clear()
+
+    site = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    routes = ((site or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
+    new_url = _loc_url(loc, f"/{kind}/{new_handle}", routes)
+    await db.delisted_links.update_one({"id": link["id"]}, {"$set": {
+        "status": "rotated", "replacement_url": new_url, "rotated_at": now_utc(), "rewritten": rewritten,
+        "notes": (link.get("notes") or "").strip(),
+    }})
+    return {"id": link["id"], "url": link["url"], "new_url": new_url, "handle": new_handle,
+            "locale": loc, "kind": kind, "rewritten": rewritten}
+
+
+class BulkLinksIn(BaseModel):
+    text: str
+    locale: str = "bg"
+    reason: str = ""
+
+
+@api.post("/admin/delisted-links/bulk")
+async def create_delisted_links_bulk(payload: BulkLinksIn, user=Depends(require_admin)):
+    """Paste as many links as you want — one per line, comma separated or glued together."""
+    urls = parse_link_list(payload.text)
+    if not urls:
+        raise HTTPException(400, "Не разпознах нито един линк в текста")
+    existing = {d["url"] for d in await db.delisted_links.find({"url": {"$in": urls}}, {"_id": 0, "url": 1}).to_list(1000)}
+    docs = [{"id": str(uuid.uuid4()), "url": u, "locale": normalize_locale(payload.locale),
+             "reason": payload.reason, "status": "pending", "replacement_url": "", "notes": "",
+             "created_at": now_utc(), "updated_at": now_utc(), "created_by": user["email"]}
+            for u in urls if u not in existing]
+    if docs:
+        await db.delisted_links.insert_many(docs)
+    return {"added": len(docs), "skipped": len(urls) - len(docs),
+            "links": [{k: v for k, v in d.items() if k != "_id"} for d in docs]}
+
+
+@api.post("/admin/delisted-links/{link_id}/rotate")
+async def rotate_delisted_link(link_id: str, user=Depends(require_admin)):
+    link = await db.delisted_links.find_one({"id": link_id}, {"_id": 0})
+    if not link:
+        raise HTTPException(404, "Линкът не е намерен")
+    return {"rotated": await rotate_one(link, user["email"])}
+
+
+@api.post("/admin/delisted-links/rotate-pending")
+async def rotate_pending_links(user=Depends(require_admin)):
+    links = await db.delisted_links.find({"status": "pending"}, {"_id": 0}).to_list(200)
+    done, failed = [], []
+    gate = asyncio.Semaphore(3)   # the AI rewrites are the slow part — run a few in parallel
+
+    async def run(link):
+        async with gate:
+            try:
+                done.append(await rotate_one(link, user["email"]))
+            except HTTPException as exc:
+                failed.append({"url": link["url"], "error": exc.detail})
+            except Exception as exc:
+                failed.append({"url": link["url"], "error": str(exc)})
+
+    await asyncio.gather(*(run(l) for l in links))
+    return {"rotated": done, "failed": failed}
 
 
 @api.get("/settings")
@@ -718,9 +868,12 @@ async def checkout(payload: CheckoutIn, request: Request):
 
     line_items = []
     for li in payload.items:
-        prod = await db.products.find_one({"id": li.product_id}, {"_id": 0})
+        # the SKU is the stable key — a re-import gives products new ids, so a cart saved in the
+        # browser before the import must still check out
+        prod = (await db.products.find_one({"id": li.product_id}, {"_id": 0})
+                or await db.products.find_one({"variants.sku": li.variant_sku}, {"_id": 0}))
         if not prod:
-            raise HTTPException(400, f"Продукт не е намерен: {li.product_id}")
+            raise HTTPException(400, f"Продуктът вече не се предлага (SKU {li.variant_sku}) — премахнете го от количката")
         variant = next((v for v in prod.get("variants", []) if v.get("sku") == li.variant_sku), None)
         if not variant:
             raise HTTPException(400, f"Вариант не е намерен: {li.variant_sku}")
@@ -851,6 +1004,9 @@ async def get_order(order_id: str, request: Request):
     if not o:
         raise HTTPException(404, "Поръчката не е намерена")
     user = await get_user_from_request(request)
+    blocker = cancel_blocker(o)
+    o["cancellable"] = not blocker
+    o["cancel_blocker"] = blocker
     is_owner = user and (user.get("role") == "admin" or o.get("customer_id") == user.get("id"))
     if not is_owner:
         # allow guest lookup by id (acts as token) for confirmation page
@@ -863,6 +1019,8 @@ async def get_order(order_id: str, request: Request):
 @api.get("/me/orders")
 async def my_orders(user=Depends(require_user)):
     docs = await db.orders.find({"customer_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    for d in docs:
+        d["cancellable"] = not cancel_blocker(d)
     return {"orders": docs}
 
 
@@ -956,6 +1114,11 @@ def _order_view(o: Dict[str, Any]) -> Dict[str, Any]:
         "currency": cur,
         "delivery": o.get("delivery"),
         "discount_code": o.get("discount_code") or "",
+        "cancellable": not cancel_blocker(o),
+        "cancel_blocker": cancel_blocker(o),
+        "cancelled_at": o.get("cancelled_at"),
+        "cancelled_by": o.get("cancelled_by"),
+        "cancel_reason": o.get("cancel_reason") or "",
     }
 
 
@@ -1157,16 +1320,105 @@ async def admin_test_email(payload: TestEmailIn, user=Depends(require_admin)):
     return res
 
 
-@api.post("/admin/orders/{order_id}/cancel")
-async def cancel_order(order_id: str, user=Depends(require_admin)):
-    o = await db.orders.find_one({"id": order_id})
+CANCEL_LOCKED = ("fulfilled", "shipped", "delivered")
+
+
+def cancel_blocker(o: Dict[str, Any]) -> str:
+    """Empty string when the order may still be cancelled, otherwise the reason it may not."""
+    if o.get("status") == "cancelled" or o.get("payment_status") == "cancelled":
+        return "Поръчката вече е отказана"
+    if (o.get("fulfillment_status") or "") in CANCEL_LOCKED or o.get("status") in CANCEL_LOCKED:
+        return "Поръчката вече е изпратена — свържете се с нас за връщане"
+    return ""
+
+
+async def perform_cancel(o: Dict[str, Any], by: str, reason: str = "") -> Dict[str, Any]:
+    """Cancel at the courier, put the stock back, mark the order cancelled and notify both sides."""
+    blocker = cancel_blocker(o)
+    if blocker:
+        raise HTTPException(400, blocker)
+
+    courier: Dict[str, Any] = {}
+    if (o.get("fulfillment") or {}).get("number"):
+        try:
+            courier["fulfillment"] = await fulfillment.cancel_order(o["id"])
+        except Exception as exc:
+            courier["fulfillment_error"] = str(exc)
+            log.warning("fulfillment cancel failed for %s: %s", o.get("order_number"), exc)
+    if (o.get("shipment") or {}).get("awb"):
+        try:
+            courier["shipment"] = await nextlevel.cancel_shipment(o["id"])
+        except Exception as exc:
+            courier["shipment_error"] = str(exc)
+            log.warning("shipment cancel failed for %s: %s", o.get("order_number"), exc)
+
+    for li in o.get("items") or []:
+        await db.products.update_one(
+            {"id": li["product_id"], "variants.sku": li["variant_sku"]},
+            {"$inc": {"variants.$.stock": li["quantity"]}},
+        )
+        product = await db.products.find_one({"id": li["product_id"]}, {"_id": 0})
+        if product:
+            variant = next((v for v in product.get("variants", []) if v.get("sku") == li["variant_sku"]), {})
+            await log_inventory(product, variant.get("name", li.get("variant_name", "")),
+                                li["quantity"], int(variant.get("stock") or 0),
+                                f"Отказана поръчка {o['order_number']}", by)
+
+    await db.orders.update_one({"id": o["id"]}, {"$set": {
+        "status": "cancelled", "payment_status": "cancelled", "fulfillment_status": "cancelled",
+        "cancelled_at": now_utc(), "cancelled_by": by, "cancel_reason": reason, "updated_at": now_utc(),
+    }})
+
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    site_settings = (s or {}).get("value", {})
+    if o.get("customer_email"):
+        try:
+            await email_service.send_order_cancelled(o, site_settings, reason)
+        except Exception:
+            log.exception("cancellation email failed")
+    try:
+        await email_service.send_email(
+            os.environ.get("CONTACT_EMAIL") or ADMIN_EMAIL,
+            f"Отказана поръчка {o['order_number']} — PurePeptide",
+            email_templates.render_admin_note(
+                "ОТКАЗАНА", f"Поръчка {o['order_number']} е отказана",
+                f"Отказана от: {by}<br>Причина: {reason or '—'}<br>"
+                f"Сума: {o.get('total_display') or o.get('total_eur')} {o.get('currency') or 'EUR'}<br>"
+                f"Наличностите са върнати автоматично."),
+            site_settings,
+        )
+    except Exception:
+        log.exception("admin cancellation email failed")
+
+    return {"ok": True, "courier": courier}
+
+
+class CancelIn(BaseModel):
+    reason: str = ""
+
+
+@api.post("/orders/{order_id}/cancel")
+async def cancel_own_order(order_id: str, payload: CancelIn, request: Request):
+    """A customer may cancel while the parcel has not been shipped yet."""
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not o:
-        raise HTTPException(404)
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": {"payment_status": "cancelled", "fulfillment_status": "cancelled", "updated_at": now_utc()}},
-    )
-    return {"ok": True}
+        raise HTTPException(404, "Поръчката не е намерена")
+    user = await get_user_from_request(request)
+    if user and user.get("role") == "admin":
+        by = f"админ {user['email']}"
+    elif user and o.get("customer_id") == user.get("id"):
+        by = f"клиент {user.get('email')}"
+    else:
+        by = "клиент (без профил)"
+    return await perform_cancel(o, by, payload.reason.strip()[:300])
+
+
+@api.post("/admin/orders/{order_id}/cancel")
+async def cancel_order(order_id: str, payload: CancelIn = CancelIn(), user=Depends(require_admin)):
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Поръчката не е намерена")
+    return await perform_cancel(o, f"админ {user['email']}", payload.reason.strip()[:300])
 
 
 @api.get("/admin/customers")
@@ -2790,7 +3042,7 @@ async def sitemap():
     cols = await db.collections_cat.find({}, {"_id": 0}).to_list(200)
     prods = await db.products.find({}, {"_id": 0}).to_list(500)
     arts = await db.articles.find({"published": {"$ne": False}}, {"_id": 0}).to_list(200)
-    static_pages = ["", f"/collections/{ALL_COLLECTION}"] + [f"/pages/{s}" for s in PAGE_SLUGS] + [
+    static_pages = [""] + [f"/pages/{s}" for s in PAGE_SLUGS] + [
         "/pages/articles", "/pages/html-sitemap", "/pages/html-sitemap-products",
         "/pages/html-sitemap-collections", "/pages/html-sitemap-blogs",
         "/pages/html-sitemap-articles", "/pages/html-sitemap-pages",
@@ -2839,7 +3091,7 @@ async def agentic_sitemap():
     origin = (routes.get("bg") or SITE_ORIGINS["bg"])["origin"]
     cols = await db.collections_cat.find({}, {"_id": 0, "handle": 1}).to_list(200)
     prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0, "handle": 1}).to_list(500)
-    paths = ["/", f"/collections/{ALL_COLLECTION}", "/pages/html-sitemap", "/pages/articles",
+    paths = ["/", f"/collections/{await catalog_handle()}", "/pages/html-sitemap", "/pages/articles",
              "/pages/chemical-analysis", "/pages/faq", "/pages/contact-1", "/agents.md", "/llms.txt"]
     paths += [f"/collections/{c['handle']}" for c in cols]
     paths += [f"/products/{p['handle']}" for p in prods]
@@ -2868,7 +3120,7 @@ async def agents_md():
         "",
         "## Entry points",
         f"- Home: {origin}/",
-        f"- All peptides: {origin}/collections/{ALL_COLLECTION}",
+        f"- All peptides: {origin}/collections/{await catalog_handle()}",
         f"- HTML sitemap: {origin}/pages/html-sitemap",
         f"- XML sitemap: {origin}/sitemap.xml",
         f"- Scientific articles: {origin}/pages/articles",
@@ -2917,7 +3169,7 @@ async def llms_txt():
         "",
         "## Store",
         f"- [Home]({origin}/): storefront entry point",
-        f"- [All peptides]({origin}/collections/{ALL_COLLECTION}): the full catalogue with prices and stock",
+        f"- [All peptides]({origin}/collections/{await catalog_handle()}): the full catalogue with prices and stock",
         f"- [Lab analysis & COA]({origin}/pages/chemical-analysis): HPLC / LC-MS certificates per batch",
         f"- [Scientific articles]({origin}/pages/articles): research summaries per peptide",
         f"- [FAQ]({origin}/pages/faq): storage, reconstitution, delivery and payment questions",

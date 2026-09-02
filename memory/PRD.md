@@ -1103,3 +1103,44 @@ deploy_backend + deploy_frontend + deploy_nginx. Отворено: Resend дом
   `qa-country@example.com` е изчистен. В панела на NextLevel може да останат записи за изтриване.
 - Тестове: `tests/test_nextlevel_payload.py` (7), `tests/test_fulfillment.py` (18, вкл. нов obpd тест),
   `tests/test_iteration37_llms.py` (5) — 30 зелени. (Поправена и остаряла проверка за тегло 0.4 → 0.1.)
+
+### 2026-06 — Ротация на изтеглени линкове, bulk paste, 404 → каталог, отказ на поръчка
+**Ротация на съдържание** (`/admin/delisted-links`):
+- `POST /api/admin/delisted-links/{id}/rotate` и `.../rotate-pending` (до 3 паралелно, защото AI
+  пренаписването е бавно). Нов handle = базовият + случаен 3-буквен код (`immunology` → `immunology-htj`),
+  записан **само в `translations.{locale}.handle`** → другите езици остават непокътнати.
+- Пренаписва се **само описанието** с `i18n.ai_rewrite_html()` (Claude): същите факти, задължително
+  същите HTML тагове и H1, ±15% дължина. Ако AI-то падне, ротацията пак минава и в реда пише
+  „описанието не е пренаписано — ротирайте пак“ (`rewritten: false`).
+- Старият адрес умира: `retired_handle()` пази историята в `rotations[]` и връща 404 само за езика,
+  за който е ротиран. Повторна ротация — само когато собственикът пак маркира линка като деиндексиран.
+- `catalog_handle()` заменя твърдо зашития `ALL_COLLECTION` в sitemap, agentic sitemap, agents.md и
+  llms.txt; `/api/links` вече дава ротирания път, така че меню, hero бутон и вътрешни линкове следват сами.
+- **Bulk paste**: `POST /api/admin/delisted-links/bulk` + текстово поле в админа. `parse_link_list()`
+  разпознава линкове на нови редове, със запетаи и дори залепени (`...healinghttps://...`), маха дублите.
+- Ротирани на 2026-06 (само BG): `2all-the-peptides-1-phc`, `immunology-htj`, `studies-on-healing-pvc`,
+  `secretagogues-cbc`, `melanin-i-libido-idh` (в preview; в продукция кодовете ще са други).
+
+**404 → каталог**: `NotFoundBlock` чете `/api/links` и пренасочва (replace) към „всички пептиди“,
+затова ротиран/премахнат адрес никога не е задънена улица и не може да зацикли към себе си.
+
+**Отказ на поръчка**:
+- `POST /api/orders/{id}/cancel` (клиент, вкл. гост през id-то като токен) и
+  `POST /api/admin/orders/{id}/cancel` (админ, с причина).
+- `cancel_blocker()`: не може при `shipped/fulfilled/delivered` или вече отказана.
+- `perform_cancel()`: анулира при NextLevel (fulfillment webhook `cancelled` и/или товарителница),
+  връща наличностите + `inventory_log` („Отказана поръчка X“), маркира
+  `status/payment_status/fulfillment_status = cancelled` + `cancelled_at/by/reason`, праща имейл на
+  клиента (`send_order_cancelled`) и на собственика.
+- UI: `CancelOrderButton` (`cancel-order-btn`) на страницата с потвърждение и в „Моят профил“;
+  в админ детайла — `order-cancel-btn` + банер `order-cancelled-banner`. Показва се само при `cancellable`.
+
+**Поправен бъг**: „Продукт не е намерен: 282eceb0…“ — количка, запазена в браузъра преди реимпорт,
+съдържаше стар `product_id`. Чекаутът вече намира продукта и по `variants.sku`, а `CartContext`
+след зареждане пре-мапва количката по SKU (цена, име, снимка, нов id) и маха вече несъществуващи артикули.
+
+**Cookie банерът** вече е компактна карта долу вляво на десктоп (620px) — не покрива бутоните.
+
+Тестове: `tests/test_rotation.py` (5), `tests/test_order_cancel.py` (3),
+`tests/test_iteration38_rotation_and_checkout.py` (13), отчети iteration_38 и iteration_39 —
+backend 100%, frontend 100%.

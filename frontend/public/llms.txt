@@ -11,7 +11,7 @@ Pigeon in Bulgaria, FAN Courier, Speedex and GLS across the EU.
 ## Store
 
 - [Home](https://purepeptide.bg/): storefront entry point
-- [All peptides](https://purepeptide.bg/collections/2all-the-peptides-1): the full catalogue with prices and stock
+- [All peptides](https://purepeptide.bg/api/llms.txt): the full catalogue with prices and stock (live list)
 - [Lab analysis & COA](https://purepeptide.bg/pages/chemical-analysis): HPLC / LC-MS certificates per batch
 - [Scientific articles](https://purepeptide.bg/pages/articles): research summaries per peptide
 - [FAQ](https://purepeptide.bg/pages/faq): storage, reconstitution, delivery and payment questions

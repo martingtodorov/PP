@@ -233,3 +233,48 @@ async def ai_translate_page(source: Dict[str, Any], locales: List[str]) -> Dict[
         if entry:
             out[loc] = entry
     return out
+
+
+async def ai_rewrite_html(html: str, locale: str, context: str = "") -> str:
+    """Light rewrite for content rotation: same meaning and facts, different wording.
+
+    Keeps the HTML structure (including every heading) byte-for-byte, only the sentences change.
+    """
+    from anthropic import AsyncAnthropic
+
+    api_key = os.environ["ANTHROPIC_API_KEY"]
+    model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
+    lang = LOCALE_META[normalize_locale(locale)]["name"]
+    system = (
+        "You rewrite e-commerce copy for a peptide research supplier so that it is no longer a "
+        "duplicate of the previous version, while saying exactly the same thing.\n"
+        "HARD RULES:\n"
+        "- Keep the SAME language as the input (" + lang + ").\n"
+        "- Keep every HTML tag, attribute and their order EXACTLY as given: same number of <h1>, "
+        "<h2>, <h3>, <p>, <ul>, <li>, <img>, <a> and identical src/href values.\n"
+        "- Rewrite only the visible sentences: different word order, synonyms, different sentence "
+        "openings. Keep headings' meaning; you may reword them slightly but never drop a heading.\n"
+        "- Never change facts, numbers, dosages (mg/mcg), CAS numbers, prices, product or peptide "
+        "names, legal/disclaimer wording.\n"
+        "- Keep roughly the same length (±15%).\n"
+        "Return ONLY the rewritten HTML, no markdown fences, no commentary."
+    )
+    client = AsyncAnthropic(api_key=api_key)
+    try:
+        response = await client.messages.create(
+            model=model, max_tokens=16000, system=system,
+            messages=[{"role": "user", "content": (f"Context: {context}\n\n" if context else "") + html}],
+        )
+    finally:
+        await client.close()
+    if getattr(response, "stop_reason", None) == "max_tokens":
+        raise RuntimeError("Отговорът беше отрязан (max_tokens) — текстът е прекалено дълъг")
+    block = next((b for b in response.content if getattr(b, "type", None) == "text"), None)
+    if block is None:
+        raise RuntimeError("Claude returned no text block")
+    text = block.text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.lstrip().lower().startswith("html"):
+            text = text.lstrip()[4:]
+    return text.strip()

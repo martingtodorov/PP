@@ -10,6 +10,7 @@ import { Label } from "../components/ui/label";
 import { Badge } from "../components/ui/badge";
 import { useAuth } from "../context/AuthContext";
 import { api, fmtPrice, formatErr } from "../lib/api";
+import CancelOrderButton from "../components/CancelOrderButton";
 
 const STATUS_BG = {
   awaiting_payment: { label: "Очаква плащане", cls: "bg-amber-100 text-amber-800 border-amber-300" },
@@ -29,9 +30,8 @@ export default function AccountPage() {
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
 
-  useEffect(() => {
-    if (user) api.get("/me/orders").then(({ data }) => setOrders(data.orders));
-  }, [user]);
+  const loadOrders = () => api.get("/me/orders").then(({ data }) => setOrders(data.orders));
+  useEffect(() => { if (user) loadOrders(); }, [user]);
 
   const doLogin = async (e) => {
     e.preventDefault();
@@ -96,6 +96,7 @@ export default function AccountPage() {
                     <p className="font-display font-bold text-slate-900">{fmtPrice(o.total_eur)}</p>
                     <p className="text-xs text-slate-500">{o.items.length} артикула</p>
                   </div>
+                  <CancelOrderButton order={o} onDone={loadOrders} className="w-full sm:w-auto" />
                 </div>
               );
             })}

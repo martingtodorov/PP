@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, ExternalLink, RotateCcw, Check } from "lucide-react";
+import { Plus, Trash2, ExternalLink, RotateCcw, Check, Shuffle, Loader2, ClipboardPaste } from "lucide-react";
 import { toast } from "sonner";
 import AdminLayout from "../components/AdminLayout";
 import { api, formatErr } from "../lib/api";
@@ -19,6 +19,8 @@ export default function AdminDelistedLinksPage() {
   const [draft, setDraft] = useState(EMPTY);
   const [filter, setFilter] = useState("all");
   const [busy, setBusy] = useState(false);
+  const [bulk, setBulk] = useState("");
+  const [rotating, setRotating] = useState("");
 
   const load = () => api.get("/admin/delisted-links").then(({ data }) => setLinks(data.links));
   useEffect(() => { load(); }, []);
@@ -33,6 +35,38 @@ export default function AdminDelistedLinksPage() {
       toast.success("Линкът е добавен");
       load();
     } catch (err) { toast.error(formatErr(err)); } finally { setBusy(false); }
+  };
+
+  const addBulk = async () => {
+    if (!bulk.trim()) return;
+    setBusy(true);
+    try {
+      const { data } = await api.post("/admin/delisted-links/bulk", { text: bulk, locale: draft.locale, reason: draft.reason });
+      setBulk("");
+      toast.success(`Добавени ${data.added} линка${data.skipped ? `, ${data.skipped} вече бяха в списъка` : ""}`);
+      load();
+    } catch (err) { toast.error(formatErr(err)); } finally { setBusy(false); }
+  };
+
+  const rotate = async (l) => {
+    setRotating(l.id);
+    try {
+      const { data } = await api.post(`/admin/delisted-links/${l.id}/rotate`);
+      const r = data.rotated;
+      toast.success(`Нов адрес: /${r.kind}/${r.handle}${r.rewritten ? " · описанието е пренаписано" : " · описанието остана същото"}`);
+      load();
+    } catch (err) { toast.error(formatErr(err)); } finally { setRotating(""); }
+  };
+
+  const rotateAll = async () => {
+    if (!window.confirm(`Да ротирам ли всички ${pendingCount} чакащи линка? Старите адреси ще спрат да работят (404).`)) return;
+    setRotating("all");
+    try {
+      const { data } = await api.post("/admin/delisted-links/rotate-pending");
+      toast.success(`Ротирани ${data.rotated.length} линка`);
+      (data.failed || []).forEach((f) => toast.error(`${f.url}: ${f.error}`));
+      load();
+    } catch (err) { toast.error(formatErr(err)); } finally { setRotating(""); }
   };
 
   const update = async (l, patch) => {
@@ -90,6 +124,32 @@ export default function AdminDelistedLinksPage() {
         </button>
       </form>
 
+      <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6" data-testid="delisted-bulk">
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-2">
+          <ClipboardPaste className="h-4 w-4 text-coral-600" /> Поставете няколко линка наведнъж
+        </label>
+        <p className="text-xs text-slate-500 mb-3">
+          Всеки на нов ред, разделени със запетая или залепени един за друг — сам разпознавам къде свършва
+          един и започва следващият. Езикът и причината се взимат от полетата по-горе.
+        </p>
+        <textarea
+          rows={4}
+          value={bulk}
+          onChange={(e) => setBulk(e.target.value)}
+          placeholder={"https://purepeptide.bg/collections/immunology\nhttps://purepeptide.bg/collections/secretagogues"}
+          className="w-full border border-slate-300 rounded-md px-3 py-2 text-xs font-mono"
+          data-testid="delisted-bulk-input"
+        />
+        <button
+          onClick={addBulk}
+          disabled={busy || !bulk.trim()}
+          className="mt-3 inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-60"
+          data-testid="delisted-bulk-btn"
+        >
+          <Plus className="h-4 w-4" /> Добави всички
+        </button>
+      </div>
+
       <div className="flex flex-wrap gap-2 mb-4" data-testid="delisted-filters">
         {[{ v: "all", label: `Всички (${links.length})` }, ...STATUSES.map((s) => ({ v: s.v, label: s.label }))].map((f) => (
           <button
@@ -104,9 +164,20 @@ export default function AdminDelistedLinksPage() {
           </button>
         ))}
         {pendingCount > 0 && (
-          <span className="ml-auto text-xs text-amber-700 font-semibold self-center" data-testid="delisted-pending-count">
-            {pendingCount} страници чакат ротация
-          </span>
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-xs text-amber-700 font-semibold" data-testid="delisted-pending-count">
+              {pendingCount} страници чакат ротация
+            </span>
+            <button
+              onClick={rotateAll}
+              disabled={!!rotating}
+              className="inline-flex items-center gap-1.5 bg-coral-600 hover:bg-coral-700 text-white rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+              data-testid="delisted-rotate-all-btn"
+            >
+              {rotating === "all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shuffle className="h-3.5 w-3.5" />}
+              Ротирай всички чакащи
+            </button>
+          </div>
         )}
       </div>
 
@@ -142,6 +213,11 @@ export default function AdminDelistedLinksPage() {
                       className="border border-slate-200 rounded-md px-2 py-1 text-xs font-mono w-44"
                       data-testid={`delisted-replacement-${l.id}`}
                     />
+                    {l.status === "rotated" && l.rewritten === false && (
+                      <div className="text-[11px] text-amber-700 mt-1" data-testid={`delisted-norewrite-${l.id}`}>
+                        описанието не е пренаписано — ротирайте пак
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <select
@@ -154,6 +230,15 @@ export default function AdminDelistedLinksPage() {
                     </select>
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <button
+                      onClick={() => rotate(l)}
+                      disabled={!!rotating}
+                      title="Нов handle с случаен 3-буквен код + леко пренаписано описание (само за този език)"
+                      className="text-coral-700 hover:underline mr-3 inline-flex items-center gap-1 text-xs font-semibold disabled:opacity-50"
+                      data-testid={`delisted-rotate-${l.id}`}
+                    >
+                      {rotating === l.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shuffle className="h-3.5 w-3.5" />} Ротирай
+                    </button>
                     {l.status !== "rotated" ? (
                       <button onClick={() => update(l, { status: "rotated" })} className="text-emerald-700 hover:underline mr-3 inline-flex items-center gap-1 text-xs" data-testid={`delisted-mark-rotated-${l.id}`}>
                         <Check className="h-3.5 w-3.5" /> Ротирана

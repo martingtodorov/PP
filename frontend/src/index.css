@@ -1685,6 +1685,10 @@ button.bg-coral-600:disabled { box-shadow: none; }
   pointer-events: none;
   animation: pp-cookie-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
 }
+/* keep the banner out of the way of the page's main buttons */
+@media (min-width: 768px) {
+  .pp-cookie { justify-content: flex-start; padding: 20px 24px; }
+}
 @keyframes pp-cookie-up {
   from { opacity: 0; transform: translateY(18px); }
   to { opacity: 1; transform: none; }
@@ -1769,3 +1773,8 @@ main#main-content { min-height: 70vh; }
 }
 .pp-skel-text--sm { width: 38%; }
 .pp-skel-block { display: block; border-radius: 10px; }
+
+/* the consent card sits in the bottom-left corner on desktop so it never covers a CTA */
+@media (min-width: 768px) {
+  .pp-cookie__card { max-width: 620px; }
+}

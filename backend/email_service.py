@@ -111,3 +111,16 @@ async def send_shipped(order: Dict[str, Any], tracking: Dict[str, Any], settings
         order["customer_email"], f"Поръчка {order['order_number']} е изпратена — PurePeptide",
         _wrap("Пратката е на път", body, "PurePeptide"), settings,
     )
+
+async def send_order_cancelled(order: Dict[str, Any], settings: Dict[str, Any], reason: str = ""):
+    body = (
+        f"<p>Здравейте, {order.get('customer_name', '')},</p>"
+        f"<p>Поръчка <strong>{order['order_number']}</strong> е отказана и няма да бъде изпратена. "
+        f"Нямате какво да плащате.</p>"
+        + (f"<p>Причина: {reason}</p>" if reason else "")
+        + "<p>Ако това е станало по грешка или искате да поръчате отново, просто ни пишете.</p>"
+    )
+    return await send_email(
+        order["customer_email"], f"Поръчка {order['order_number']} е отказана — PurePeptide",
+        _wrap("Поръчката е отказана", body, "PurePeptide"), settings,
+    )

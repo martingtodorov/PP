@@ -115,9 +115,9 @@ server {
 
     # llms.txt / agents.md must be served as Markdown, never as the SPA shell
     location = /llms.txt {
-        default_type text/markdown;
-        charset utf-8;
-        try_files $uri =404;
+        # always fresh: generated from the database (handles change when a URL is rotated)
+        proxy_pass http://127.0.0.1:8001/api/llms.txt;
+        proxy_set_header Host $host;
     }
     location = /agents.md {
         default_type text/markdown;
