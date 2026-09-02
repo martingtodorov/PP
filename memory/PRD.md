@@ -762,3 +762,22 @@ non-BG storefronts (product data and nav are translated, the checkout chrome is 
 **Production TODO (owner):** Save to GitHub → `git pull` → `ansible-playbook -i inventory.ini
 playbooks/deploy_backend.yml -e run_catalog_import=true` (re-import to fix the page texts and the
 missing media) → `deploy_frontend.yml` → `deploy_nginx.yml`. Note: always pass `-i inventory.ini`.
+
+### 2026-06 — "images still broken": the cache was poisoned, the origin was already fine
+Measured in a clean browser on production: homepage 57 images / collection 32 / product 19 — only
+**2** were broken (`4961a3f6bac6-retatrutide_5mg…png`, `74752aefec3e-ad1dd308d7c2d2f6dc53.png`), i.e.
+two files an earlier import left dangling; the `_stored_ok()` fix re-downloads them on the next
+import. What the owner sees is a **cached** 404: while the static-image regex was swallowing
+`/api/files/*.png`, nginx answered 404 AND attached `Cache-Control: public, max-age=2592000` /
+`max-age=31536000, immutable`, because every `add_header` in the template used `always` (which applies
+the header to error responses too). Cloudflare and every visitor's browser therefore keep serving the
+broken image for up to a year.
+- `templates/nginx-purepeptide.conf.j2`: `always` removed from the three long-lived Cache-Control
+  headers (nginx's own `expires` only touches successful statuses). **Proven with a real nginx**
+  rendered from the template: media 200 → `immutable`, media 404 → no Cache-Control at all, static
+  and image-regex 404 → no Cache-Control.
+- `frontend/src/lib/api.js`: `img()` now appends `&v=${MEDIA_REV}` (MEDIA_REV=2) so the new build
+  requests fresh cache keys and bypasses whatever is already poisoned, without waiting for a purge.
+- 2 new guard tests (63 deploy tests green).
+**Owner action:** purge the Cloudflare cache (Caching → Configuration → Purge Everything) once, then
+deploy nginx + frontend + the catalog re-import.

@@ -526,3 +526,17 @@ def test_api_locations_win_over_the_static_image_regex():
     assert "location ^~ /api/ {" in conf
     assert "location ^~ /api/files/ {" in conf
     assert "location /api/ {" not in conf
+
+
+def test_long_cache_headers_are_never_forced_onto_errors():
+    """`always` stamps the header on 404s too — Cloudflare then serves a broken image for a year."""
+    conf = (TEMPLATES / "nginx-purepeptide.conf.j2").read_text()
+    for line in conf.splitlines():
+        if "add_header Cache-Control" in line and "always" in line:
+            assert "no-cache" in line or "no-store" in line, line.strip()
+
+
+def test_media_urls_carry_a_revision_so_a_poisoned_cache_can_be_bypassed():
+    api_js = (ROOT / "frontend" / "src" / "lib" / "api.js").read_text()
+    assert "MEDIA_REV" in api_js
+    assert "v=${MEDIA_REV}" in api_js
