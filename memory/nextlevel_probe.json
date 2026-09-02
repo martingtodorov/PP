@@ -1,0 +1,1061 @@
+{
+ "countries": {
+  "BG": {
+   "id": 1,
+   "code": "BG",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Bulgaria",
+   "phone_code": "359"
+  },
+  "RO": {
+   "id": 2,
+   "code": "RO",
+   "parent_id": null,
+   "currency": "RON",
+   "name": "Romania",
+   "phone_code": "40"
+  },
+  "GR": {
+   "id": 3,
+   "code": "GR",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Greece",
+   "phone_code": "30"
+  },
+  "HR": {
+   "id": 4,
+   "code": "HR",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Croatia (Hrvatska)",
+   "phone_code": "385"
+  },
+  "SI": {
+   "id": 5,
+   "code": "SI",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Slovenia",
+   "phone_code": "386"
+  },
+  "HU": {
+   "id": 6,
+   "code": "HU",
+   "parent_id": null,
+   "currency": "HUF",
+   "name": "Hungary",
+   "phone_code": "36"
+  },
+  "SK": {
+   "id": 7,
+   "code": "SK",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Slovakia",
+   "phone_code": "421"
+  },
+  "CZ": {
+   "id": 8,
+   "code": "CZ",
+   "parent_id": null,
+   "currency": "CZK",
+   "name": "Czech Republic",
+   "phone_code": "420"
+  },
+  "PL": {
+   "id": 9,
+   "code": "PL",
+   "parent_id": null,
+   "currency": "PLN",
+   "name": "Poland",
+   "phone_code": "48"
+  },
+  "DE": {
+   "id": 10,
+   "code": "DE",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Germany",
+   "phone_code": "49"
+  },
+  "AT": {
+   "id": 11,
+   "code": "AT",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Austria",
+   "phone_code": "43"
+  },
+  "IT": {
+   "id": 12,
+   "code": "IT",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Italy",
+   "phone_code": "39"
+  },
+  "LT": {
+   "id": 13,
+   "code": "LT",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Lithuania",
+   "phone_code": "370"
+  },
+  "LV": {
+   "id": 14,
+   "code": "LV",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Latvia",
+   "phone_code": "371"
+  },
+  "ES": {
+   "id": 15,
+   "code": "ES",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Spain",
+   "phone_code": "34"
+  },
+  "PT": {
+   "id": 16,
+   "code": "PT",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Portugal",
+   "phone_code": "351"
+  },
+  "BE": {
+   "id": 17,
+   "code": "BE",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Belgium",
+   "phone_code": "32"
+  },
+  "NL": {
+   "id": 18,
+   "code": "NL",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Netherlands",
+   "phone_code": "31"
+  },
+  "DK": {
+   "id": 19,
+   "code": "DK",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Denmark",
+   "phone_code": "45"
+  },
+  "EE": {
+   "id": 20,
+   "code": "EE",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Estonia",
+   "phone_code": "372"
+  },
+  "FR": {
+   "id": 21,
+   "code": "FR",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "France",
+   "phone_code": "33"
+  },
+  "LU": {
+   "id": 22,
+   "code": "LU",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Luxembourg",
+   "phone_code": "352"
+  },
+  "LI": {
+   "id": 23,
+   "code": "LI",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Liechtenstein",
+   "phone_code": "423"
+  },
+  "SE": {
+   "id": 24,
+   "code": "SE",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Sweden",
+   "phone_code": "46"
+  },
+  "FI": {
+   "id": 25,
+   "code": "FI",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Finland",
+   "phone_code": "358"
+  },
+  "CY": {
+   "id": 26,
+   "code": "CY",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Cyprus",
+   "phone_code": "357"
+  },
+  "CH": {
+   "id": 27,
+   "code": "CH",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Switzerland",
+   "phone_code": "41"
+  },
+  "SM": {
+   "id": 28,
+   "code": "SM",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "San Marino",
+   "phone_code": "378"
+  },
+  "MT": {
+   "id": 29,
+   "code": "MT",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Malta",
+   "phone_code": "356"
+  },
+  "UK": {
+   "id": 30,
+   "code": "UK",
+   "parent_id": null,
+   "currency": "GBP",
+   "name": "United Kingdom",
+   "phone_code": "44"
+  },
+  "US": {
+   "id": 31,
+   "code": "US",
+   "parent_id": null,
+   "currency": "USD",
+   "name": "United States",
+   "phone_code": "1"
+  },
+  "CA": {
+   "id": 32,
+   "code": "CA",
+   "parent_id": null,
+   "currency": "CAD",
+   "name": "Canada",
+   "phone_code": "1"
+  },
+  "NO": {
+   "id": 33,
+   "code": "NO",
+   "parent_id": null,
+   "currency": "NOK",
+   "name": "Norway",
+   "phone_code": "47"
+  },
+  "AE": {
+   "id": 34,
+   "code": "AE",
+   "parent_id": null,
+   "currency": "AED",
+   "name": "United Arab Emirates",
+   "phone_code": "971"
+  },
+  "IE": {
+   "id": 35,
+   "code": "IE",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Ireland",
+   "phone_code": "353"
+  },
+  "AU": {
+   "id": 36,
+   "code": "AU",
+   "parent_id": null,
+   "currency": "AUD",
+   "name": "Australia",
+   "phone_code": "61"
+  },
+  "KW": {
+   "id": 37,
+   "code": "KW",
+   "parent_id": null,
+   "currency": "KWD",
+   "name": "Kuwait",
+   "phone_code": "965"
+  },
+  "AL": {
+   "id": 38,
+   "code": "AL",
+   "parent_id": null,
+   "currency": "ALL",
+   "name": "Albania",
+   "phone_code": "355"
+  },
+  "CN": {
+   "id": 39,
+   "code": "CN",
+   "parent_id": null,
+   "currency": "CNY",
+   "name": "China",
+   "phone_code": "86"
+  },
+  "RE": {
+   "id": 40,
+   "code": "RE",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Reunion",
+   "phone_code": "262"
+  },
+  "SG": {
+   "id": 41,
+   "code": "SG",
+   "parent_id": null,
+   "currency": "SGD",
+   "name": "Singapore",
+   "phone_code": "65"
+  },
+  "MC": {
+   "id": 42,
+   "code": "MC",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Monaco",
+   "phone_code": "377"
+  },
+  "XK": {
+   "id": 43,
+   "code": "XK",
+   "parent_id": null,
+   "currency": "EUR",
+   "name": "Kosovo",
+   "phone_code": "383"
+  },
+  "AM": {
+   "id": 44,
+   "code": "AM",
+   "parent_id": null,
+   "currency": "AMD",
+   "name": "Armenia",
+   "phone_code": "374"
+  },
+  "GH": {
+   "id": 45,
+   "code": "GH",
+   "parent_id": null,
+   "currency": "GHS",
+   "name": "Ghana",
+   "phone_code": "233"
+  },
+  "QA": {
+   "id": 46,
+   "code": "QA",
+   "parent_id": null,
+   "currency": "QAR",
+   "name": "Qatar",
+   "phone_code": "974"
+  },
+  "KZ": {
+   "id": 47,
+   "code": "KZ",
+   "parent_id": null,
+   "currency": "KZT",
+   "name": "Kazakhstan",
+   "phone_code": "7"
+  },
+  "JO": {
+   "id": 48,
+   "code": "JO",
+   "parent_id": null,
+   "currency": "JOD",
+   "name": "Jordan",
+   "phone_code": "962"
+  },
+  "GE": {
+   "id": 49,
+   "code": "GE",
+   "parent_id": null,
+   "currency": "GEL",
+   "name": "Georgia",
+   "phone_code": "995"
+  },
+  "IS": {
+   "id": 50,
+   "code": "IS",
+   "parent_id": null,
+   "currency": "ISK",
+   "name": "Iceland",
+   "phone_code": "354"
+  },
+  "TH": {
+   "id": 51,
+   "code": "TH",
+   "parent_id": null,
+   "currency": "THB",
+   "name": "Thailand",
+   "phone_code": "66"
+  },
+  "IL": {
+   "id": 52,
+   "code": "IL",
+   "parent_id": null,
+   "currency": "ILS",
+   "name": "Israel",
+   "phone_code": "972"
+  },
+  "HK": {
+   "id": 53,
+   "code": "HK",
+   "parent_id": null,
+   "currency": "HKD",
+   "name": "Hong Kong",
+   "phone_code": "852"
+  },
+  "MY": {
+   "id": 54,
+   "code": "MY",
+   "parent_id": null,
+   "currency": "MYR",
+   "name": "Malaysia",
+   "phone_code": "60"
+  },
+  "BR": {
+   "id": 55,
+   "code": "BR",
+   "parent_id": null,
+   "currency": "BRL",
+   "name": "Brazil",
+   "phone_code": "55"
+  },
+  "SA": {
+   "id": 56,
+   "code": "SA",
+   "parent_id": null,
+   "currency": "SAR",
+   "name": "Saudi Arabia",
+   "phone_code": "966"
+  },
+  "KR": {
+   "id": 57,
+   "code": "KR",
+   "parent_id": null,
+   "currency": "KRW",
+   "name": "South Korea",
+   "phone_code": "82"
+  },
+  "IN": {
+   "id": 58,
+   "code": "IN",
+   "parent_id": null,
+   "currency": "INR",
+   "name": "India",
+   "phone_code": "91"
+  },
+  "MK": {
+   "id": 59,
+   "code": "MK",
+   "parent_id": null,
+   "currency": "MKD",
+   "name": "Macedonia",
+   "phone_code": "389"
+  },
+  "TR": {
+   "id": 60,
+   "code": "TR",
+   "parent_id": null,
+   "currency": "TRY",
+   "name": "Turkey",
+   "phone_code": "90"
+  },
+  "RU": {
+   "id": 61,
+   "code": "RU",
+   "parent_id": null,
+   "currency": "RUB",
+   "name": "Russia",
+   "phone_code": "7"
+  },
+  "JP": {
+   "id": 62,
+   "code": "JP",
+   "parent_id": null,
+   "currency": "JPY",
+   "name": "Japan",
+   "phone_code": "81"
+  },
+  "BA": {
+   "id": 63,
+   "code": "BA",
+   "parent_id": null,
+   "currency": "BAM",
+   "name": "Bosnia and Herzegovina",
+   "phone_code": "387"
+  },
+  "NZ": {
+   "id": 64,
+   "code": "NZ",
+   "parent_id": null,
+   "currency": "NZD",
+   "name": "New Zealand",
+   "phone_code": "64"
+  },
+  "RS": {
+   "id": 65,
+   "code": "RS",
+   "parent_id": null,
+   "currency": "RSD",
+   "name": "Serbia",
+   "phone_code": "381"
+  },
+  "UA": {
+   "id": 66,
+   "code": "UA",
+   "parent_id": null,
+   "currency": "UAH",
+   "name": "Ukraine",
+   "phone_code": "380"
+  },
+  "CO": {
+   "id": 67,
+   "code": "CO",
+   "parent_id": null,
+   "currency": "COP",
+   "name": "Colombia",
+   "phone_code": "57"
+  },
+  "E1": {
+   "id": 68,
+   "code": "E1",
+   "parent_id": 15,
+   "currency": "EUR",
+   "name": "Spain - Balearic Islands",
+   "phone_code": "34"
+  },
+  "E2": {
+   "id": 69,
+   "code": "E2",
+   "parent_id": 15,
+   "currency": "EUR",
+   "name": "Spain - Canary Islands",
+   "phone_code": "34"
+  },
+  "E3": {
+   "id": 70,
+   "code": "E3",
+   "parent_id": 15,
+   "currency": "EUR",
+   "name": "Spain - Ceuta and Melilla",
+   "phone_code": "34"
+  },
+  "MA": {
+   "id": 71,
+   "code": "MA",
+   "parent_id": null,
+   "currency": "MAD",
+   "name": "Morocco",
+   "phone_code": "212"
+  },
+  "LB": {
+   "id": 72,
+   "code": "LB",
+   "parent_id": null,
+   "currency": "LBP",
+   "name": "Lebanon",
+   "phone_code": "961"
+  },
+  "PH": {
+   "id": 73,
+   "code": "PH",
+   "parent_id": null,
+   "currency": "PHP",
+   "name": "Philippines",
+   "phone_code": "63"
+  },
+  "KY": {
+   "id": 74,
+   "code": "KY",
+   "parent_id": null,
+   "currency": "KYD",
+   "name": "Cayman Islands",
+   "phone_code": "345"
+  },
+  "F1": {
+   "id": 75,
+   "code": "F1",
+   "parent_id": 21,
+   "currency": "EUR",
+   "name": "France - Corsica",
+   "phone_code": "33"
+  },
+  "CL": {
+   "id": 76,
+   "code": "CL",
+   "parent_id": null,
+   "currency": "CLP",
+   "name": "Chile",
+   "phone_code": "56"
+  }
+ },
+ "couriers_by_country": {
+  "BG": {
+   "NextLevel": 1,
+   "Speedy": 507,
+   "Econt": 469,
+   "Sameday": 23
+  },
+  "RO": {
+   "Speedy": 115,
+   "DPD": 440,
+   "FAN": 445
+  },
+  "GR": {
+   "Speedy": 7,
+   "Geniki": 221,
+   "Speedex": 211,
+   "ACS": 486,
+   "CourierGr": 75
+  },
+  "HU": {
+   "Sprinter": 542,
+   "GLS": 458
+  },
+  "PL": {
+   "Speedy": 1000
+  },
+  "CZ": {
+   "Speedy": 1000
+  },
+  "SK": {
+   "Speedy": 572,
+   "GLS": 428
+  },
+  "SI": {
+   "Speedy": 147,
+   "GLS": 853
+  },
+  "HR": {
+   "Speedy": 159,
+   "Overseas": 841
+  },
+  "DE": {
+   "GLS": 1000
+  },
+  "IT": {
+   "GLS": 1000
+  }
+ },
+ "matrix": [
+  {
+   "country": "BG",
+   "courier": "(auto)",
+   "mode": "address",
+   "plain": "OK total=4.70 base=3.56 services=0.00",
+   "cod": "OK total=6.68 base=3.56 services=1.50"
+  },
+  {
+   "country": "BG",
+   "courier": "Econt",
+   "mode": "address",
+   "plain": "OK total=4.70 base=3.56 services=0.00",
+   "cod": "OK total=6.68 base=3.56 services=1.50"
+  },
+  {
+   "country": "BG",
+   "courier": "Econt",
+   "mode": "office#4431 (Айдемир)",
+   "plain": "OK total=3.99 base=3.02 services=0.00",
+   "cod": "OK total=5.97 base=3.02 services=1.50"
+  },
+  {
+   "country": "BG",
+   "courier": "Sameday",
+   "mode": "address",
+   "plain": "OK total=4.24 base=3.30 services=0.00",
+   "cod": "OK total=5.52 base=3.30 services=1.00"
+  },
+  {
+   "country": "BG",
+   "courier": "Sameday",
+   "mode": "office#87404 (easybox София Черковна)",
+   "plain": "OK total=0.00 base=0.00 services=0.00",
+   "cod": "OK total=1.28 base=0.00 services=1.00"
+  },
+  {
+   "country": "BG",
+   "courier": "Speedy",
+   "mode": "address",
+   "plain": "OK total=0.00 base=0.00 services=0.00",
+   "cod": "OK total=0.00 base=0.00 services=0.00"
+  },
+  {
+   "country": "BG",
+   "courier": "Speedy",
+   "mode": "office#2 (ПЛОВДИВ – СКЛАД ЮГ)",
+   "plain": "OK total=0.00 base=0.00 services=0.00",
+   "cod": "OK total=0.00 base=0.00 services=0.00"
+  },
+  {
+   "country": "RO",
+   "courier": "(auto)",
+   "mode": "address",
+   "plain": "OK total=3.78 base=2.81 services=0.00",
+   "cod": "OK total=5.79 base=2.81 services=1.50"
+  },
+  {
+   "country": "RO",
+   "courier": "DPD",
+   "mode": "address",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "RO",
+   "courier": "DPD",
+   "mode": "office#6099 (SIBIU)",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "RO",
+   "courier": "FAN",
+   "mode": "address",
+   "plain": "OK total=3.78 base=2.81 services=0.00",
+   "cod": "OK total=5.79 base=2.81 services=1.50"
+  },
+  {
+   "country": "RO",
+   "courier": "FAN",
+   "mode": "office#21627 (FANbox Kaufland Theodor Pallad)",
+   "plain": "OK total=3.78 base=2.81 services=0.00",
+   "cod": "OK total=5.79 base=2.81 services=1.50"
+  },
+  {
+   "country": "RO",
+   "courier": "Speedy",
+   "mode": "address",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "RO",
+   "courier": "Speedy",
+   "mode": "office#580 (SIBIU)",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "GR",
+   "courier": "(auto)",
+   "mode": "address",
+   "plain": "OK total=8.81 base=3.12 services=0.00",
+   "cod": "OK total=12.02 base=3.12 services=2.50"
+  },
+  {
+   "country": "GR",
+   "courier": "ACS",
+   "mode": "address",
+   "plain": "OK total=8.41 base=2.81 services=0.00",
+   "cod": "OK total=10.98 base=2.81 services=2.00"
+  },
+  {
+   "country": "GR",
+   "courier": "ACS",
+   "mode": "office#6501 (ACS AGRINIO - AGRINIO (ΑΓ))",
+   "plain": "OK total=8.41 base=2.81 services=0.00",
+   "cod": "OK total=10.98 base=2.81 services=2.00"
+  },
+  {
+   "country": "GR",
+   "courier": "CourierGr",
+   "mode": "address",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "GR",
+   "courier": "CourierGr",
+   "mode": "office#451977 (ΣΠΕΤΣΕΣ (PARTNER))",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "GR",
+   "courier": "Geniki",
+   "mode": "address",
+   "plain": "OK total=8.81 base=3.12 services=0.00",
+   "cod": "OK total=12.02 base=3.12 services=2.50"
+  },
+  {
+   "country": "GR",
+   "courier": "Geniki",
+   "mode": "office#5757 (ΑΓ.ΔΗΜΗΤΡΙΟΥ)",
+   "plain": "OK total=8.81 base=3.12 services=0.00",
+   "cod": "OK total=12.02 base=3.12 services=2.50"
+  },
+  {
+   "country": "GR",
+   "courier": "Speedex",
+   "mode": "address",
+   "plain": "OK total=8.51 base=2.81 services=0.00",
+   "cod": "OK total=11.15 base=2.81 services=2.00"
+  },
+  {
+   "country": "GR",
+   "courier": "Speedex",
+   "mode": "office#6281 (ATH-ΚΕΝΤΡΙΚΑ)",
+   "plain": "OK total=8.51 base=2.81 services=0.00",
+   "cod": "OK total=11.15 base=2.81 services=2.00"
+  },
+  {
+   "country": "GR",
+   "courier": "Speedy",
+   "mode": "address",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "GR",
+   "courier": "Speedy",
+   "mode": "office#1339 (ACS SMARTPOINT KOMOTINI)",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "HU",
+   "courier": "(auto)",
+   "mode": "address",
+   "plain": "OK total=5.36 base=3.99 services=0.00",
+   "cod": "OK total=8.05 base=3.99 services=2.00"
+  },
+  {
+   "country": "HU",
+   "courier": "GLS",
+   "mode": "address",
+   "plain": "OK total=5.36 base=3.99 services=0.00",
+   "cod": "OK total=8.05 base=3.99 services=2.00"
+  },
+  {
+   "country": "HU",
+   "courier": "GLS",
+   "mode": "office#11630 (Alpha Zoo Batthyány tér)",
+   "plain": "OK total=5.36 base=3.99 services=0.00",
+   "cod": "OK total=8.05 base=3.99 services=2.00"
+  },
+  {
+   "country": "HU",
+   "courier": "Sprinter",
+   "mode": "address",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "HU",
+   "courier": "Sprinter",
+   "mode": "office#8657 (MOL 45158 Baja)",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "PL",
+   "courier": "(auto)",
+   "mode": "address",
+   "plain": "OK total=5.36 base=3.99 services=0.00",
+   "cod": "OK total=8.05 base=3.99 services=2.00"
+  },
+  {
+   "country": "PL",
+   "courier": "Speedy",
+   "mode": "address",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "PL",
+   "courier": "Speedy",
+   "mode": "office#597445 (DPD Pickup - Punkt Oplat Be-Mi)",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "CZ",
+   "courier": "(auto)",
+   "mode": "address",
+   "plain": "OK total=5.85 base=4.35 services=0.00",
+   "cod": "OK total=8.53 base=4.35 services=2.00"
+  },
+  {
+   "country": "CZ",
+   "courier": "Speedy",
+   "mode": "address",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "CZ",
+   "courier": "Speedy",
+   "mode": "office#2083 (Teleric Elektro )",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "SK",
+   "courier": "(auto)",
+   "mode": "address",
+   "plain": "OK total=5.36 base=3.99 services=0.00",
+   "cod": "OK total=8.05 base=3.99 services=2.00"
+  },
+  {
+   "country": "SK",
+   "courier": "GLS",
+   "mode": "address",
+   "plain": "OK total=5.36 base=3.99 services=0.00",
+   "cod": "OK total=8.05 base=3.99 services=2.00"
+  },
+  {
+   "country": "SK",
+   "courier": "GLS",
+   "mode": "office#13692 (Večierka Babničová)",
+   "plain": "OK total=5.36 base=3.99 services=0.00",
+   "cod": "OK total=8.05 base=3.99 services=2.00"
+  },
+  {
+   "country": "SK",
+   "courier": "Speedy",
+   "mode": "address",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "SK",
+   "courier": "Speedy",
+   "mode": "office#1351 (Predajna PICCOLINO )",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "SI",
+   "courier": "(auto)",
+   "mode": "address",
+   "plain": "OK total=5.46 base=3.99 services=0.00",
+   "cod": "OK total=8.19 base=3.99 services=2.00"
+  },
+  {
+   "country": "SI",
+   "courier": "GLS",
+   "mode": "address",
+   "plain": "OK total=5.46 base=3.99 services=0.00",
+   "cod": "OK total=8.19 base=3.99 services=2.00"
+  },
+  {
+   "country": "SI",
+   "courier": "GLS",
+   "mode": "office#10462 (PS 3DVA LJUBLJANA Litijska b.š)",
+   "plain": "OK total=5.46 base=3.99 services=0.00",
+   "cod": "OK total=8.19 base=3.99 services=2.00"
+  },
+  {
+   "country": "SI",
+   "courier": "Speedy",
+   "mode": "address",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "SI",
+   "courier": "Speedy",
+   "mode": "office#3873 (Petrol BS SEMP.PRI GORICI )",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "HR",
+   "courier": "(auto)",
+   "mode": "address",
+   "plain": "OK total=34.45 base=3.99 services=0.00",
+   "cod": "OK total=37.19 base=3.99 services=2.00"
+  },
+  {
+   "country": "HR",
+   "courier": "Overseas",
+   "mode": "address",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "HR",
+   "courier": "Overseas",
+   "mode": "office#114590 (TI909900 (TISAK))",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "HR",
+   "courier": "Speedy",
+   "mode": "address",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "HR",
+   "courier": "Speedy",
+   "mode": "office#1341 (INA benzinska S269 )",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "DE",
+   "courier": "(auto)",
+   "mode": "address",
+   "plain": "OK total=5.65 base=4.40 services=0.00",
+   "cod": "OK total=12.21 base=4.40 services=5.11"
+  },
+  {
+   "country": "DE",
+   "courier": "GLS",
+   "mode": "address",
+   "plain": "OK total=5.65 base=4.40 services=0.00",
+   "cod": "OK total=12.21 base=4.40 services=5.11"
+  },
+  {
+   "country": "DE",
+   "courier": "GLS",
+   "mode": "office#1157094 (Müller Manfred Büro- und Daten)",
+   "plain": "OK total=5.65 base=4.40 services=0.00",
+   "cod": "OK total=12.21 base=4.40 services=5.11"
+  },
+  {
+   "country": "IT",
+   "courier": "(auto)",
+   "mode": "address",
+   "plain": "OK total=24.92 base=5.06 services=0.00",
+   "cod": "OK total=29.82 base=5.06 services=3.58"
+  },
+  {
+   "country": "IT",
+   "courier": "GLS",
+   "mode": "address",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  },
+  {
+   "country": "IT",
+   "courier": "GLS",
+   "mode": "office#1391295 (PARCEL SHOP DESENZANO DEL GARD)",
+   "plain": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager",
+   "cod": "ERR 400 The account does not have setup for this courier in this country, please contact your account manager"
+  }
+ ]
+}

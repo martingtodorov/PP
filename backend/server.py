@@ -396,6 +396,7 @@ async def on_startup():
         log.error("Storage init failed: %s", ex)
     import abandoned as _abandoned
     asyncio.create_task(_abandoned.sweeper_loop())
+    asyncio.create_task(nextlevel.sync_loop())
     from restore_headings import restore_headings
     try:
         await restore_headings(db, storage)
@@ -795,6 +796,7 @@ async def checkout(payload: CheckoutIn, request: Request):
         "amount_eur": totals["total_eur"],
     }
     order_clean = {k: v for k, v in order.items() if k != "_id"}
+    asyncio.create_task(nextlevel.auto_create(order["id"]))
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     site_settings = (s or {}).get("value", {})
     try:
@@ -936,6 +938,8 @@ def _order_view(o: Dict[str, Any]) -> Dict[str, Any]:
         "shipping_method": o.get("shipping_method") or (tracking or {}).get("carrier") or "",
         "payment_method": o.get("payment_method") or "",
         "tracking": tracking,
+        "shipment": o.get("shipment"),
+        "shipment_error": o.get("shipment_error"),
         "note": o.get("notes") or o.get("note") or "",
         "source": o.get("source") or "storefront",
         "currency": cur,
@@ -2924,6 +2928,8 @@ import ui_strings  # noqa: E402
 api.include_router(nextcart_router)
 api.include_router(geo_router)
 api.include_router(revorder.init(db, require_admin))
+import nextlevel  # noqa: E402
+api.include_router(nextlevel.init(db, require_admin))
 api.include_router(abandoned.init(db, require_admin))
 api.include_router(ui_strings.init(db, require_admin))
 app.include_router(api)

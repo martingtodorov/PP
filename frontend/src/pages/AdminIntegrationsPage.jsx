@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Copy, Eye, EyeOff, KeyRound, Loader2, Send } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
+import { NextLevelCard } from "../components/admin/NextLevelCard";
 import { api, formatErr } from "../lib/api";
 
 const copy = async (value, label) => {
@@ -182,7 +183,9 @@ export default function AdminIntegrationsPage() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <AdminLayout title="Интеграции — RevOrder">
+    <AdminLayout title="Интеграции">
+      <NextLevelCard />
+      <h2 className="font-display font-bold text-slate-900 mb-2">RevOrder</h2>
       <p className="text-sm text-slate-500 mb-6 max-w-3xl">
         Ключовете се издават тук и се поставят в RevOrder. <strong>Webhook URL</strong> е нашият входящ
         адрес — RevOrder го вика при промяна на поръчка и подписва тялото с HMAC-SHA256 върху
