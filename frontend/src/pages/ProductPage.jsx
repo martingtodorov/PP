@@ -4,6 +4,7 @@ import { useParams, Link } from "react-router-dom";
 import { Truck, Minus, Plus, ShieldCheck, Droplets } from "lucide-react";
 import { toast } from "sonner";
 import Layout, { USPRow } from "../components/Layout";
+import NotFoundBlock from "../components/NotFoundBlock";
 import ProductsCarousel from "../components/ProductsCarousel";
 import Breadcrumbs from "../components/Breadcrumbs";
 import StickyBuyBar from "../components/StickyBuyBar";
@@ -59,6 +60,7 @@ export const variantGallery = (images, variants, index) => {
 export default function ProductPage() {
   const { handle } = useParams();
   const [data, setData] = useState({ product: null, related: [], collections: [], articles: [] });
+  const [gone, setGone] = useState(false);
   const [variantIdx, setVariantIdx] = useState(0);
   const [imgIdx, setImgIdx] = useState(0);
   const ctaRef = useRef(null);
@@ -70,7 +72,8 @@ export default function ProductPage() {
     setVariantIdx(0);
     setImgIdx(0);
     setQty(1);
-    api.get(`/products/${handle}`).then(({ data }) => setData(data));
+    setGone(false);
+    api.get(`/products/${handle}`).then(({ data }) => setData(data)).catch(() => setGone(true));
   }, [handle, locale]);
 
   const p = data.product;
@@ -98,6 +101,8 @@ export default function ProductPage() {
       organizationLd(),
     ),
   });
+
+  if (gone) return <Layout><NotFoundBlock /></Layout>;
 
   /* Skeleton mirrors the real layout AND reserves the full page height, so nothing that is visible
      in the viewport moves when the product arrives (CLS) */

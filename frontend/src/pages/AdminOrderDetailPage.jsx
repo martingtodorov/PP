@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Copy, Check, Truck, Clock, PackageCheck } from "lucide-react";
+import { ArrowLeft, Copy, Check, Truck, Clock, PackageCheck, XCircle, Ban } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import { ShipmentCard } from "../components/admin/ShipmentCard";
 import { FulfillmentOrderCard } from "../components/admin/FulfillmentOrderCard";
@@ -56,13 +56,20 @@ export default function AdminOrderDetailPage() {
   }, [id]);
   useEffect(() => { load(); }, [load]);
 
-  const act = async (key, url, message) => {
+  const act = async (key, url, message, body) => {
     setBusy(key);
     try {
-      const { data } = await api.post(url);
+      const { data } = await api.post(url, body);
       toast.success(data.sent_to ? `${message}: ${data.sent_to}` : message);
       load();
     } catch (e) { toast.error(formatErr(e)); } finally { setBusy(""); }
+  };
+
+  const cancel = () => {
+    const reason = window.prompt(
+      "Отказване на поръчката. Товарителницата се анулира, наличностите се връщат и клиентът получава имейл.\n\nПричина (по избор):", "");
+    if (reason === null) return;
+    act("cancel", `/admin/orders/${order.id}/cancel`, "Поръчката е отказана", { reason });
   };
 
   if (!order) return <AdminLayout title="Поръчка"><p className="text-sm text-slate-400">Зареждане…</p></AdminLayout>;
@@ -87,6 +94,16 @@ export default function AdminOrderDetailPage() {
         <Badge map={FUL_BADGE} value={order.fulfillment_status} />
         <Badge map={PAY_BADGE} value={order.payment_status} />
       </div>
+      {order.cancel_reason !== undefined && order.cancelled_at && (
+        <div className="flex items-start gap-2 bg-slate-100 border border-slate-200 rounded-lg px-4 py-3 mb-4 text-sm text-slate-700"
+          data-testid="order-cancelled-banner">
+          <Ban className="h-4 w-4 mt-0.5 flex-shrink-0 text-slate-500" />
+          <span>
+            Отказана на {new Date(order.cancelled_at).toLocaleString("bg-BG")} от {order.cancelled_by || "—"}
+            {order.cancel_reason ? ` · ${order.cancel_reason}` : ""}
+          </span>
+        </div>
+      )}
       <p className="text-sm text-slate-500 mb-6" data-testid="order-meta">
         {new Date(order.created_at).toLocaleString("bg-BG")} · {order.source === "shopify_import" ? "Shopify (импорт)" : "Онлайн магазин"}
       </p>
@@ -171,6 +188,14 @@ export default function AdminOrderDetailPage() {
                 data-testid="order-send-invoice-btn">
                 {busy === "invoice" ? "Изпращане…" : "Изпрати фактура по имейл"}
               </button>
+              {order.cancellable && (
+                <button onClick={cancel}
+                  disabled={busy === "cancel"}
+                  className="w-full border border-slate-300 hover:border-red-500 hover:text-red-600 font-semibold py-3 rounded-lg text-sm disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                  data-testid="order-cancel-btn">
+                  <XCircle className="h-4 w-4" /> {busy === "cancel" ? "Отказване…" : "Откажи поръчката"}
+                </button>
+              )}
               {!paid && (
                 <button onClick={() => act("paid", `/admin/orders/${order.id}/mark-paid`, "Маркирана като платена")}
                   disabled={busy === "paid"}

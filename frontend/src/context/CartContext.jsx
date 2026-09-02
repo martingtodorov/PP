@@ -28,6 +28,34 @@ export const CartProvider = ({ children }) => {
     localStorage.setItem(KEY, JSON.stringify(items));
   }, [items, hydrated]);
 
+  /* Re-import gives products new ids, so a cart saved earlier in the browser would fail at checkout.
+     The SKU is stable — re-map every saved line against the live catalogue once after hydration. */
+  useEffect(() => {
+    if (!hydrated || !items.length) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get("/products");
+        const bySku = new Map();
+        for (const p of data.products || []) {
+          for (const v of p.variants || []) bySku.set(v.sku, { p, v });
+        }
+        if (cancelled || !bySku.size) return;
+        setItems((cur) => {
+          const next = cur
+            .filter((x) => bySku.has(x.variant_sku))
+            .map((x) => {
+              const { p, v } = bySku.get(x.variant_sku);
+              return { ...x, product_id: p.id, product_handle: p.handle, title: p.title,
+                       image: p.image || x.image, variant_name: v.name, price_eur: v.price_eur };
+            });
+          return JSON.stringify(next) === JSON.stringify(cur) ? cur : next;
+        });
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [hydrated]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!hydrated) return;
     localStorage.setItem(META_KEY, JSON.stringify({ note, discount }));

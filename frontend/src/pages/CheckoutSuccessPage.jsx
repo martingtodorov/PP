@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { CheckCircle2, Copy } from "lucide-react";
 import { toast } from "sonner";
@@ -7,6 +7,7 @@ import { useSeo } from "../lib/seo";
 import { Button } from "../components/ui/button";
 import { api, fmtEUR, fmtAmount, amountOf, fmtBGN, showsBGN } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
+import CancelOrderButton from "../components/CancelOrderButton";
 
 export default function CheckoutSuccessPage() {
   const { t } = useLocaleCtx();
@@ -15,13 +16,17 @@ export default function CheckoutSuccessPage() {
   const { orderId } = useParams();
   const [data, setData] = useState(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    /* the cached copy paints instantly; the API answer carries the live status (cancellable, AWB) */
     const cached = sessionStorage.getItem(`pp_order_${orderId}`);
     if (cached) {
-      try { setData(JSON.parse(cached)); return; } catch {}
+      try { setData(JSON.parse(cached)); } catch {}
     }
-    api.get(`/orders/${orderId}`).then(({ data }) => setData({ order: data.order, bank_transfer: null }));
+    api.get(`/orders/${orderId}`)
+      .then(({ data }) => setData((cur) => ({ order: data.order, bank_transfer: cur?.bank_transfer || null })))
+      .catch(() => {});
   }, [orderId]);
+  useEffect(() => { load(); }, [load]);
 
   if (!data) return <Layout><div className="max-w-3xl mx-auto py-20 px-4 text-slate-500">{t("loadingText")}</div></Layout>;
   const { order, bank_transfer } = data;
@@ -110,9 +115,10 @@ export default function CheckoutSuccessPage() {
           </div>
         </div>
 
-        <div className="mt-10 flex justify-center gap-3">
+        <div className="mt-10 flex flex-wrap justify-center gap-3">
           <Link to="/"><Button variant="outline">{t("toHome")}</Button></Link>
           <Link to="/account"><Button className="bg-coral-600 hover:bg-coral-700">{t("myOrders")}</Button></Link>
+          <CancelOrderButton order={order} onDone={load} />
         </div>
       </div>
     </Layout>

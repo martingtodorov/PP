@@ -3,10 +3,12 @@ import { link } from "../lib/links";
 import { useParams, Link } from "react-router-dom";
 import Layout, { USPRow } from "../components/Layout";
 import ProductCard from "../components/ProductCard";
+import NotFoundBlock from "../components/NotFoundBlock";
 import Breadcrumbs from "../components/Breadcrumbs";
 import { api } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { LOCALES } from "../i18n/locales";
+import { isAllCollection } from "../lib/collections";
 import { useSeo } from "../lib/seo";
 import { graph, itemListLd, breadcrumbLd, organizationLd } from "../lib/schema";
 
@@ -14,10 +16,12 @@ export default function CollectionPage() {
   const { handle = "2all-the-peptides-1" } = useParams();
   const [data, setData] = useState({ collection: null, products: [], siblings: [] });
   const [sort, setSort] = useState("featured");
+  const [gone, setGone] = useState(false);
   const { lp, t, locale } = useLocaleCtx();
 
   useEffect(() => {
-    api.get(`/collections/${handle}`).then(({ data }) => setData(data));
+    setGone(false);
+    api.get(`/collections/${handle}`).then(({ data }) => setData(data)).catch(() => setGone(true));
   }, [handle, locale]);
 
   const c = data.collection;
@@ -49,7 +53,9 @@ export default function CollectionPage() {
   });
 
   const sorted = data.products;
-  const loading = !c;
+  const loading = !c && !gone;
+
+  if (gone) return <Layout><NotFoundBlock /></Layout>;
 
   if (loading) {
     return (
@@ -77,7 +83,7 @@ export default function CollectionPage() {
     );
   }
 
-  const isAll = handle === "2all-the-peptides-1";
+  const isAll = isAllCollection(c);   // base_handle survives URL rotation
 
   return (
     <Layout>
