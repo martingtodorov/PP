@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { X, Minus, Plus, Trash2, Loader2, Check, Search } from "lucide-react";
 import { toast } from "sonner";
 import { api, fmtPrice, fmtAmount, amountOf, cartAmounts, fmtBGN, showsBGN, img, formatErr } from "../lib/api";
-import { loadSaved, saveCheckout, pfBank, pfCountries, pfGeo, pfConfig, pfPickups } from "../lib/checkoutPrefetch";
+import { loadSaved, saveCheckout, pfBank, pfCountries, pfGeo, pfDeviceGeo, pfConfig, pfPickups } from "../lib/checkoutPrefetch";
 import { siteMedia } from "../lib/media";
 import { useCart } from "../context/CartContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
@@ -254,6 +254,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
     || { city: "", postal_code: "", place_id: null, street: "", number: "" });
   const [payment, setPayment] = useState(saved.current?.payment || "cod");
   const [geo, setGeo] = useState(null);
+  const [locating, setLocating] = useState(false);
   const [countries, setCountries] = useState([]);
   const [bank, setBank] = useState(null);
   const [code, setCode] = useState("");
@@ -267,12 +268,22 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
     return () => { document.body.style.overflow = prev; };
   }, [open]);
 
+  /** The device position is the only accurate source of the visitor's city. */
+  const locate = useCallback(({ prompt = true } = {}) => {
+    setLocating(true);
+    pfDeviceGeo({ prompt })
+      .then((d) => setGeo((g) => ({ ...(g || {}), ...d, country: d.country || g?.country })))
+      .catch(() => {})
+      .finally(() => setLocating(false));
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     setErr("");
     pfBank().then(setBank).catch(() => {});
     pfCountries().then((d) => setCountries(d.countries || [])).catch(() => {});
-    pfGeo().then(setGeo).catch(() => {});
+    pfGeo().then((d) => setGeo((g) => (g?.source === "device" ? g : d))).catch(() => {});
+    locate();
     track("checkout_opened");
   }, [open]);
 
@@ -563,6 +574,14 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                     </label>
                   ))}
                 </div>
+
+                {(needsPickup || needsAddress) && geo?.source !== "device" && (
+                  <button type="button" className="nc2-locate" onClick={() => locate({ prompt: true })}
+                    disabled={locating} data-testid="pc-locate-btn">
+                    {locating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                    {locating ? "Търся те..." : "Намери най-близките до мен"}
+                  </button>
+                )}
 
                 {needsPickup && (
                   <PickupSelect options={pickups} value={pickup} onChange={setPickup} loading={loadingPickups}

@@ -34,6 +34,39 @@ export const pfBank = () => once("bank", () => api.get("/bank-details").then((r)
 export const pfCountries = () => once("countries", () => api.get("/nextcart/countries").then((r) => r.data));
 export const pfGeo = () => once("geo", () => api.get("/geo/country").then((r) => r.data));
 
+/* The IP only tells us the country, so the city (which orders the courier offices) comes from the
+   device position, reverse-geocoded into the local spelling the courier database uses. */
+const DEVICE_KEY = "pp_geo_device_v1";
+const DEVICE_TTL = 30 * 60 * 1000;
+
+const readDevice = () => {
+  try {
+    const d = JSON.parse(window.localStorage.getItem(DEVICE_KEY) || "null");
+    if (d && Date.now() - d.at < DEVICE_TTL) return d.geo;
+  } catch (e) { /* ignore */ }
+  return null;
+};
+
+export const pfDeviceGeo = async ({ prompt = false } = {}) => {
+  const cached = readDevice();
+  if (cached) return cached;
+  if (!navigator.geolocation) throw new Error("geolocation-unavailable");
+  if (!prompt && navigator.permissions?.query) {
+    const st = await navigator.permissions.query({ name: "geolocation" }).catch(() => null);
+    if (st && st.state !== "granted") throw new Error("geolocation-not-granted");
+  }
+  const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, {
+    enableHighAccuracy: false, timeout: 9000, maximumAge: 5 * 60 * 1000,
+  }));
+  const { data } = await api.get("/geo/reverse", {
+    params: { lat: pos.coords.latitude, lon: pos.coords.longitude },
+  });
+  try {
+    window.localStorage.setItem(DEVICE_KEY, JSON.stringify({ at: Date.now(), geo: data }));
+  } catch (e) { /* ignore */ }
+  return data;
+};
+
 export const pfConfig = (country) =>
   once(`cfg:${country}`, () =>
     api.get("/nextcart/config", { params: { country } }).then((r) => r.data));

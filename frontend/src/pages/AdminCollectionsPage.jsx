@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ArrowUp, ArrowDown, Save, EyeOff, TrendingUp } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
-import { api, fmtEUR, formatErr } from "../lib/api";
+import { api, fmtEUR, formatErr, img } from "../lib/api";
 
 export default function AdminCollectionsPage() {
   const [collections, setCollections] = useState([]);
@@ -86,7 +86,7 @@ export default function AdminCollectionsPage() {
           <div key={p.handle} className="flex items-center gap-3 px-3 sm:px-4 py-3" data-testid={`admin-order-row-${p.handle}`}>
             <span className="w-6 text-xs font-bold text-slate-400 tabular-nums">{i + 1}</span>
             {p.image
-              ? <img src={p.image} alt="" className="w-10 h-10 object-contain bg-white border border-slate-200 rounded" />
+              ? <img src={img(p.image, 80)} alt="" className="w-10 h-10 object-contain bg-white border border-slate-200 rounded" />
               : <div className="w-10 h-10 bg-slate-100 rounded" />}
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-slate-900 truncate">{p.title}</p>

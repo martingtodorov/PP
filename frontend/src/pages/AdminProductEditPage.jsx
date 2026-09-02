@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { Upload, X, Plus, Trash2, Sparkles, ArrowLeft, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import AdminLayout from "../components/AdminLayout";
-import { api, BACKEND_URL, formatErr } from "../lib/api";
+import { api, BACKEND_URL, formatErr, img } from "../lib/api";
 import { LOCALES, LOCALE_META } from "../i18n/locales";
 import { isAllCollection } from "../lib/collections";
 
@@ -231,7 +231,7 @@ export default function AdminProductEditPage() {
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                   {p.images.map((src, i) => (
                     <div key={`${src}-${i}`} className="relative group border border-slate-200 rounded-lg bg-white p-1" data-testid={`product-image-${i}`}>
-                      <img src={src} alt="" className="w-full aspect-square object-contain" />
+                      <img src={img(src, 400)} alt="" className="w-full aspect-square object-contain" />
                       {i === 0 && <span className="absolute top-1 left-1 bg-coral-600 text-white text-[10px] px-1.5 py-0.5 rounded">основна</span>}
                       <div className="absolute inset-x-1 bottom-1 flex justify-between opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => moveImage(i, -1)} className="bg-white/90 border border-slate-200 rounded px-1 text-xs">←</button>
