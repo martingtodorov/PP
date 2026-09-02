@@ -636,3 +636,15 @@ Cloudflare got a refused connection (521). The site had been down since.
   `ss -ltnp` on every run and dumps `nginx -T`, `systemctl status nginx` and all attempts on failure.
 - 5 new guards in `tests/test_deploy_config.py` (flush_handlers before verify, 443 self-heal, no
   public-DNS dependency, canonical_domain, courier snapshot shipped). 57 deploy tests green.
+
+### 2026-06 — production verified live (purepeptide-labs.bg)
+nginx opened :443 after the flush_handlers/self-heal fix and the site is up. Checked from outside:
+`/api/settings` 200, `/api/products?locale=bg` 200 (catalog non-empty), `/` 200,
+`/api/nextcart/countries` 200 with 11 countries, `/api/nextcart/config?country=BG` returns
+econt/office €3.89 + boxnow/locker €2.99 + pigeon/address €4.59, `/api/nextcart/pickups`
+(BG/econt/office) returns **589 offices** — i.e. the courier snapshot works on the blocked server.
+Remaining fix in this round: the smoke/courier tasks no longer echo the raw response body
+(`head -c` cut a Cyrillic character mid-byte → "Refusing to deserialize an invalid UTF8 string
+value" killed the task even though nginx answered 200). They now print status + size, an ASCII-only
+country count, and the one remaining `head -c` in deploy_backend.yml is piped through `iconv -c`.
+58 deploy tests green.

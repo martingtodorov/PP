@@ -495,3 +495,11 @@ def test_courier_snapshot_is_shipped_and_enabled():
     assert len(list(snap.glob("offices_*.json"))) >= 9
     assert "NEXTCART_SNAPSHOT_ONLY" in (TEMPLATES / "backend.env.j2").read_text()
     assert EXAMPLE_VARS["nextcart_snapshot_only"] is True
+
+
+def test_verification_never_echoes_a_cyrillic_payload_unguarded():
+    """A byte-truncated Cyrillic body ('head -c') makes Ansible refuse the task result."""
+    for name in ("deploy_nginx.yml", "deploy_backend.yml"):
+        for line in (PLAYBOOKS / name).read_text().splitlines():
+            if "head -c" in line and not line.strip().startswith("#"):
+                assert "iconv -c" in line, f"{name}: {line.strip()}"
