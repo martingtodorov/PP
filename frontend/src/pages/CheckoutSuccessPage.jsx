@@ -41,6 +41,29 @@ export default function CheckoutSuccessPage() {
           </p>
         </div>
 
+        <section className="mt-10 bg-white border border-slate-200 rounded-xl p-8" data-testid="order-tracking">
+          <h2 className="font-display font-bold text-xl text-slate-900">{t("trackingTitle")}</h2>
+          {order.shipment?.awb && order.shipment.status !== "Cancelled" ? (
+            <dl className="mt-4 space-y-3 text-sm">
+              {[[t("trackingCourier"), order.shipment.courier || "NextLevel"],
+                [t("trackingNumber"), order.shipment.awb],
+                ...(order.shipment.status ? [[t("trackingStatus"), order.shipment.status]] : [])].map(([k, v]) => (
+                <div key={k} className="flex justify-between items-center gap-4 border-b border-slate-100 pb-2">
+                  <dt className="text-slate-500">{k}</dt>
+                  <dd className="font-mono text-slate-900 font-medium" data-testid={`tracking-${k === t("trackingNumber") ? "awb" : "row"}`}>{v}</dd>
+                </div>
+              ))}
+              {order.shipment.tracking_link && (
+                <a href={order.shipment.tracking_link} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-2 mt-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold px-5 py-3 rounded-md"
+                  data-testid="tracking-open-link">{t("trackingOpen")}</a>
+              )}
+            </dl>
+          ) : (
+            <p className="text-sm text-slate-600 mt-2" data-testid="tracking-pending">{t("trackingPending")}</p>
+          )}
+        </section>
+
         {bank_transfer && (
           <div className="mt-10 bg-white border border-slate-200 rounded-xl p-8" data-testid="bank-transfer-info">
             <h2 className="font-display font-bold text-xl text-slate-900">{t("bankDetailsTitle")}</h2>

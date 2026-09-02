@@ -33,6 +33,47 @@ COUNTRY_COURIERS: Dict[str, list] = {
     "SI": ["gls"], "HR": ["gls"], "IT": ["gls"], "DE": ["gls"],
 }
 
+# The merchant's own delivery offer — wins over whatever the NextCart profile says (price and presence).
+METHOD_OVERRIDES: Dict[str, Dict[str, Dict[str, Any]]] = {
+    "BG": {
+        "econt_locker": {"provider_key": "econt", "destination_type": "locker", "price_eur": 3.39},
+        "econt_address": {"provider_key": "econt", "destination_type": "address", "price_eur": 4.99},
+    },
+}
+
+
+def method_price(country: str, method_key: str, destination_type: str = "") -> Optional[float]:
+    """Server-side price for a checkout selection (the client must not be able to invent one)."""
+    ov = METHOD_OVERRIDES.get(country, {}).get(method_key)
+    if ov:
+        return float(ov["price_eur"])
+    return None
+
+
+def _apply_overrides(country: str, methods: list, providers: list) -> None:
+    for key, ov in METHOD_OVERRIDES.get(country, {}).items():
+        pk, dest, price = ov["provider_key"], ov["destination_type"], float(ov["price_eur"])
+        existing = next((m for m in methods if m.get("key") == key
+                         or (m.get("provider_key") == pk and m.get("destination_type") == dest)), None)
+        prov = next((p for p in providers if p.get("key") == pk), None)
+        name = (prov or {}).get("name") or (existing or {}).get("provider_name") or pk.title()
+        if existing:
+            existing.update({"price_amount": price, "currency": "EUR", "price_label": f"€{price:.2f}"})
+        else:
+            methods.append({
+                "key": key, "provider_key": pk, "provider_name": name, "logo_url": (prov or {}).get("logo_url", ""),
+                "destination_type": dest, "label": f"To {name} {dest}", "price_amount": price, "currency": "EUR",
+                "price_label": f"€{price:.2f}", "can_add_to_summary_total": True,
+                "supports_office_selection": dest == "office", "supports_locker_selection": dest == "locker",
+                "supports_address": dest == "address", "is_default": False, "is_highlighted": False,
+            })
+        if prov:
+            if dest == "address":
+                prov["supports_address"] = True
+            else:
+                prov["supports_pickup"] = True
+
+
 # Used when the upstream country profile does not expose the courier we ship with (SI / IT / DE + GLS).
 COURIER_FALLBACK: Dict[str, Dict[str, Any]] = {
     "gls": {
@@ -188,6 +229,7 @@ async def _shape_delivery(data: Dict[str, Any], country: str) -> Dict[str, Any]:
                     "supports_office_selection": d == "office", "supports_locker_selection": False,
                     "supports_address": d == "address", "is_default": False, "is_highlighted": False,
                 })
+        _apply_overrides(country, methods, providers)
         order = {k: i for i, k in enumerate(allowed)}
         dest_order = {"office": 0, "locker": 1, "address": 2}
         providers.sort(key=lambda p: order.get(p.get("key"), 99))

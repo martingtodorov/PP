@@ -51,11 +51,20 @@ export const pfDeviceGeo = async ({ prompt = false } = {}) => {
   const cached = readDevice();
   if (cached) return cached;
   if (!navigator.geolocation) throw new Error("geolocation-unavailable");
+  if (!window.isSecureContext) throw new Error("geolocation-insecure");
+  const st = navigator.permissions?.query
+    ? await navigator.permissions.query({ name: "geolocation" }).catch(() => null) : null;
   if (!prompt) {
     // warm-up only: reuse an already granted permission, never open the browser dialog
-    if (!navigator.permissions?.query) throw new Error("geolocation-not-granted");
-    const st = await navigator.permissions.query({ name: "geolocation" }).catch(() => null);
     if (!st || st.state !== "granted") throw new Error("geolocation-not-granted");
+  }
+  // inside a cross-origin iframe (e.g. a preview panel) the browser refuses silently — no dialog ever shows
+  if (st?.state !== "granted" && window.self !== window.top) throw new Error("geolocation-framed");
+  if (st?.state === "denied") {
+    const e = new Error("geolocation-denied");
+    e.code = 1;
+    e.remembered = true;
+    throw e;
   }
   const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, {
     enableHighAccuracy: false, timeout: 12000, maximumAge: 5 * 60 * 1000,

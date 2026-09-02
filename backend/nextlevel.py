@@ -25,7 +25,7 @@ BASE = "https://api.nextlevel.delivery/v1"
 SETTINGS_KEY = "integrations.nextlevel"
 COUNTRY_CURRENCY = {"RO": "RON", "HU": "HUF", "PL": "PLN", "CZ": "CZK", "UK": "GBP", "GB": "GBP"}
 OPEN_STATUSES_DONE = {"Delivered", "Returned", "Cancelled", "Canceled", "Return delivered"}
-SYNC_SEC = 1800
+SYNC_SEC = 600
 
 _db = None
 _client = httpx.AsyncClient(timeout=40)
@@ -37,7 +37,7 @@ def _now() -> str:
 
 # ---------------------------------------------------------------- settings
 DEFAULTS = {"enabled": False, "auto_create": True, "app_id": "", "app_secret": "", "sender_id": 0,
-            "sender_office_id": 1, "default_weight": 0.4, "cod_processing": "CASH", "package": "PACK"}
+            "sender_office_id": 1, "default_weight": 0.1, "cod_processing": "CASH", "package": "PACK"}
 
 
 async def get_config() -> Dict[str, Any]:
@@ -130,11 +130,13 @@ def build_payload(order: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         receiver["other"] = ((receiver.get("other") or "") + " " + str(ship["note"])).strip()[:200]
 
     items = order.get("items") or []
-    contents = ", ".join(f"{i.get('title', '')} ×{i.get('quantity', 1)}" for i in items)[:200] or "peptides"
+    # every order ships by SKU — the warehouse reads the codes, not the marketing titles
+    contents = ", ".join(f"{i.get('variant_sku') or i.get('sku') or i.get('title', '')} x{i.get('quantity', 1)}"
+                         for i in items)[:200] or "peptides"
     payload: Dict[str, Any] = {
         "sender": {"id": int(cfg["sender_id"]), "office_id": int(cfg.get("sender_office_id") or 1)},
         "receiver": receiver,
-        "content": {"parcels_count": 1, "weight": float(cfg.get("default_weight") or 0.4),
+        "content": {"parcels_count": 1, "weight": float(cfg.get("default_weight") or 0.1),
                     "package": cfg.get("package") or "PACK", "contents": contents},
         "payment": {"payer": "sender"},
         "ref": str(order.get("order_number") or ""),
@@ -213,7 +215,22 @@ async def create_shipment(order_id: str, force: bool = False) -> Dict[str, Any]:
         "$set": {"shipment": shipment, "tracking": tracking, "tracking_number": shipment["awb"]},
         "$unset": {"shipment_error": "", "shipment_error_at": ""}})
     log.info("NextLevel shipment %s for order %s (%s)", shipment["awb"], order.get("order_number"), shipment.get("courier"))
+    if order.get("customer_email") and order.get("source") != "nextlevel-selftest":
+        asyncio.create_task(_notify_customer({**order, "shipment": shipment}))
     return shipment
+
+
+async def _notify_customer(order: Dict[str, Any]) -> None:
+    """The customer gets the waybill the moment we have it: email + the tracking block on the order page."""
+    import email_service
+
+    try:
+        s = await _db.settings.find_one({"key": "site"}, {"_id": 0})
+        res = await email_service.send_shipment_created(order, (s or {}).get("value") or {})
+        await _db.orders.update_one({"id": order["id"]}, {"$set": {"shipment.customer_notified_at": _now(),
+                                                                    "shipment.customer_email_id": (res or {}).get("id")}})
+    except Exception as ex:
+        log.warning("Shipment email for %s failed: %s", order.get("order_number"), ex)
 
 
 async def cancel_shipment(order_id: str) -> Dict[str, Any]:
@@ -279,7 +296,25 @@ async def sync_open_shipments() -> Dict[str, Any]:
                 "shipment.tracking_link": tracking_url_for(courier, row.get("courier_awb"), awb),
                 "shipment.last_movement": row.get("last_movement"), "shipment.updated_at": _now()}})
             updated += 1
+            if str(row.get("status") or "").lower() == "delivered":
+                await notify_delivered(by_awb[awb])
     return {"open": len(by_awb), "updated": updated}
+
+
+async def notify_delivered(order_id: str) -> None:
+    """One thank-you email per order when the courier confirms delivery."""
+    import email_service
+
+    order = await _db.orders.find_one({"id": order_id, "shipment.delivered_notified_at": {"$exists": False}}, {"_id": 0})
+    if not order or not order.get("customer_email") or order.get("source") == "nextlevel-selftest":
+        return
+    await _db.orders.update_one({"id": order_id}, {"$set": {"shipment.delivered_notified_at": _now(), "fulfillment_status": "fulfilled",
+                                                            "shipment.delivered_at": _now()}})
+    try:
+        s = await _db.settings.find_one({"key": "site"}, {"_id": 0})
+        await email_service.send_delivered(order, (s or {}).get("value") or {})
+    except Exception as ex:
+        log.warning("Delivered email for %s failed: %s", order.get("order_number"), ex)
 
 
 async def sync_loop():
@@ -349,7 +384,7 @@ def init(db_, admin_guard) -> APIRouter:
             countries = await _call(cfg, "GET", "/countries")
             probe = {"sender": {"id": int(cfg["sender_id"]), "office_id": int(cfg.get("sender_office_id") or 1)},
                      "receiver": {"country": "BG", "place": "София", "post_code": "1000", "street": "бул. Витоша", "street_no": "1"},
-                     "weight": float(cfg.get("default_weight") or 0.4)}
+                     "weight": float(cfg.get("default_weight") or 0.1)}
             price = await _call(cfg, "POST", "/shipments/calculate", json=probe)
             recent = await _call(cfg, "GET", "/shipments", params={"limit": 3})
         except NextLevelError as ex:

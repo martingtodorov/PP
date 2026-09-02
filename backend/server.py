@@ -17,7 +17,6 @@ import sys
 import tempfile
 import time
 import asyncio
-from urllib.parse import urlparse
 import hashlib
 import logging
 import uuid
@@ -397,6 +396,8 @@ async def on_startup():
     import abandoned as _abandoned
     asyncio.create_task(_abandoned.sweeper_loop())
     asyncio.create_task(nextlevel.sync_loop())
+    asyncio.create_task(fulfillment.sync_loop())
+    asyncio.create_task(wc_api.backfill_wc_ids())
     from restore_headings import restore_headings
     try:
         await restore_headings(db, storage)
@@ -738,8 +739,16 @@ async def checkout(payload: CheckoutIn, request: Request):
 
     subtotal_raw = sum(li["price_eur"] * li["quantity"] for li in line_items)
     discount = await _resolve_discount(payload.discount_code or "", subtotal_raw)
-    totals = _calc_totals(line_items, payload.shipping_method, discount.get("discount_eur", 0.0),
-                          payload.delivery.price_amount if payload.delivery else None)
+    shipping_override = None
+    if payload.delivery:
+        from nextcart import method_price
+        shipping_override = method_price((payload.shipping.country or "").upper(), payload.delivery.method_key,
+                                         payload.delivery.destination_type)
+        if shipping_override is None:
+            shipping_override = payload.delivery.price_amount
+        else:
+            payload.delivery.price_amount = shipping_override
+    totals = _calc_totals(line_items, payload.shipping_method, discount.get("discount_eur", 0.0), shipping_override)
     user = await get_user_from_request(request)
     loc = (payload.locale or "bg").lower()
     fx = await currency.rate_for_locale(db, loc)
@@ -796,7 +805,8 @@ async def checkout(payload: CheckoutIn, request: Request):
         "amount_eur": totals["total_eur"],
     }
     order_clean = {k: v for k, v in order.items() if k != "_id"}
-    asyncio.create_task(nextlevel.auto_create(order["id"]))
+    await db.orders.update_one({"id": order["id"]}, {"$set": {"wc_id": wc_api.wc_int(order["id"])}})
+    asyncio.create_task(fulfillment.dispatch_new_order(order["id"]))
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     site_settings = (s or {}).get("value", {})
     try:
@@ -827,10 +837,6 @@ async def checkout(payload: CheckoutIn, request: Request):
         await email_service.send_email(admin_to, admin_subject, admin_html, site_settings)
     except Exception:
         log.exception("Admin order email failed")
-    origin = request.headers.get("origin") or ""
-    domain = urlparse(origin).hostname or (request.headers.get("host") or "").split(":")[0]
-    if domain and await revorder.domain_config(domain):
-        asyncio.create_task(revorder.push_order(order_clean, domain))
     try:
         await abandoned.mark_recovered(order["customer_email"])
     except Exception:
@@ -848,6 +854,8 @@ async def get_order(order_id: str, request: Request):
     is_owner = user and (user.get("role") == "admin" or o.get("customer_id") == user.get("id"))
     if not is_owner:
         # allow guest lookup by id (acts as token) for confirmation page
+        if o.get("shipment"):
+            o["shipment"] = {k: v for k, v in o["shipment"].items() if k != "payload"}
         return {"order": o, "guest_view": True}
     return {"order": o}
 
@@ -940,6 +948,9 @@ def _order_view(o: Dict[str, Any]) -> Dict[str, Any]:
         "tracking": tracking,
         "shipment": o.get("shipment"),
         "shipment_error": o.get("shipment_error"),
+        "fulfillment": o.get("fulfillment"),
+        "fulfillment_error": o.get("fulfillment_error"),
+        "wc_id": o.get("wc_id"),
         "note": o.get("notes") or o.get("note") or "",
         "source": o.get("source") or "storefront",
         "currency": cur,
@@ -1068,6 +1079,7 @@ async def mark_paid(order_id: str, user=Depends(require_admin)):
         "id": str(uuid.uuid4()), "actor": user["email"], "action": "mark_paid",
         "order_id": order_id, "at": now_utc(),
     })
+    asyncio.create_task(fulfillment.on_paid(order_id))
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     try:
         await email_service.send_payment_received({k: v for k, v in o.items() if k != "_id"}, (s or {}).get("value", {}))
@@ -2921,15 +2933,20 @@ async def robots():
 # ---------- Mount + CORS ----------
 from nextcart import router as nextcart_router  # noqa: E402
 from geo import router as geo_router  # noqa: E402
-import revorder  # noqa: E402
 import abandoned  # noqa: E402
 import ui_strings  # noqa: E402
 
 api.include_router(nextcart_router)
 api.include_router(geo_router)
-api.include_router(revorder.init(db, require_admin))
 import nextlevel  # noqa: E402
+import fulfillment  # noqa: E402
+import wc_api  # noqa: E402
 api.include_router(nextlevel.init(db, require_admin))
+api.include_router(fulfillment.init(db, require_admin))
+_wc_router = wc_api.init(db, fulfillment.get_config)
+app.add_exception_handler(wc_api.WCError, wc_api.wc_error_handler)
+app.include_router(_wc_router, prefix="/wp-json/wc/v3")
+app.include_router(_wc_router, prefix="/api/wc/wp-json/wc/v3")
 api.include_router(abandoned.init(db, require_admin))
 api.include_router(ui_strings.init(db, require_admin))
 app.include_router(api)

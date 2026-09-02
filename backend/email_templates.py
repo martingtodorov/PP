@@ -42,6 +42,9 @@ T: Dict[str, Dict[str, str]] = {
         "ab_subject": "Забравихте нещо в количката си 👀", "ab_title": "Вашата количка ви чака",
         "ab_body": "Запазихме артикулите ви. Завършете поръчката си само с няколко клика.",
         "ab_cta": "Завърши поръчката", "qty": "бр.",
+        "sh_subject": "Поръчка {n} е на път 🚚", "sh_title": "Пратката ви е на път", "sh_body": "Товарителницата за поръчка {n} е издадена. Можете да следите пратката при куриера или в страницата на поръчката.", "sh_courier": "Куриер",
+        "dv_subject": "Поръчка {n} е доставена ✅", "dv_title": "Пратката ви е доставена", "dv_body": "Поръчка {n} е доставена. Благодарим ви, че избрахте PurePeptide! Ако имате въпроси, отговорете на този имейл.",
+        "sh_awb": "Номер на товарителница", "sh_track": "Проследи пратката", "sh_view": "Виж поръчката", "sh_cod": "Сума за плащане при получаване",
     },
     "en": {
         "order": "Order", "subject_order": "Order {n} · PurePeptide",
@@ -61,6 +64,9 @@ T: Dict[str, Dict[str, str]] = {
         "ab_subject": "You left something in your cart 👀", "ab_title": "Your cart is waiting",
         "ab_body": "We saved your items. Complete your order in just a few clicks.",
         "ab_cta": "Complete my order", "qty": "pcs",
+        "sh_subject": "Order {n} is on its way 🚚", "sh_title": "Your parcel is on its way", "sh_body": "The waybill for order {n} has been issued. Track the parcel with the courier or on your order page.", "sh_courier": "Courier",
+        "dv_subject": "Order {n} has been delivered ✅", "dv_title": "Your parcel has been delivered", "dv_body": "Order {n} has been delivered. Thank you for choosing PurePeptide! If you have any questions, just reply to this email.",
+        "sh_awb": "Waybill number", "sh_track": "Track the parcel", "sh_view": "View order", "sh_cod": "Amount due on delivery",
     },
     "fr": {
         "order": "Commande", "subject_order": "Commande {n} · PurePeptide",
@@ -81,6 +87,9 @@ T: Dict[str, Dict[str, str]] = {
         "ab_title": "Votre panier vous attend",
         "ab_body": "Nous avons gardé vos articles. Finalisez votre commande en quelques clics.",
         "ab_cta": "Finaliser ma commande", "qty": "pcs",
+        "sh_subject": "La commande {n} est en route 🚚", "sh_title": "Votre colis est en route", "sh_body": "Le bordereau de la commande {n} a été émis. Suivez le colis chez le transporteur ou sur la page de votre commande.", "sh_courier": "Transporteur",
+        "dv_subject": "La commande {n} a été livrée ✅", "dv_title": "Votre colis a été livré", "dv_body": "La commande {n} a été livrée. Merci d'avoir choisi PurePeptide ! Pour toute question, répondez simplement à cet e-mail.",
+        "sh_awb": "Numéro de suivi", "sh_track": "Suivre le colis", "sh_view": "Voir la commande", "sh_cod": "Montant à payer à la livraison",
     },
     "de": {
         "order": "Bestellung", "subject_order": "Bestellung {n} · PurePeptide",
@@ -101,6 +110,9 @@ T: Dict[str, Dict[str, str]] = {
         "ab_title": "Ihr Warenkorb wartet auf Sie",
         "ab_body": "Wir haben Ihre Artikel gespeichert. Schließen Sie Ihre Bestellung mit wenigen Klicks ab.",
         "ab_cta": "Bestellung abschließen", "qty": "Stk.",
+        "sh_subject": "Bestellung {n} ist unterwegs 🚚", "sh_title": "Ihr Paket ist unterwegs", "sh_body": "Der Frachtbrief für Bestellung {n} wurde erstellt. Verfolgen Sie das Paket beim Kurier oder auf Ihrer Bestellseite.", "sh_courier": "Kurier",
+        "dv_subject": "Bestellung {n} wurde zugestellt ✅", "dv_title": "Ihr Paket wurde zugestellt", "dv_body": "Bestellung {n} wurde zugestellt. Vielen Dank, dass Sie sich für PurePeptide entschieden haben! Bei Fragen antworten Sie einfach auf diese E-Mail.",
+        "sh_awb": "Sendungsnummer", "sh_track": "Sendung verfolgen", "sh_view": "Bestellung ansehen", "sh_cod": "Bei Lieferung zu zahlender Betrag",
     },
     "cz": {
         "order": "Objednávka", "subject_order": "Objednávka {n} · PurePeptide",
@@ -120,6 +132,9 @@ T: Dict[str, Dict[str, str]] = {
         "ab_subject": "Zapomněli jste něco v košíku 👀", "ab_title": "Váš košík na vás čeká",
         "ab_body": "Uložili jsme vaše položky. Dokončete objednávku na několik kliknutí.",
         "ab_cta": "Dokončit objednávku", "qty": "ks",
+        "sh_subject": "Objednávka {n} je na cestě 🚚", "sh_title": "Váš balík je na cestě", "sh_body": "Přepravní štítek pro objednávku {n} byl vystaven. Sledujte balík u kurýra nebo na stránce objednávky.", "sh_courier": "Kurýr",
+        "dv_subject": "Objednávka {n} byla doručena ✅", "dv_title": "Váš balík byl doručen", "dv_body": "Objednávka {n} byla doručena. Děkujeme, že jste si vybrali PurePeptide! V případě dotazů stačí odpovědět na tento e-mail.",
+        "sh_awb": "Číslo zásilky", "sh_track": "Sledovat zásilku", "sh_view": "Zobrazit objednávku", "sh_cod": "Částka k úhradě při doručení",
     },
     "hu": {
         "order": "Megrendelés", "subject_order": "Megrendelés {n} · PurePeptide",
@@ -139,6 +154,9 @@ T: Dict[str, Dict[str, str]] = {
         "ab_subject": "Valamit a kosárban hagyott 👀", "ab_title": "A kosara várja Önt",
         "ab_body": "Elmentettük a termékeit. Fejezze be a rendelést néhány kattintással.",
         "ab_cta": "Rendelés befejezése", "qty": "db",
+        "sh_subject": "A {n} rendelés úton van 🚚", "sh_title": "Csomagja úton van", "sh_body": "A {n} rendelés fuvarlevele elkészült. Kövesse a csomagot a futárnál vagy a rendelés oldalán.", "sh_courier": "Futár",
+        "dv_subject": "A {n} rendelés kézbesítve ✅", "dv_title": "Csomagját kézbesítettük", "dv_body": "A {n} rendelést kézbesítettük. Köszönjük, hogy a PurePeptide-ot választotta! Kérdés esetén válaszoljon erre az e-mailre.",
+        "sh_awb": "Fuvarlevél száma", "sh_track": "Csomag követése", "sh_view": "Rendelés megtekintése", "sh_cod": "Átvételkor fizetendő összeg",
     },
     "pl": {
         "order": "Zamówienie", "subject_order": "Zamówienie {n} · PurePeptide",
@@ -158,6 +176,9 @@ T: Dict[str, Dict[str, str]] = {
         "ab_subject": "Zostawiłeś coś w koszyku 👀", "ab_title": "Twój koszyk czeka",
         "ab_body": "Zachowaliśmy Twoje produkty. Dokończ zamówienie w kilku kliknięciach.",
         "ab_cta": "Dokończ zamówienie", "qty": "szt.",
+        "sh_subject": "Zamówienie {n} jest w drodze 🚚", "sh_title": "Twoja przesyłka jest w drodze", "sh_body": "List przewozowy dla zamówienia {n} został wystawiony. Śledź przesyłkę u kuriera lub na stronie zamówienia.", "sh_courier": "Kurier",
+        "dv_subject": "Zamówienie {n} zostało dostarczone ✅", "dv_title": "Twoja przesyłka została dostarczona", "dv_body": "Zamówienie {n} zostało dostarczone. Dziękujemy za wybór PurePeptide! W razie pytań odpowiedz na tę wiadomość.",
+        "sh_awb": "Numer listu przewozowego", "sh_track": "Śledź przesyłkę", "sh_view": "Zobacz zamówienie", "sh_cod": "Kwota do zapłaty przy odbiorze",
     },
     "sk": {
         "order": "Objednávka", "subject_order": "Objednávka {n} · PurePeptide",
@@ -177,6 +198,9 @@ T: Dict[str, Dict[str, str]] = {
         "ab_subject": "Zabudli ste niečo v košíku 👀", "ab_title": "Váš košík na vás čaká",
         "ab_body": "Uložili sme vaše položky. Dokončite objednávku na niekoľko klikov.",
         "ab_cta": "Dokončiť objednávku", "qty": "ks",
+        "sh_subject": "Objednávka {n} je na ceste 🚚", "sh_title": "Váš balík je na ceste", "sh_body": "Prepravný štítok pre objednávku {n} bol vystavený. Sledujte balík u kuriéra alebo na stránke objednávky.", "sh_courier": "Kuriér",
+        "dv_subject": "Objednávka {n} bola doručená ✅", "dv_title": "Váš balík bol doručený", "dv_body": "Objednávka {n} bola doručená. Ďakujeme, že ste si vybrali PurePeptide! V prípade otázok stačí odpovedať na tento e-mail.",
+        "sh_awb": "Číslo zásielky", "sh_track": "Sledovať zásielku", "sh_view": "Zobraziť objednávku", "sh_cod": "Suma na úhradu pri doručení",
     },
     "si": {
         "order": "Naročilo", "subject_order": "Naročilo {n} · PurePeptide",
@@ -196,6 +220,9 @@ T: Dict[str, Dict[str, str]] = {
         "ab_subject": "V košarici ste nekaj pozabili 👀", "ab_title": "Vaša košarica vas čaka",
         "ab_body": "Shranili smo vaše izdelke. Zaključite naročilo z nekaj kliki.",
         "ab_cta": "Zaključi naročilo", "qty": "kos",
+        "sh_subject": "Naročilo {n} je na poti 🚚", "sh_title": "Vaš paket je na poti", "sh_body": "Tovorni list za naročilo {n} je izdan. Paket spremljajte pri kurirju ali na strani naročila.", "sh_courier": "Kurir",
+        "dv_subject": "Naročilo {n} je dostavljeno ✅", "dv_title": "Vaš paket je dostavljen", "dv_body": "Naročilo {n} je dostavljeno. Hvala, ker ste izbrali PurePeptide! Če imate vprašanja, odgovorite na to e-pošto.",
+        "sh_awb": "Številka pošiljke", "sh_track": "Spremljaj pošiljko", "sh_view": "Ogled naročila", "sh_cod": "Znesek za plačilo ob dostavi",
     },
     "gr": {
         "order": "Παραγγελία", "subject_order": "Παραγγελία {n} · PurePeptide",
@@ -215,6 +242,9 @@ T: Dict[str, Dict[str, str]] = {
         "ab_subject": "Ξεχάσατε κάτι στο καλάθι σας 👀", "ab_title": "Το καλάθι σας σας περιμένει",
         "ab_body": "Κρατήσαμε τα προϊόντα σας. Ολοκληρώστε την παραγγελία με λίγα κλικ.",
         "ab_cta": "Ολοκλήρωση παραγγελίας", "qty": "τεμ.",
+        "sh_subject": "Η παραγγελία {n} είναι καθ' οδόν 🚚", "sh_title": "Το δέμα σας είναι καθ' οδόν", "sh_body": "Η φορτωτική για την παραγγελία {n} εκδόθηκε. Παρακολουθήστε το δέμα στον courier ή στη σελίδα της παραγγελίας.", "sh_courier": "Courier",
+        "dv_subject": "Η παραγγελία {n} παραδόθηκε ✅", "dv_title": "Το δέμα σας παραδόθηκε", "dv_body": "Η παραγγελία {n} παραδόθηκε. Σας ευχαριστούμε που επιλέξατε την PurePeptide! Για ερωτήσεις, απαντήστε σε αυτό το e-mail.",
+        "sh_awb": "Αριθμός φορτωτικής", "sh_track": "Παρακολούθηση δέματος", "sh_view": "Προβολή παραγγελίας", "sh_cod": "Ποσό πληρωμής κατά την παράδοση",
     },
     "ro": {
         "order": "Comandă", "subject_order": "Comanda {n} · PurePeptide",
@@ -234,6 +264,9 @@ T: Dict[str, Dict[str, str]] = {
         "ab_subject": "Ați uitat ceva în coș 👀", "ab_title": "Coșul dvs. vă așteaptă",
         "ab_body": "Am păstrat produsele dvs. Finalizați comanda în doar câteva clicuri.",
         "ab_cta": "Finalizează comanda", "qty": "buc",
+        "sh_subject": "Comanda {n} este pe drum 🚚", "sh_title": "Coletul dvs. este pe drum", "sh_body": "AWB-ul pentru comanda {n} a fost emis. Urmăriți coletul la curier sau în pagina comenzii.", "sh_courier": "Curier",
+        "dv_subject": "Comanda {n} a fost livrată ✅", "dv_title": "Coletul dvs. a fost livrat", "dv_body": "Comanda {n} a fost livrată. Vă mulțumim că ați ales PurePeptide! Pentru întrebări, răspundeți la acest e-mail.",
+        "sh_awb": "Număr AWB", "sh_track": "Urmărește coletul", "sh_view": "Vezi comanda", "sh_cod": "Sumă de plată la livrare",
     },
 }
 
@@ -616,3 +649,57 @@ def render_admin_note(badge: str, title: str, body_html: str, cta_url: str = "",
     content = (f'<tr><td style="padding:0 28px 22px;font-size:14px;color:#475569;line-height:1.7;">'
                f'{body_html}</td></tr>')
     return _admin_shell(badge, title, content, cta_url, cta_label)
+
+
+def render_shipment(order: Dict[str, Any], locale: str, contact_email: str) -> tuple:
+    """Waybill issued: courier, number, tracking link and the order page — in the customer's language."""
+    loc = (locale or order.get("locale") or "bg").lower()
+    base = base_url(loc)
+    sh = order.get("shipment") or {}
+    n = order.get("order_number", "")
+    money = _money_of(order)
+    rows = [(tr(loc, "sh_courier"), sh.get("courier") or "NextLevel"), (tr(loc, "sh_awb"), sh.get("awb", ""))]
+    if sh.get("courier_awb") and sh.get("courier_awb") != sh.get("awb"):
+        rows.append((tr(loc, "sh_courier") + " №", sh["courier_awb"]))
+    if order.get("payment_method") == "cod":
+        rows.append((tr(loc, "sh_cod"), money(order.get("total_eur"), order.get("total_orig"))))
+    table = "".join(
+        f'<tr><td style="padding:6px 0;color:#64748b;">{k}</td>'
+        f'<td style="padding:6px 0;text-align:right;font-weight:700;">{v}</td></tr>' for k, v in rows)
+    buttons = ""
+    if sh.get("tracking_link"):
+        buttons += _button(sh["tracking_link"], tr(loc, "sh_track"))
+    buttons += _button(f"{base}/checkout/success/{order.get('id', '')}", tr(loc, "sh_view"))
+    content = f"""
+  <tr><td style="padding:26px 28px 6px;">
+    <p style="margin:0 0 8px;font-size:15px;color:#0f172a;">{tr(loc, 'hello', name=order.get('customer_name', ''))}</p>
+    <p style="margin:0;font-size:14px;line-height:1.6;color:#334155;">{tr(loc, 'sh_body', n=n)}</p>
+  </td></tr>
+  <tr><td style="padding:14px 28px 6px;">
+    <table role="presentation" width="100%" style="font-size:14px;border-top:1px solid #e2e8f0;">{table}</table>
+  </td></tr>
+  <tr><td style="padding:10px 28px 28px;">{buttons}</td></tr>"""
+    subject = tr(loc, "sh_subject", n=n)
+    return subject, _shell(loc, f"{tr(loc, 'order')} {n}", tr(loc, "sh_title"), content, contact_email)
+
+
+def render_delivered(order: Dict[str, Any], locale: str, contact_email: str) -> tuple:
+    """Courier confirmed delivery: a short thank-you with the order link."""
+    loc = (locale or order.get("locale") or "bg").lower()
+    base = base_url(loc)
+    n = order.get("order_number", "")
+    sh = order.get("shipment") or {}
+    rows = [(tr(loc, "sh_courier"), sh.get("courier") or "NextLevel"), (tr(loc, "sh_awb"), sh.get("awb", ""))]
+    table = "".join(
+        f'<tr><td style="padding:6px 0;color:#64748b;">{k}</td>'
+        f'<td style="padding:6px 0;text-align:right;font-weight:700;">{v}</td></tr>' for k, v in rows if v)
+    content = f"""
+  <tr><td style="padding:26px 28px 6px;">
+    <p style="margin:0 0 8px;font-size:15px;color:#0f172a;">{tr(loc, 'hello', name=order.get('customer_name', ''))}</p>
+    <p style="margin:0;font-size:14px;line-height:1.6;color:#334155;">{tr(loc, 'dv_body', n=n)}</p>
+  </td></tr>
+  <tr><td style="padding:14px 28px 6px;">
+    <table role="presentation" width="100%" style="font-size:14px;border-top:1px solid #e2e8f0;">{table}</table>
+  </td></tr>
+  <tr><td style="padding:10px 28px 28px;">{_button(f"{base}/checkout/success/{order.get('id', '')}", tr(loc, 'sh_view'))}</td></tr>"""
+    return tr(loc, "dv_subject", n=n), _shell(loc, f"{tr(loc, 'order')} {n}", tr(loc, "dv_title"), content, contact_email)
