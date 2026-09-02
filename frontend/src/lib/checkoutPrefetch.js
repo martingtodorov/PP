@@ -51,12 +51,14 @@ export const pfDeviceGeo = async ({ prompt = false } = {}) => {
   const cached = readDevice();
   if (cached) return cached;
   if (!navigator.geolocation) throw new Error("geolocation-unavailable");
-  if (!prompt && navigator.permissions?.query) {
+  if (!prompt) {
+    // warm-up only: reuse an already granted permission, never open the browser dialog
+    if (!navigator.permissions?.query) throw new Error("geolocation-not-granted");
     const st = await navigator.permissions.query({ name: "geolocation" }).catch(() => null);
-    if (st && st.state !== "granted") throw new Error("geolocation-not-granted");
+    if (!st || st.state !== "granted") throw new Error("geolocation-not-granted");
   }
   const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, {
-    enableHighAccuracy: false, timeout: 9000, maximumAge: 5 * 60 * 1000,
+    enableHighAccuracy: false, timeout: 12000, maximumAge: 5 * 60 * 1000,
   }));
   const { data } = await api.get("/geo/reverse", {
     params: { lat: pos.coords.latitude, lon: pos.coords.longitude },

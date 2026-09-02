@@ -57,11 +57,11 @@ DEFAULT_PAGES = {
     "contact-1": {
         "bg": {
             "title": "Контакти",
-            "html": "<p>Свържете се с нас за въпроси относно продукти, поръчки и доставки.</p><p>Имейл: <a href='mailto:info@purepeptide.bg'>info@purepeptide.bg</a><br>Работно време: понеделник – петък, 9:00 – 18:00</p><p>Доставки се извършват със Спиди в рамките на 1–3 работни дни.</p>",
+            "html": "<p>Нашият екип ще отговори на всички запитвания в рамките на 24 часа.</p><p><strong>Важно:</strong> Нашият екип не предоставя медицински консултации. При въпроси, свързани с вашето здраве, моля, обърнете се към квалифициран медицински специалист.</p><h2>Работно време</h2><p>Понеделник – Петък: 10:00 – 17:00 ч.</p><h2>Имейл адреси</h2><p>Общи запитвания: <a href='mailto:contact@purepeptide.bg'>contact@purepeptide.bg</a></p>",
         },
         "en": {
             "title": "Contact",
-            "html": "<p>Get in touch about products, orders and shipping.</p><p>Email: <a href='mailto:info@purepeptide.eu'>info@purepeptide.eu</a><br>Hours: Monday – Friday, 9:00 – 18:00 CET</p>",
+            "html": "<p>Our team answers every enquiry within 24 hours.</p><p><strong>Important:</strong> Our team does not provide medical advice. For any questions about your health, please consult a qualified medical professional.</p><h2>Opening hours</h2><p>Monday – Friday: 10:00 – 17:00 (EET)</p><h2>Email addresses</h2><p>General enquiries: <a href='mailto:contact@purepeptide.bg'>contact@purepeptide.bg</a></p>",
         },
     },
     "become-a-distributor": {

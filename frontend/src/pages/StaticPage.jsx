@@ -9,6 +9,7 @@ import { useLocaleCtx } from "../i18n/LocaleContext";
 import { FAQ_ITEMS, pick } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
 import { ContactForm } from "../components/ContactForm";
+import { ContactInfo } from "../components/ContactInfo";
 import { graph, faqLd, breadcrumbLd, organizationLd } from "../lib/schema";
 import { isAllCollection } from "../lib/collections";
 
@@ -24,7 +25,7 @@ const BODY = {
     },
     contacts: {
       title: "Контакти",
-      html: "<p>Свържете се с нас за въпроси относно продукти, поръчки и доставки.</p><p>Имейл: <a href='mailto:info@purepeptide.bg'>info@purepeptide.bg</a><br>Работно време: понеделник – петък, 9:00 – 18:00</p><p>Доставки се извършват със Спиди в рамките на 1–3 работни дни.</p>",
+      html: "<p>Нашият екип ще отговори на всички запитвания в рамките на 24 часа.</p><p><strong>Важно:</strong> Нашият екип не предоставя медицински консултации. При въпроси, свързани с вашето здраве, моля, обърнете се към квалифициран медицински специалист.</p><h2>Работно време</h2><p>Понеделник – Петък: 10:00 – 17:00 ч.</p><h2>Имейл адреси</h2><p>Общи запитвания: <a href='mailto:contact@purepeptide.bg'>contact@purepeptide.bg</a></p>",
     },
     "become-a-distributor": {
       title: "Партньори",
@@ -44,7 +45,7 @@ const BODY = {
       title: "Laboratory analysis & certificates",
       html: "<p>Every batch undergoes HPLC and LC-MS analysis at the independent Czech laboratory <strong>Janoshik Analytical</strong>, confirming identity, purity (&gt;99%) and net peptide content.</p><h2>What the certificate contains</h2><ul><li>Batch number and analysis date</li><li>HPLC chromatogram with purity percentage</li><li>Mass-spectrometry confirmation of molecular weight</li><li>Net peptide content</li></ul>",
     },
-    contacts: { title: "Contact", html: "<p>Get in touch about products, orders and shipping.</p><p>Email: <a href='mailto:info@purepeptide.eu'>info@purepeptide.eu</a><br>Hours: Monday – Friday, 9:00 – 18:00 CET</p>" },
+    contacts: { title: "Contact", html: "<p>Our team answers every enquiry within 24 hours.</p><p><strong>Important:</strong> Our team does not provide medical advice. For any questions about your health, please consult a qualified medical professional.</p><h2>Opening hours</h2><p>Monday – Friday: 10:00 – 17:00 (EET)</p><h2>Email addresses</h2><p>General enquiries: <a href='mailto:contact@purepeptide.bg'>contact@purepeptide.bg</a></p>" },
     "become-a-distributor": { title: "Partners", html: "<p>We work with independent laboratories and research partners supporting quality control and the accuracy of the published information.</p><ul><li>Janoshik Analytical — HPLC / LC-MS testing</li><li>Specialised distributors of research consumables</li></ul>" },
     "privacy-policy": { title: "Privacy policy", html: "<p>We process personal data only to fulfil orders and related communication. Data is never shared beyond the partners required for delivery.</p>" },
     "refund-policy": { title: "Refund policy", html: "<p>Unopened products in original packaging can be returned within 14 days of delivery. Refunds are issued via the original payment method.</p>" },
@@ -90,6 +91,7 @@ export default function StaticPage() {
   const page = remote?.title || remote?.html ? remote : fallback;
   const isFaq = slug === "faq";
   const isArticles = slug === "articles";
+  const isContact = slug === "contact-1" || slug === "contacts";
   const faqItems = remote?.faq_items?.length ? remote.faq_items : pick(FAQ_ITEMS, locale);
   const loading = remote === null && !fallback && !isArticles;
   const title = isArticles ? t("articles") : remote?.title || (isFaq ? t("faq") : page?.title) || (loading ? "" : PAGE_TITLES[slug] || slug);
@@ -167,11 +169,16 @@ export default function StaticPage() {
           </ul>
         )}
 
-        {page?.html && !isArticles && (
+        {page?.html && !isArticles && !isContact && (
           <div className="pp-rte mt-6" dangerouslySetInnerHTML={{ __html: page.html }} data-testid="static-body" />
         )}
 
-        {slug === "contact-1" && <ContactForm />}
+        {isContact && (
+          <>
+            <ContactInfo />
+            <ContactForm />
+          </>
+        )}
 
         {slug === "какво-са-пептиди" && (
           <div className="mt-10">
