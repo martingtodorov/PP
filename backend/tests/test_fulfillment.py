@@ -54,7 +54,8 @@ def test_address_cod_ron_payload():
     assert p["receiver"]["country"] == "RO" and p["receiver"]["post_code"] == "400001" and p["receiver"]["other"] == "ap. 3"
     assert p["courier"] == "FAN"
     assert p["is_paid"] is False
-    assert p["services"] == {"cod": {"amount": 550.0, "currency": "RON", "processing_type": "CASH", "included_shipping_price": True}}
+    assert p["services"] == {"cod": {"amount": 550.0, "currency": "RON", "processing_type": "CASH", "included_shipping_price": True},
+                             "obpd": {"option": "OPEN", "return_shipment_payer": "SENDER"}}
 
 
 def test_wrong_currency_for_country_is_rejected():
@@ -91,3 +92,10 @@ def test_delivered_email_all_locales(loc):
     assert "SUB29" in subject and "{n}" not in subject
     assert "1000030801324" in html and "/checkout/success/4f1deeca" in html
     assert email_templates.T[loc]["dv_title"] in html
+
+
+def test_open_before_pay_can_be_switched_off_and_is_cod_only():
+    o = order(payment_method="cod", delivery={"destination_type": "office", "office": {"id": "econt:4434"}})
+    assert "obpd" not in fulfillment.build_order(o, {**CFG, "open_before_pay": False})["services"]
+    bank = order(payment_method="bank_transfer", delivery={"destination_type": "office", "office": {"id": "econt:4434"}})
+    assert "obpd" not in (fulfillment.build_order(bank, CFG).get("services") or {})

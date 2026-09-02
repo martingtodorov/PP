@@ -32,6 +32,7 @@ _client = httpx.AsyncClient(timeout=40)
 
 DEFAULTS = {"enabled": False, "auto_create": True, "app_id": "", "app_secret": "", "webhook_url": "",
             "weight": 0.1, "bank_transfer_when": "paid", "send_courier": True,
+            "open_before_pay": True, "obpd_option": "OPEN", "obpd_return_payer": "SENDER",
             "wc_consumer_key": "", "wc_consumer_secret": "", "wc_country": "BG"}
 
 
@@ -147,6 +148,10 @@ def build_order(order: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     if is_cod:
         payload["services"] = {"cod": {"amount": _local(order, "total"), "currency": currency,
                                        "processing_type": "CASH", "included_shipping_price": True}}
+        obpd = nextlevel.obpd_of({**nextlevel.DEFAULTS, "open_before_pay": cfg.get("open_before_pay", True),
+                                  "obpd_option": cfg.get("obpd_option"), "obpd_return_payer": cfg.get("obpd_return_payer")})
+        if obpd:
+            payload["services"]["obpd"] = obpd
     return payload
 
 
@@ -388,6 +393,7 @@ class ConfigIn(BaseModel):
     weight: Optional[float] = None
     bank_transfer_when: Optional[str] = None
     send_courier: Optional[bool] = None
+    open_before_pay: Optional[bool] = None
     wc_consumer_key: Optional[str] = None
     wc_consumer_secret: Optional[str] = None
     wc_country: Optional[str] = None
