@@ -466,18 +466,18 @@ async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
     if handle == LEGACY_ALL:
         handle = ALL_COLLECTION
-    col = await db.collections_cat.find_one(
-        {"$or": [{"handle": handle}, {f"translations.{loc}.handle": handle}]}, {"_id": 0}
-    )
+    query = ({"handle": {"$in": [ALL_COLLECTION, LEGACY_ALL]}} if handle == ALL_COLLECTION
+             else {"$or": [{"handle": handle}, {f"translations.{loc}.handle": handle}]})
+    col = await db.collections_cat.find_one(query, {"_id": 0})
     if not col:
         raise HTTPException(404, "Колекцията не е намерена")
     base_handle = col["handle"]
-    if base_handle == ALL_COLLECTION:
+    if base_handle in (ALL_COLLECTION, LEGACY_ALL):
         prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0}).to_list(500)
     else:
         prods = await db.products.find({"collections": base_handle, "active": {"$ne": False}}, {"_id": 0}).to_list(500)
     siblings = await db.collections_cat.find(
-        {"handle": {"$nin": [base_handle, ALL_COLLECTION]}, "nav_hidden": {"$ne": True}}, {"_id": 0}
+        {"handle": {"$nin": [base_handle, ALL_COLLECTION, LEGACY_ALL]}, "nav_hidden": {"$ne": True}}, {"_id": 0}
     ).sort("sort_order", 1).to_list(50)
     prods = _apply_manual_order(prods, col.get("product_order"))
     return {
