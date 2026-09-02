@@ -808,3 +808,34 @@ deploy nginx + frontend + the catalog re-import.
 
 **Отворено (P1):** RevOrder webhook (чака URL от собственика), верификация на `purepeptide.bg` в
 Resend, UI низовете на чекаута за не-BG магазините.
+
+### 2026-06 — RevOrder: ключовете се издават от нас и се виждат в админа
+Собственик: „Създай webhook url, secret key и api key… искам да се виждат в админ панела.“
+- `backend/revorder.py`: `POST /api/admin/integrations/revorder/generate` издава `api_key`
+  (`pp_live_<32hex>`) + `secret_key` (64 hex); `GET …/reveal?domain=` дава пълните стойности само на
+  админ сесия; списъкът винаги е маскиран. `webhook_url()` = `PUBLIC_SITE_URL` ако е зададен, иначе
+  `https://<домейн>` (в продукция `public_site_url` е празен → всеки домейн получава своя адрес).
+- **purepeptide-labs.bg**: остава псевдоним на purepeptide.bg (`DOMAIN_ALIASES`) — ползва същите
+  ключове, но има собствен webhook адрес, който се показва в картата. Проверено: подписан POST на
+  `/api/webhooks/revorder/purepeptide-labs.bg` → 200.
+- Нов екран `/admin/integrations` (`AdminIntegrationsPage.jsx`, меню „Интеграции“): по карта за
+  .bg/.eu/.ro/.gr — webhook URL, маскирани ключове с „Покажи“/копиране, „Генерирай нови“,
+  превключвател „Изпращай поръчките“, RevOrder API адрес (`https://api.nextcartmanager.com`) + път,
+  „Тествай връзката“ и журнал на събитията.
+- Входящите webhook-ове се проверяват с HMAC-SHA256 върху secret key-а, идемпотентни по event id;
+  обновяват `fulfillment_status` / `tracking_number` на поръчката.
+- Тестове: `tests/test_iteration28_revorder.py` (18 зелени), iteration_28 отчет.
+  Всички домейни са оставени ИЗКЛЮЧЕНИ — собственикът ги пуска, щом ключовете са в RevOrder.
+
+### 2026-06 — Origin сертификат за всеки домейн (SNI)
+Дотогава nginx имаше един server блок с една двойка `origin.pem/key` за всички домейни, а всяка
+Cloudflare зона издава свой Origin сертификат — сертификат за purepeptide.bg не може да обслужва
+purepeptide.ro.
+- `group_vars/all.yml.example`: нов `site_tls_certs: {}` — карта домейн → `cert`/`key` (файловете се
+  качват ръчно, playbook-ът никога не генерира TLS). Домейн без запис ползва общата двойка.
+- `templates/nginx-purepeptide.conf.j2`: рендерира по един 443 server блок за всяка двойка
+  сертификати (общото тяло е Jinja макрос), nginx избира правилния през SNI.
+- `playbooks/deploy_nginx.yml`: проверката за съществуващи сертификати обхожда общата двойка + всички
+  от `site_tls_certs`.
+- Проверено с истински nginx: `nginx -t` минава и с една, и с три различни двойки; 68 deploy теста
+  зелени.

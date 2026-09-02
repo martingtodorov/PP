@@ -55,8 +55,27 @@ wg_force_regenerate_keys: false
 wg_force_rewrite_config: false
 
 # ---------- existing TLS (Cloudflare Origin, installed manually) ----------
+# Shared fallback pair — used by every domain that has no entry in site_tls_certs below.
 ssl_cert_path: /etc/ssl/cloudflare/origin.pem
 ssl_key_path: /etc/ssl/cloudflare/origin.key
+# Per-domain Cloudflare Origin certificates. Each Cloudflare zone issues its own Origin cert, so a
+# certificate for purepeptide.bg can NOT serve purepeptide.ro. Upload the files to pp-front by hand
+# (this playbook never generates TLS material) and map them here; nginx then renders one server
+# block per pair and picks the right certificate via SNI. Leave a domain out to keep using the
+# shared pair above.
+site_tls_certs: {}
+#  purepeptide.bg:
+#    cert: /etc/ssl/cloudflare/purepeptide.bg.pem
+#    key:  /etc/ssl/cloudflare/purepeptide.bg.key
+#  purepeptide.eu:
+#    cert: /etc/ssl/cloudflare/purepeptide.eu.pem
+#    key:  /etc/ssl/cloudflare/purepeptide.eu.key
+#  purepeptide.ro:
+#    cert: /etc/ssl/cloudflare/purepeptide.ro.pem
+#    key:  /etc/ssl/cloudflare/purepeptide.ro.key
+#  purepeptide.gr:
+#    cert: /etc/ssl/cloudflare/purepeptide.gr.pem
+#    key:  /etc/ssl/cloudflare/purepeptide.gr.key
 
 # ---------- backend env (REAL production secrets) ----------
 db_name: purepeptide

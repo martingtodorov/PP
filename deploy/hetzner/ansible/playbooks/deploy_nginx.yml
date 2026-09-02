@@ -9,13 +9,14 @@
     - import_tasks: ../tasks/infra_defaults.yml
 
   tasks:
-    - name: Existing Cloudflare Origin certificate must be in place (never generated here)
+    - name: Existing Cloudflare Origin certificates must be in place (never generated here)
       stat: { path: "{{ item }}" }
       register: certs
       failed_when: not certs.stat.exists
-      loop:
-        - "{{ ssl_cert_path }}"
-        - "{{ ssl_key_path }}"
+      loop: >-
+        {{ ([ssl_cert_path, ssl_key_path]
+            + (site_tls_certs | default({}, true)).values() | map(attribute='cert') | list
+            + (site_tls_certs | default({}, true)).values() | map(attribute='key') | list) | unique }}
       tags: [config]
 
     - name: Read the nginx version

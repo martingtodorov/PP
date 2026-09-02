@@ -12,6 +12,7 @@ import hmac
 import json
 import logging
 import os
+import secrets
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +24,9 @@ log = logging.getLogger("purepeptide.revorder")
 router = APIRouter(tags=["revorder"])
 SETTINGS_KEY = "integrations.revorder"
 DEFAULT_BASE = os.environ["NEXTCART_BASE_URL"]
+DEFAULT_ORDERS_PATH = "/api/orders"
+# one backend serves every storefront domain, so the callback always lands on the live API host
+WEBHOOK_BASE = (os.environ.get("PUBLIC_SITE_URL") or "").strip().strip('"').rstrip("/")
 
 _db = None
 _admin_dep = None
@@ -55,6 +59,25 @@ async def _all_domains() -> Dict[str, Dict[str, Any]]:
 
 
 DOMAIN_ALIASES = {"purepeptide-labs.bg": "purepeptide.bg"}
+
+
+def webhook_url(domain: str) -> str:
+    """The address the merchant pastes into RevOrder so it can call us back.
+
+    In production PUBLIC_SITE_URL is empty (each locale lives on its own domain), so the callback
+    goes to the domain itself; the preview/staging host sets it and wins.
+    """
+    base = WEBHOOK_BASE or f"https://{domain}"
+    return f"{base}/api/webhooks/revorder/{domain}"
+
+
+def aliases_of(domain: str) -> List[str]:
+    return [a for a, target in DOMAIN_ALIASES.items() if target == domain]
+
+
+def _new_credentials() -> Dict[str, str]:
+    """We issue the pair ourselves — the merchant copies it into the RevOrder dashboard."""
+    return {"api_key": f"pp_live_{secrets.token_hex(16)}", "secret_key": secrets.token_hex(32)}
 
 
 async def domain_config(domain: str) -> Optional[Dict[str, Any]]:
@@ -123,12 +146,61 @@ def _mask(value: str) -> str:
 
 @router.get("/admin/integrations/revorder")
 async def get_revorder_settings(admin=Depends(_admin_guard)):
+    """Every storefront domain, keys masked — the full values come from /reveal or /generate."""
     domains = await _all_domains()
     out = {}
-    for d, c in domains.items():
-        out[d] = {**c, "api_key": _mask(c.get("api_key", "")), "secret_key": _mask(c.get("secret_key", ""))}
+    for d in list(dict.fromkeys(ALL_DOMAINS_HINT + list(domains))):
+        c = domains.get(d) or {}
+        out[d] = {
+            "enabled": bool(c.get("enabled")),
+            "api_base": c.get("api_base") or DEFAULT_BASE,
+            "orders_path": c.get("orders_path") or DEFAULT_ORDERS_PATH,
+            "webhook_url": webhook_url(d),
+            "aliases": {a: webhook_url(a) for a in aliases_of(d)},
+            "api_key": _mask(c.get("api_key", "")),
+            "secret_key": _mask(c.get("secret_key", "")),
+            "has_keys": bool(c.get("api_key") and c.get("secret_key")),
+            "updated_at": c.get("updated_at") or "",
+        }
     events = await _db.integration_events.find({}, {"_id": 0}).sort("created_at", -1).to_list(30)
     return {"domains": out, "events": events}
+
+
+async def _store(domain: str, cfg: Dict[str, Any]) -> None:
+    domains = await _all_domains()
+    domains[domain] = cfg
+    await _db.settings.update_one(
+        {"key": SETTINGS_KEY},
+        {"$set": {"value": {"domains": domains}, "updated_at": _now()}},
+        upsert=True,
+    )
+
+
+@router.post("/admin/integrations/revorder/generate")
+async def generate_revorder_keys(payload: Dict[str, Any] = Body(...), admin=Depends(_admin_guard)):
+    """Issue a fresh api_key + secret_key for one domain and return them in full, once."""
+    domain = (payload.get("domain") or "").strip().lower()
+    if not domain:
+        raise HTTPException(400, "Липсва домейн")
+    cfg = (await _all_domains()).get(domain) or {}
+    cfg.update(_new_credentials())
+    cfg["api_base"] = cfg.get("api_base") or DEFAULT_BASE
+    cfg["orders_path"] = cfg.get("orders_path") or DEFAULT_ORDERS_PATH
+    cfg["webhook_url"] = webhook_url(domain)
+    cfg["updated_at"] = _now()
+    await _store(domain, cfg)
+    return {"domain": domain, "api_key": cfg["api_key"], "secret_key": cfg["secret_key"],
+            "webhook_url": cfg["webhook_url"], "enabled": bool(cfg.get("enabled"))}
+
+
+@router.get("/admin/integrations/revorder/reveal")
+async def reveal_revorder_keys(domain: str, admin=Depends(_admin_guard)):
+    """Unmasked keys for copy-paste into RevOrder — admin session only."""
+    cfg = (await _all_domains()).get((domain or "").strip().lower())
+    if not cfg or not cfg.get("api_key"):
+        raise HTTPException(404, "Няма генерирани ключове за този домейн")
+    return {"domain": domain, "api_key": cfg["api_key"], "secret_key": cfg.get("secret_key", ""),
+            "webhook_url": webhook_url(domain)}
 
 
 @router.put("/admin/integrations/revorder")
@@ -144,16 +216,14 @@ async def save_revorder_settings(payload: Dict[str, Any] = Body(...), admin=Depe
         if value and "•" not in value:
             current[field] = value
     current["api_base"] = (payload.get("api_base") or current.get("api_base") or DEFAULT_BASE).strip()
-    current["orders_path"] = (payload.get("orders_path") or current.get("orders_path") or "/api/orders").strip()
-    current["webhook_url"] = (payload.get("webhook_url") or "").strip()
+    current["orders_path"] = (payload.get("orders_path") or current.get("orders_path")
+                              or DEFAULT_ORDERS_PATH).strip()
+    current["webhook_url"] = webhook_url(domain)
     current["enabled"] = bool(payload.get("enabled"))
-    domains[domain] = current
-    await _db.settings.update_one(
-        {"key": SETTINGS_KEY},
-        {"$set": {"value": {"domains": domains}, "updated_at": _now()}},
-        upsert=True,
-    )
-    return {"ok": True, "domain": domain}
+    current["updated_at"] = _now()
+    await _store(domain, current)
+    return {"ok": True, "domain": domain, "webhook_url": current["webhook_url"],
+            "has_keys": bool(current.get("api_key") and current.get("secret_key"))}
 
 
 @router.post("/admin/integrations/revorder/test")

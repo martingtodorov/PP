@@ -217,7 +217,52 @@ def test_tls_files_are_the_existing_cloudflare_origin_pair():
     assert EXAMPLE_VARS["ssl_cert_path"] == "/etc/ssl/cloudflare/origin.pem"
     assert EXAMPLE_VARS["ssl_key_path"] == "/etc/ssl/cloudflare/origin.key"
     nginx = (TEMPLATES / "nginx-purepeptide.conf.j2").read_text()
-    assert "{{ ssl_cert_path }}" in nginx and "{{ ssl_key_path }}" in nginx
+    assert "default(ssl_cert_path, true)" in nginx and "default(ssl_key_path, true)" in nginx
+
+
+def test_each_domain_can_carry_its_own_origin_certificate():
+    """Every Cloudflare zone needs its own Origin cert — one server block per cert pair (SNI)."""
+    import re as _re
+
+    from jinja2 import Environment, FileSystemLoader, StrictUndefined
+
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES)), undefined=StrictUndefined)
+    ctx = dict(EXAMPLE_VARS)
+    ctx["nginx_http2_directive"] = "http2on"
+    ctx["site_tls_certs"] = {
+        "purepeptide.ro": {"cert": "/etc/ssl/cloudflare/ro.pem", "key": "/etc/ssl/cloudflare/ro.key"},
+        "purepeptide.gr": {"cert": "/etc/ssl/cloudflare/gr.pem", "key": "/etc/ssl/cloudflare/gr.key"},
+    }
+    conf = env.get_template("nginx-purepeptide.conf.j2").render(**ctx)
+
+    blocks = _re.findall(r"server_name ([^;]+);\n\n?\s*ssl_certificate\s+(\S+);\n\s*ssl_certificate_key\s+(\S+);", conf)
+    by_cert = {cert: names.split() for names, cert, _ in blocks}
+    assert by_cert["/etc/ssl/cloudflare/ro.pem"] == ["purepeptide.ro"]
+    assert by_cert["/etc/ssl/cloudflare/gr.pem"] == ["purepeptide.gr"]
+    # everything without its own pair keeps sharing the existing production certificate
+    assert set(by_cert["/etc/ssl/cloudflare/origin.pem"]) == {
+        "purepeptide.bg", "purepeptide.eu", "purepeptide-labs.bg"}
+    # every domain still gets the full site config (API proxy + SPA fallback)
+    assert conf.count("location ^~ /api/files/") == len(by_cert)
+    assert conf.count("try_files $uri $uri/ /index.html;") == len(by_cert)
+
+
+def test_a_single_certificate_still_renders_one_server_block():
+    from jinja2 import Environment, FileSystemLoader, StrictUndefined
+
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES)), undefined=StrictUndefined)
+    ctx = dict(EXAMPLE_VARS)
+    ctx["nginx_http2_directive"] = "http2on"
+    conf = env.get_template("nginx-purepeptide.conf.j2").render(**ctx)
+    assert conf.count("listen 443 ssl;") == 1
+    assert conf.count("ssl_certificate ") == 1
+    for domain in EXAMPLE_VARS["site_domains"]:
+        assert domain in conf
+
+
+def test_nginx_deploy_checks_every_configured_certificate():
+    text = (PLAYBOOKS / "deploy_nginx.yml").read_text()
+    assert "site_tls_certs" in text
 
 
 def test_inventory_matches_production():
