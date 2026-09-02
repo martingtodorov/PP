@@ -603,3 +603,21 @@ pp-front) curl the SAME url: `/api/nextcart/countries`.
   self-diagnosing.
 - `tests/test_iteration16_nextcart.py::test_city_suggest` relaxed: an empty suggestion list is the
   contract in snapshot-only mode. 123 nextcart/deploy tests green.
+
+### 2026-06 — deploy verification decoupled from DNS + canonical_domain
+`Public API smoke test` failed because it requested `https://purepeptide.bg/api/settings` — that
+domain still resolves to the **old Shopify store** (404, `server: cloudflare`). The deploy itself was
+fine (pp-back failed=0, pp-front 50 ok).
+- `deploy_nginx.yml`: the fatal check now asks the LOCAL nginx with a Host header
+  (`curl -k https://127.0.0.1/api/settings -H 'Host: {{ canonical_domain }}'`), so it validates
+  nginx → backend regardless of DNS. Added an informational per-domain table (HTTP status +
+  `server:` header) that shows which of site_domains still point at Shopify, plus a non-fatal
+  courier check through the same local route.
+- New var **`canonical_domain`** (`tasks/infra_defaults.yml`, defaults to `site_domains[0]`, asserted
+  to be inside site_domains) drives `REACT_APP_SITE_URL` in `deploy_frontend.yml` and the deploy
+  checks. Owner's choice (option c) so the canonical host can change without reordering site_domains.
+  `group_vars/all.yml.example` now sets `canonical_domain: purepeptide-labs.bg`.
+- Note: sitemaps / hreflang / robots are NOT affected by site_domains — they are built from the
+  per-locale origins (`i18n.SITE_ORIGINS`, overridable via the `site.locale_routes` admin setting),
+  so every domain already has its own sitemap.
+102 nginx/deploy/nextcart tests green.

@@ -13,6 +13,11 @@ site_domains:
   - purepeptide.ro
   - purepeptide.gr
   - purepeptide-labs.bg
+# Canonical host used for REACT_APP_SITE_URL and the deploy verification. Independent of the order
+# above — point it at a domain whose DNS already reaches pp-front (purepeptide.bg still resolves to
+# the old Shopify store). Per-locale sitemaps/hreflang are NOT affected: those live in the admin
+# settings (locale_routes).
+canonical_domain: purepeptide-labs.bg
 app_dir: /opt/purepeptide
 web_root: /var/www/purepeptide
 env_dir: /etc/purepeptide
