@@ -1,0 +1,39 @@
+# PurePeptide
+
+> Bulgarian supplier of lyophilised research peptides with >99% purity, verified by HPLC and LC-MS
+> at the independent laboratory Janoshik Analytical. All products are sold strictly for laboratory
+> and scientific research purposes (Research Use Only) and are not medicinal products.
+
+Prices are shown in EUR (BGN in parallel on purepeptide.bg; RON, CZK, HUF and PLN on the local
+storefronts). Payment: cash on delivery or bank transfer. Shipping: Econt, BoxNow, Speedy and
+Pigeon in Bulgaria, FAN Courier, Speedex and GLS across the EU.
+
+## Store
+
+- [Home](https://purepeptide.bg/): storefront entry point
+- [All peptides](https://purepeptide.bg/collections/2all-the-peptides-1): the full catalogue with prices and stock
+- [Lab analysis & COA](https://purepeptide.bg/pages/chemical-analysis): HPLC / LC-MS certificates per batch
+- [Scientific articles](https://purepeptide.bg/pages/articles): research summaries per peptide
+- [FAQ](https://purepeptide.bg/pages/faq): storage, reconstitution, delivery and payment questions
+- [Contact](https://purepeptide.bg/pages/contact-1): e-mail, phone and contact form
+
+## Policies
+
+- [Terms & conditions](https://purepeptide.bg/pages/terms-conditions)
+- [Delivery and payment](https://purepeptide.bg/pages/delivery-and-payment)
+- [What are peptides](https://purepeptide.bg/pages/какво-са-пептиди)
+- [Become a distributor](https://purepeptide.bg/pages/become-a-distributor)
+
+## Localised storefronts
+
+- [English](https://purepeptide.eu/en), [German](https://purepeptide.eu/de), [French](https://purepeptide.eu/fr)
+- [Czech](https://purepeptide.eu/cz), [Hungarian](https://purepeptide.eu/hu), [Polish](https://purepeptide.eu/pl), [Slovak](https://purepeptide.eu/sk), [Slovenian](https://purepeptide.eu/si)
+- [Greek](https://purepeptide.gr/), [Romanian](https://purepeptide.ro/)
+
+## Optional
+
+- [Live llms.txt with every product and price](https://purepeptide.bg/api/llms.txt): generated from the database on every request
+- [AI agent guide](https://purepeptide.bg/agents.md): longer machine-readable guide
+- [XML sitemap](https://purepeptide.bg/sitemap.xml)
+- [Agentic discovery sitemap](https://purepeptide.bg/sitemap_agentic_discovery.xml)
+- [HTML sitemap](https://purepeptide.bg/pages/html-sitemap)

@@ -26,7 +26,7 @@ const Price = ({ eur, className = "" }) => (
 );
 
 /* ---------------- Announcement bar (coral, arrow carousel) ---------------- */
-const AnnouncementBar = ({ messages }) => {
+const AnnouncementBar = ({ messages, loading }) => {
   const [i, setI] = useState(0);
   const list = messages && messages.length ? messages : [];
   useEffect(() => {
@@ -34,7 +34,9 @@ const AnnouncementBar = ({ messages }) => {
     const t = setInterval(() => setI((v) => (v + 1) % list.length), 5000);
     return () => clearInterval(t);
   }, [list.length]);
-  if (!list.length) return null;
+  // while /api/settings is in flight the bar keeps its height — otherwise the whole page
+  // shifts down by ~58px when the messages arrive (this was the biggest CLS source)
+  if (!list.length && !loading) return null;
 
   return (
     <div className="pp-announce" data-testid="announcement-bar">
@@ -468,7 +470,8 @@ const Header = ({ collections, settings }) => {
 
   return (
     <>
-      <AnnouncementBar messages={(settings.announcements_i18n || {})[locale] || settings.announcements} />
+      <AnnouncementBar messages={(settings.announcements_i18n || {})[locale] || settings.announcements}
+        loading={!Object.keys(settings || {}).length} />
 
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200" data-testid="site-header">
         {/* ---------- mobile / tablet ---------- */}

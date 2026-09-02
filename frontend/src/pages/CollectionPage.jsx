@@ -54,7 +54,7 @@ export default function CollectionPage() {
   if (loading) {
     return (
       <Layout>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5" data-testid="collection-skeleton">
+        <div key="collection-skeleton" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 min-h-[2400px]" data-testid="collection-skeleton">
           <div className="h-3 w-40 bg-slate-100 rounded animate-pulse" />
           <div className="h-9 w-72 bg-slate-100 rounded mt-5 animate-pulse" />
           <div className="h-4 w-full max-w-2xl bg-slate-100 rounded mt-4 animate-pulse" />
@@ -81,7 +81,7 @@ export default function CollectionPage() {
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+      <div key="collection-content" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
         <Breadcrumbs
           items={isAll
             ? [{ label: t("catalog") }]

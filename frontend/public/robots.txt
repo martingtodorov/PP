@@ -24,3 +24,6 @@ Sitemap: https://purepeptide.bg/api/sitemap.xml
 Sitemap: https://purepeptide.eu/api/sitemap.xml
 Sitemap: https://purepeptide.gr/api/sitemap.xml
 Sitemap: https://purepeptide.ro/api/sitemap.xml
+
+# AI agent guide: https://purepeptide.bg/agents.md
+# llms.txt: https://purepeptide.bg/llms.txt

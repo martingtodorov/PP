@@ -113,6 +113,18 @@ server {
     location = /robots.txt   { try_files $uri @backend; }
     location = /sitemap.xml  { try_files $uri @backend; }
 
+    # llms.txt / agents.md must be served as Markdown, never as the SPA shell
+    location = /llms.txt {
+        default_type text/markdown;
+        charset utf-8;
+        try_files $uri =404;
+    }
+    location = /agents.md {
+        default_type text/markdown;
+        charset utf-8;
+        try_files $uri =404;
+    }
+
     location @backend {
         proxy_pass http://{{ backend_private_ip }}:8001;
         proxy_set_header Host $host;

@@ -2840,7 +2840,7 @@ async def agentic_sitemap():
     cols = await db.collections_cat.find({}, {"_id": 0, "handle": 1}).to_list(200)
     prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0, "handle": 1}).to_list(500)
     paths = ["/", f"/collections/{ALL_COLLECTION}", "/pages/html-sitemap", "/pages/articles",
-             "/pages/chemical-analysis", "/pages/faq", "/pages/contact-1", "/agents.md"]
+             "/pages/chemical-analysis", "/pages/faq", "/pages/contact-1", "/agents.md", "/llms.txt"]
     paths += [f"/collections/{c['handle']}" for c in cols]
     paths += [f"/products/{p['handle']}" for p in prods]
     today = datetime.now(timezone.utc).date().isoformat()
@@ -2896,6 +2896,54 @@ async def agents_md():
     return "\n".join(lines)
 
 
+@api.get("/llms.txt", response_class=PlainTextResponse)
+async def llms_txt():
+    """llms.txt per llmstxt.org: one H1, a blockquote summary, then link sections (Markdown)."""
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
+    origin = (routes.get("bg") or SITE_ORIGINS["bg"])["origin"]
+    cols = await db.collections_cat.find({"nav_hidden": {"$ne": True}}, {"_id": 0, "handle": 1, "title": 1}).sort("sort_order", 1).to_list(50)
+    prods = await db.products.find({"active": {"$ne": False}},
+                                   {"_id": 0, "handle": 1, "title": 1, "variants": 1, "seo_description": 1}).to_list(500)
+    lines = [
+        "# PurePeptide",
+        "",
+        "> Bulgarian supplier of lyophilised research peptides with >99% purity, verified by HPLC and",
+        "> LC-MS at the independent laboratory Janoshik Analytical. All products are sold strictly for",
+        "> laboratory and scientific research purposes (Research Use Only) and are not medicinal products.",
+        "",
+        "Prices below are in EUR (BGN in parallel on purepeptide.bg; RON, CZK, HUF and PLN on the local",
+        "storefronts). Payment: cash on delivery or bank transfer. Shipping across the EU.",
+        "",
+        "## Store",
+        f"- [Home]({origin}/): storefront entry point",
+        f"- [All peptides]({origin}/collections/{ALL_COLLECTION}): the full catalogue with prices and stock",
+        f"- [Lab analysis & COA]({origin}/pages/chemical-analysis): HPLC / LC-MS certificates per batch",
+        f"- [Scientific articles]({origin}/pages/articles): research summaries per peptide",
+        f"- [FAQ]({origin}/pages/faq): storage, reconstitution, delivery and payment questions",
+        f"- [Contact]({origin}/pages/contact-1): e-mail, phone and contact form",
+        "",
+        "## Collections",
+    ]
+    lines += [f"- [{c.get('title')}]({origin}/collections/{c['handle']})" for c in cols]
+    lines += ["", "## Products"]
+    for p in prods:
+        prices = [v.get("price_eur") for v in (p.get("variants") or []) if v.get("price_eur")]
+        price = f" — from €{min(prices):.2f}" if prices else ""
+        desc = re.sub(r"\s+", " ", (p.get("seo_description") or "")).strip()[:140]
+        lines.append(f"- [{p.get('title')}{price}]({origin}/products/{p['handle']})" + (f": {desc}" if desc else ""))
+    lines += [
+        "",
+        "## Optional",
+        f"- [AI agent guide]({origin}/agents.md): longer machine-readable guide",
+        f"- [XML sitemap]({origin}/sitemap.xml)",
+        f"- [Agentic discovery sitemap]({origin}/sitemap_agentic_discovery.xml)",
+        f"- [HTML sitemap]({origin}/pages/html-sitemap)",
+        "",
+    ]
+    return PlainTextResponse("\n".join(lines), media_type="text/markdown; charset=utf-8")
+
+
 @api.get("/robots.txt", response_class=PlainTextResponse)
 async def robots():
     lines = [
@@ -2927,6 +2975,7 @@ async def robots():
     origin_bg = (routes.get("bg") or SITE_ORIGINS["bg"])["origin"]
     lines.append("")
     lines.append(f"# AI agent guide: {origin_bg}/agents.md")
+    lines.append(f"# llms.txt: {origin_bg}/llms.txt")
     return "\n".join(lines)
 
 
