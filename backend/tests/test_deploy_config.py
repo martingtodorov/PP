@@ -573,6 +573,15 @@ def test_api_locations_win_over_the_static_image_regex():
     assert "location /api/ {" not in conf
 
 
+def test_woocommerce_facade_is_proxied_to_the_backend():
+    """NextLevel's WooCommerce-type shop calls https://<domain>/wp-json/wc/v3/… — must reach FastAPI."""
+    conf = (TEMPLATES / "nginx-purepeptide.conf.j2").read_text()
+    assert "location ^~ /wp-json/ {" in conf
+    block = conf.split("location ^~ /wp-json/ {", 1)[1].split("\n    }", 1)[0]
+    assert "proxy_pass http://{{ backend_private_ip }}:8001;" in block
+    assert "Authorization" in block
+
+
 def test_long_cache_headers_are_never_forced_onto_errors():
     """`always` stamps the header on 404s too — Cloudflare then serves a broken image for a year."""
     conf = (TEMPLATES / "nginx-purepeptide.conf.j2").read_text()

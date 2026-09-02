@@ -140,26 +140,6 @@ def test_retatrutide_compare_at_price():
         assert v5.get("compare_at_price") or body.get("compare_at_eur") or body.get("compare_at_price"), \
             f"no compare_at price on retatrutide 5mg: {v5}"
 
-
-# ---------- RevOrder integrations regression: 4 domains listed, masked ----------
-def test_revorder_lists_four_domains_masked(admin_session):
-    r = admin_session.get(f"{BASE_URL}/api/admin/integrations/revorder", timeout=15)
-    assert r.status_code == 200
-    body = r.json()
-    domains = body.get("domains") or body.get("configs") or body
-    if isinstance(domains, dict):
-        domains = list(domains.values())
-    assert isinstance(domains, list)
-    assert len(domains) == 4
-    for d in domains:
-        # Enabled must remain False (test hygiene)
-        # Keys should be masked (contain bullet) or empty
-        for field in ("api_key", "secret"):
-            v = d.get(field, "")
-            if v:
-                assert "•" in v or "*" in v, f"{d.get('domain')} {field} not masked: {v[:20]}"
-
-
 # ---------- Code review guard: bulk translate wires UI strings ----------
 def test_bulk_translate_includes_ui_step_in_code():
     src = open("/app/backend/server.py").read()

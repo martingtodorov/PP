@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Copy, Check, Truck, Clock, PackageCheck } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import { ShipmentCard } from "../components/admin/ShipmentCard";
+import { FulfillmentOrderCard } from "../components/admin/FulfillmentOrderCard";
 import { api, fmtEUR, fmtMoney, formatErr, img } from "../lib/api";
 import { Badge, PAY_BADGE, FUL_BADGE } from "./AdminOrdersPage";
 
@@ -138,6 +139,7 @@ export default function AdminOrderDetailPage() {
             )}
           </section>
 
+          <FulfillmentOrderCard order={order} onChanged={load} />
           <ShipmentCard order={order} onChanged={load} />
 
           {/* payment */}

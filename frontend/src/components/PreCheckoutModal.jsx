@@ -290,15 +290,24 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
 
   /** The device position is the only accurate source of the visitor's city. */
   const [locateErr, setLocateErr] = useState("");
+  const [locateFramed, setLocateFramed] = useState(false);
   const locate = useCallback(({ prompt = true } = {}) => {
     setLocating(true);
     setLocateErr("");
+    setLocateFramed(false);
     pfDeviceGeo({ prompt })
       .then((d) => setGeo((g) => ({ ...(g || {}), ...d, country: d.country || g?.country })))
       .catch((e) => {
         if (!prompt) return; // silent warm-up: never nag, never prompt
+        if (e?.message === "geolocation-framed") { setLocateFramed(true); return; }
         const code = e?.code; // GeolocationPositionError: 1 denied, 2 unavailable, 3 timeout
-        setLocateErr(t(code === 1 ? "locateDenied" : "locateFailed"));
+        if (code !== 1) { setLocateErr(t("locateFailed")); return; }
+        // the browser remembers an earlier "block" and never asks again — tell them where to undo it
+        const ua = navigator.userAgent;
+        const ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        const safari = /Safari/.test(ua) && !/Chrome|CriOS|Android/.test(ua);
+        const key = ios ? "locateDeniedIos" : safari ? "locateDeniedSafari" : /Firefox/.test(ua) ? "locateDeniedFirefox" : "locateDeniedChrome";
+        setLocateErr(`${t("locateDenied")} ${t(key)}`);
       })
       .finally(() => setLocating(false));
   }, [t]);
@@ -610,6 +619,13 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                       {locating ? t("locatingText") : t("locateBtn")}
                     </button>
                     {locateErr && <p className="nc2-err" data-testid="pc-locate-error">{locateErr}</p>}
+                    {locateFramed && (
+                      <p className="nc2-err" data-testid="pc-locate-framed">
+                        {t("locateFramed")}{" "}
+                        <a href={window.location.href} target="_blank" rel="noopener noreferrer" className="underline font-semibold"
+                          data-testid="pc-locate-open-tab">{t("locateOpenTab")}</a>
+                      </p>
+                    )}
                   </>
                 )}
 

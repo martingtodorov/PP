@@ -84,6 +84,21 @@ async def send_payment_received(order: Dict[str, Any], settings: Dict[str, Any])
     )
 
 
+async def send_shipment_created(order: Dict[str, Any], settings: Dict[str, Any]):
+    """Waybill issued by NextLevel — courier, number and tracking link, in the customer's language."""
+    locale = order.get("locale") or "bg"
+    contact = (settings.get("contact_email") or os.environ.get("CONTACT_EMAIL") or "info@purepeptide.bg").strip()
+    subject, html = email_templates.render_shipment(order, locale, contact)
+    return await send_email(order["customer_email"], subject, html, settings)
+
+
+async def send_delivered(order: Dict[str, Any], settings: Dict[str, Any]):
+    locale = order.get("locale") or "bg"
+    contact = (settings.get("contact_email") or os.environ.get("CONTACT_EMAIL") or "info@purepeptide.bg").strip()
+    subject, html = email_templates.render_delivered(order, locale, contact)
+    return await send_email(order["customer_email"], subject, html, settings)
+
+
 async def send_shipped(order: Dict[str, Any], tracking: Dict[str, Any], settings: Dict[str, Any]):
     body = (
         f"<p>Здравейте, {order['customer_name']},</p>"

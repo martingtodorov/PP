@@ -1004,3 +1004,44 @@ purepeptide.ro.
 - Ограничения от акаунта: HU само адрес + унгарски телефон (GLS ParcelShop „PSD“ не е активиран);
   RO само FAN; PL/CZ само „авто“ (GLS); HR/IT скъпи (34 €/25 €); COD в AT/NL/BE/FR/ES — неясно (такса 0).
 - Тестовите поръчки в preview са изтрити; всичките тестови пратки са отказани (`{success:true}`).
+
+### 2026-06 — Econt автомат/адрес за BG, SKU в товарителницата, проследяване за клиента
+- `nextcart.METHOD_OVERRIDES["BG"]`: `econt_locker` (еконтомат) **3.39 €** и `econt_address` **4.99 €** —
+  добавят се/презаписват методите от NextCart профила; Econt вече `supports_address` + `supports_pickup`.
+  Цената на доставката се определя **на сървъра** (`method_price`) — клиентът не може да подаде своя.
+- NextLevel `content.contents` = SKU × бр. (`PP-SERMORELIN-5MG x1`), не заглавия.
+- След издаване на товарителница: имейл до клиента на неговия език (`render_shipment`: куриер, номер,
+  НП сума, бутони „Проследи при куриера“ + „Виж поръчката“) и блок „Проследяване на пратката“ на
+  страницата на поръчката (`/checkout/success/{id}`) със статус и линк; преди издаване — „ще се появи тук“.
+  Гост изгледът не връща `shipment.payload`. Проверено на живо: еконтомат Бургас → 3.39 €, awb, имейл id.
+
+### 2026-06 (session 3) — NextLevel Fulfillment (WooCommerce-type shop), delivered e-mail, RevOrder removed
+- **RevOrder изтрит изцяло** (revorder.py, gen_revorder_keys.py, тестове, секцията в /admin/integrations) по искане на собственика.
+- Тегло на товарителниците: `default_weight` 0.4 → **0.1 kg** (nextlevel.DEFAULTS + fallback-ове).
+- `backend/fulfillment.py` — фулфилмент поръчки към склада на NextLevel. Настройки `integrations.nextlevel_fulfillment`
+  (enabled, auto_create, app_id ff-…, app_secret, webhook_url, weight 0.1, bank_transfer_when paid|immediately,
+  send_courier, wc_consumer_key/secret, wc_country, wc_since). `shop_type`: api (има app_secret) → woocommerce (има WC ключове) → webhook.
+  Когато е **включено**, чекаутът НЕ създава наша товарителница (`dispatch_new_order`); COD → веднага, банков превод → при
+  „Маркирай като платена“ (`on_paid`). Admin: GET/PUT `/api/admin/integrations/nextlevel-fulfillment`, `/test`, `/preview/{id}`,
+  `/wc-keys`, `/wc-log`; `/api/admin/orders/{id}/fulfillment` (POST/DELETE/`/refresh`), `/api/admin/fulfillment/sync`.
+- **Магазинът на собственика в NextLevel е тип WooCommerce** (app-id `ff-OcTywYtADkJDKfs6i`; текущите app-id/secret за
+  товарителници дават 401 на `/v1/fulfillment/*`). Затова `backend/wc_api.py` е WooCommerce REST фасада: Basic auth с
+  consumer key/secret, `GET/PUT /orders`, `/orders/{id}/notes`, `/products`, `/variations` (stock от склада → inventory_log
+  `nextlevel_sync`), catch-all 404 в WC формат; всичко се логва в `wc_api_log`. Монтирана на `/api/wc/wp-json/wc/v3` и
+  `/wp-json/wc/v3` (nginx location `^~ /wp-json/` добавена в шаблона). WC статуси: processing (COD/платена), on-hold (банков
+  превод неплатен), completed (изпратена / история преди `wc_since` / shopify_import), cancelled. `wc_id` = crc32(order.id),
+  записва се при checkout + backfill при старт. PUT със status/meta_data (`*awb*`, `*tracking*`, `_courier`) → `order.shipment`
+  (source fulfillment) + имейл „на път“; status Delivered (track sync на 10 мин) → **нов имейл „доставена“** (`dv_*` низове
+  за 11 езика, `render_delivered`, `send_delivered`, `nextlevel.notify_delivered`, `shipment.delivered_notified_at`).
+- Frontend: `FulfillmentCard.jsx` (ключове, webhook, WooCommerce секция: адрес на магазина = origin + `/api/wc`, генериране
+  на ключове, лог на заявките), `FulfillmentOrderCard.jsx` в детайла на поръчката (data-testid `order-warehouse-card`).
+- Геолокация в чекаута: `pfDeviceGeo` открива iframe (preview панел → „отворете в нов таб“), помнено „block“ (инструкции
+  по браузър: iOS/Safari/Chrome/Firefox), `isSecureContext`. Нови ключове locateDenied*/locateFramed/locateOpenTab (bg+en, fallback).
+- Тестове: `tests/test_fulfillment.py` (17), `tests/test_iteration35_fulfillment.py`, `tests/test_iteration36_wc_facade.py`
+  (изискват REACT_APP_BACKEND_URL env), deploy тестове 67. Отчети iteration_35/36 — 100%.
+- Почистване: 13 тестови поръчки (qa@/test@example.com от 2026-09-02) изтрити, 2 живи товарителници отказани,
+  Sermorelin 5mg stock върнат на 15. В панела на NextLevel може да има тестови записи (UZH91, id 4581428) — да се изтрият.
+
+**Следващи стъпки (собственик):** в NextLevel → Fulfillment → магазин (WooCommerce): адрес `https://<домейн>/api/wc`,
+consumer key/secret от Админ → Интеграции („Генерирай ключове“), държава BG → после „Включено“. Save to GitHub → git pull →
+deploy_backend + deploy_frontend + deploy_nginx. Отворено: Resend домейн, Cloudflare origin сертификати (ръчно).
