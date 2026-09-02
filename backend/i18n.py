@@ -133,7 +133,9 @@ async def ai_translate(source: Dict[str, str], locales: List[str], context: str 
         if text.lstrip().startswith("json"):
             text = text.lstrip()[4:]
     data = json.loads(text)
-    return {loc: {k: v for k, v in vals.items() if k in TRANSLATABLE} for loc, vals in data.items() if loc in LOCALES}
+    # keep the known fields plus whatever the caller asked for (settings copy uses its own keys)
+    allowed = set(TRANSLATABLE) | set(source.keys())
+    return {loc: {k: v for k, v in vals.items() if k in allowed} for loc, vals in data.items() if loc in LOCALES}
 
 
 async def ai_translate_chunked(source: Dict[str, str], locales: List[str], context: str = "",
