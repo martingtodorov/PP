@@ -60,6 +60,11 @@ const CollectionsCarousel = ({ collections }) => {
         <ArrowRight className="h-4 w-4" />
       </button>
       <div ref={trackRef} className="collection-carousel__track">
+        {!collections.length && Array.from({ length: 6 }).map((_, i) => (
+          <div key={`skel-${i}`} className="collection-carousel__item" aria-hidden="true">
+            <div className="collection-carousel__media pp-skel" />
+          </div>
+        ))}
         {collections.map((c) => (
           <Link key={c.handle} to={lp(`/collections/${c.handle}`)} className="collection-carousel__item"
             data-testid={`category-${c.handle}`} title={c.title}>

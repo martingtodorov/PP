@@ -60,6 +60,14 @@ export default function ArticlesCarousel({ articles, lp }) {
       </button>
 
       <div ref={trackRef} className="article-carousel__track">
+        {!articles.length && Array.from({ length: 5 }).map((_, i) => (
+          <div key={`skel-${i}`} className="article-carousel__item" aria-hidden="true">
+            <div className="article-card">
+              <div className="article-card__media pp-skel" />
+              <h3 className="article-card__title"><span className="pp-skel pp-skel-text" /></h3>
+            </div>
+          </div>
+        ))}
         {articles.map((a) => (
           <div key={a.handle} className="article-carousel__item">
             <Link to={lp(`/articles/${a.handle}`)} className="article-card" data-testid={`article-${a.handle}`}>

@@ -1737,3 +1737,35 @@ body.pp-consent-open .pp-buybar { display: none; }
   .pp-cookie__card { grid-template-columns: 1fr; gap: 14px; padding: 16px; max-height: 82vh; overflow-y: auto; }
   .pp-cookie__actions { min-width: 0; }
 }
+
+/* ============================================================
+   CLS: space is reserved before the data arrives
+   ============================================================ */
+main#main-content { min-height: 70vh; }
+
+/* the announcement rotates every 5s — 1-line and 2-line messages must occupy the same height */
+.pp-announce__text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+}
+@media (min-width: 640px) {
+  .pp-announce__text { min-height: 24px; }
+}
+
+.pp-skel {
+  background: #eef2f7;
+  border-radius: 12px;
+  animation: pp-skel-pulse 1.5s ease-in-out infinite;
+}
+@keyframes pp-skel-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.pp-skel-text {
+  display: inline-block;
+  width: 72%;
+  height: 1em;
+  border-radius: 6px;
+  vertical-align: middle;
+}
+.pp-skel-text--sm { width: 38%; }
+.pp-skel-block { display: block; border-radius: 10px; }

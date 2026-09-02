@@ -121,7 +121,7 @@ export default function StaticPage() {
   if (loading) {
     return (
       <Layout>
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-14" data-testid="page-skeleton">
+        <div key="page-skeleton" className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-14 min-h-[1600px]" data-testid="page-skeleton">
           <div className="h-3 w-40 bg-slate-100 rounded animate-pulse" />
           <div className="h-9 w-2/3 bg-slate-100 rounded mt-5 animate-pulse" />
           <div className="space-y-3 mt-8">
@@ -136,7 +136,7 @@ export default function StaticPage() {
 
   return (
     <Layout>
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-14">
+      <div key="page-content" className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-14">
         <Breadcrumbs items={[{ label: title }]} />
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-4">{title}</h1>
 

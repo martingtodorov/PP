@@ -99,7 +99,41 @@ export default function ProductPage() {
     ),
   });
 
-  if (!p) return <Layout><div className="max-w-7xl mx-auto px-4 py-20 text-slate-500">{t("loading")}</div></Layout>;
+  /* Skeleton mirrors the real layout AND reserves the full page height, so nothing that is visible
+     in the viewport moves when the product arrives (CLS) */
+  if (!p) return (
+    <Layout>
+      <div key="product-skeleton" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-12 min-h-[3200px]"
+        data-testid="product-skeleton" aria-busy="true">
+        <div className="pp-skel pp-skel-block h-3 w-56" />
+        <div className="pp-skel pp-skel-block h-3 w-40 mt-2 sm:hidden" />
+        <div className="grid lg:grid-cols-2 gap-5 lg:gap-14 mt-4 lg:items-start">
+          <div className="min-w-0">
+            <div className="pp-skel aspect-square w-full rounded-xl" />
+            <div className="flex gap-2 mt-2">
+              {Array.from({ length: 4 }).map((_, i) => <div key={i} className="pp-skel h-16 w-16 rounded-lg" />)}
+            </div>
+          </div>
+          <div className="space-y-5">
+            <div className="pp-skel pp-skel-block h-9 w-3/4" />
+            <div className="pp-skel pp-skel-block h-4 w-52" />
+            <div className="pp-skel pp-skel-block h-4 w-44" />
+            <div className="pp-skel pp-skel-block h-8 w-40" />
+            <div className="flex gap-2">
+              {Array.from({ length: 3 }).map((_, i) => <div key={i} className="pp-skel h-11 flex-1 rounded-md" />)}
+            </div>
+            <div className="flex gap-3">
+              <div className="pp-skel h-12 w-32 rounded-md" />
+              <div className="pp-skel h-12 flex-1 rounded-md" />
+            </div>
+            <div className="pp-skel pp-skel-block h-28 w-full" />
+            {Array.from({ length: 6 }).map((_, i) => <div key={i} className="pp-skel pp-skel-block h-12 w-full" />)}
+            <div className="pp-skel pp-skel-block h-96 w-full" />
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
 
   const allImages = p.images?.length ? p.images : [p.image];
   const images = variantGallery(allImages, p.variants || [], variantIdx);
@@ -111,7 +145,7 @@ export default function ProductPage() {
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-12">
+      <div key="product-content" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-12">
         <Breadcrumbs
           items={[
             { label: t("catalog"), to: lp(link("catalog")) },

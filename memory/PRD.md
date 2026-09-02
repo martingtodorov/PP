@@ -1045,3 +1045,38 @@ purepeptide.ro.
 **Следващи стъпки (собственик):** в NextLevel → Fulfillment → магазин (WooCommerce): адрес `https://<домейн>/api/wc`,
 consumer key/secret от Админ → Интеграции („Генерирай ключове“), държава BG → после „Включено“. Save to GitHub → git pull →
 deploy_backend + deploy_frontend + deploy_nginx. Отворено: Resend домейн, Cloudflare origin сертификати (ръчно).
+
+### 2026-06 (session 3, част 2) — CLS + llms.txt
+**CLS (Cumulative Layout Shift)** — измерено с PerformanceObserver в preview (desktop 1920×900 / mobile 390×844):
+| Страница | Преди | След |
+|---|---|---|
+| Начало | 0.218 / 0.562 | 0.014 / 0.030 |
+| Продукт | 3.485 / 6.064 | 0.001 / 0.000 |
+| Колекция | 0.076 / 0.480 | 0.002 / 0.000 |
+| Статична (FAQ) | 0.446 / 0.028 | 0.001 / 0.000 |
+
+Открити причини и поправки:
+1. **Лентата с промоции** се появяваше след `/api/settings` и избутваше цялата страница с 58px (най-големият
+   източник). `AnnouncementBar` вече получава `loading` и пази височината си, докато настройките пътуват;
+   `.pp-announce__text` има `min-height` за 2 реда на мобилен / 1 ред на десктоп, така че ротацията на
+   всеки 5 сек не мени височината.
+2. **Продуктовата страница** рендираше само „Зареждане…“ и после цялата страница → footer скачаше с ~3000px.
+   Сега има скелет 1:1 с layout-а (`min-h-[3200px]`), така че всичко под сгъвката се движи извън екрана.
+3. **React преизползваше DOM възел** от скелета за `div.grid` на реалното съдържание → шифт 232px.
+   Решено с `key="product-skeleton"` / `key="product-content"` (същото за колекция и статични страници).
+4. **Каруселите** стартираха празни → секциите растяха. `ProductsCarousel`, `ArticlesCarousel` и
+   `CollectionsCarousel` рендират placeholder карти (`.pp-skel` + реалните `__media` класове за точна височина).
+5. `main#main-content { min-height: 70vh }`.
+
+**llms.txt** (SEO одит: „трябва Markdown с поне един H1“):
+- `GET /api/llms.txt` — динамичен, по llmstxt.org: един `# PurePeptide` H1, `>` резюме, секции Store /
+  Collections / Products (всички продукти с цени в EUR) / Optional. Content-Type `text/markdown`.
+- Статичен `frontend/public/llms.txt` за корена на домейна (`https://purepeptide.bg/llms.txt`).
+- `robots.txt` (динамичен + статичен) сочи `# llms.txt:`; `sitemap_agentic_discovery.xml` включва `/llms.txt`;
+  `index.html` има `<link rel="alternate" type="text/markdown" href="/llms.txt">`.
+- nginx шаблон: `location = /llms.txt` и `= /agents.md` с `default_type text/markdown`.
+- Тестове: `backend/tests/test_iteration37_llms.py` (5 зелени), отчет iteration_37 — backend 100%, frontend 100%.
+
+**Отворени задачи (одобрени от собственика, още НЕ започнати):**
+- Опция „Отвори пратката преди плащане“ в чекаута (NextLevel `services.obpd` = {option: OPEN, return_shipment_payer: SENDER}) — потвърдено от документацията.
+- Тестови COD поръчки за всичките 10 не-BG държави (офис/автомат за RO/GR/HU/PL/SK/SI/HR, адрес за CZ/DE/IT, местна валута), с изтриване след проверка.

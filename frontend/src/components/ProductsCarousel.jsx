@@ -63,9 +63,16 @@ export default function ProductsCarousel({ products }) {
       </button>
 
       <div ref={trackRef} className="product-carousel__track">
-        {products.map((p) => (
-          <div key={p.id} className="product-carousel__item">
-            <ProductCard product={p} />
+        {/* placeholders keep the section height stable until the API answers (CLS) */}
+        {(products.length ? products : Array.from({ length: 6 })).map((p, i) => (
+          <div key={p?.id || `skel-${i}`} className="product-carousel__item">
+            {p ? <ProductCard product={p} /> : (
+              <div className="product-card" aria-hidden="true">
+                <div className="product-card__media pp-skel" />
+                <h3 className="product-card__title"><span className="pp-skel pp-skel-text" /></h3>
+                <div className="product-card__price"><span className="pp-skel pp-skel-text pp-skel-text--sm" /></div>
+              </div>
+            )}
           </div>
         ))}
       </div>
