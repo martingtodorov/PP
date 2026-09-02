@@ -312,6 +312,19 @@
           changed_when: false
           failed_when: false
 
+        - name: Does the release ship the courier snapshot?
+          shell: |
+            dir="{{ backend_src_dir }}/data/nextcart"
+            echo "snapshot dir: $dir"
+            ls -1 "$dir" 2>&1 | head -5
+            echo "files: $(ls -1 "$dir" 2>/dev/null | wc -l)"
+            grep -m1 '^NEXTCART_SNAPSHOT_ONLY=' {{ env_dir }}/backend.env || echo "NEXTCART_SNAPSHOT_ONLY missing from backend.env"
+            echo "deployed commit: $(git -C {{ release_dir }} rev-parse --short HEAD 2>/dev/null)"
+          args: { executable: /bin/bash }
+          register: nextcart_snap
+          changed_when: false
+          failed_when: false
+
         - name: What the backend logged about NextCart
           shell: "journalctl -u {{ app_name }}-backend -n 300 --no-pager | grep -i nextcart | tail -10 || true"
           args: { executable: /bin/bash }
@@ -327,6 +340,8 @@
               {{ nextcart_conf.stdout | default('(no NEXTCART_* lines)') }}
               --- upstream reachability ---
               {{ nextcart_probe.stdout | default('') }}
+              --- courier snapshot in the release ---
+              {{ nextcart_snap.stdout | default('') }}
               --- direct call to the storefront API (this is the decisive status) ---
               {{ nextcart_direct.stdout | default('') }}
               {{ nextcart_direct.stderr | default('') }}
