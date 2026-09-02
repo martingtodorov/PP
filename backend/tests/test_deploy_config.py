@@ -503,3 +503,18 @@ def test_verification_never_echoes_a_cyrillic_payload_unguarded():
         for line in (PLAYBOOKS / name).read_text().splitlines():
             if "head -c" in line and not line.strip().startswith("#"):
                 assert "iconv -c" in line, f"{name}: {line.strip()}"
+
+
+def test_catalog_import_is_available_but_never_automatic():
+    text = (PLAYBOOKS / "deploy_backend.yml").read_text()
+    assert "matrixify_import.py" in text
+    assert "run_catalog_import | default(false) | bool" in text
+    # customers would be wiped by the importer — it must not be a default step
+    assert "customers" not in text.split("--only")[1].split("\n")[0]
+
+
+def test_importer_uses_the_handle_the_backend_canonicalises_to():
+    imp = (ROOT / "backend" / "matrixify_import.py").read_text()
+    srv = (ROOT / "backend" / "server.py").read_text()
+    all_collection = re.search(r'ALL_COLLECTION = "([^"]+)"', srv).group(1)
+    assert f'ALL_HANDLE = "{all_collection}"' in imp

@@ -2341,7 +2341,7 @@ async def admin_bulk_translate_status(user=Depends(require_admin)):
 async def link_index(locale: str = Query(DEFAULT_LOCALE)):
     """Everything that has a URL — powers the HTML sitemap pages."""
     loc = normalize_locale(locale)
-    cols = await db.collections_cat.find({}, {"_id": 0}).sort("sort_order", 1).to_list(200)
+    cols = await db.collections_cat.find({"nav_hidden": {"$ne": True}}, {"_id": 0}).sort("sort_order", 1).to_list(200)
     prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0}).to_list(500)
     arts = await db.articles.find({}, {"_id": 0}).to_list(200)
     pages = await db.pages.find({"locale": {"$in": [loc, "bg"]}}, {"_id": 0}).to_list(200)

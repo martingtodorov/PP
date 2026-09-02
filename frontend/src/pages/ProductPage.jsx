@@ -12,6 +12,7 @@ import { useLocaleCtx } from "../i18n/LocaleContext";
 import { PRODUCT_BLOCKS, pick, LOCALES } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
 import { graph, productLd, breadcrumbLd, organizationLd } from "../lib/schema";
+import { isAllCollection } from "../lib/collections";
 
 /** Size token of a variant name, e.g. "5 mg" -> "5mg" */
 const sizeToken = (name) => (name || "").toLowerCase().replace(/\s+/g, "");
@@ -103,7 +104,7 @@ export default function ProductPage() {
   const images = variantGallery(allImages, p.variants || [], variantIdx);
   const out = !v || (v.stock || 0) <= 0;
   const primaryCollection = (data.collections || []).find(
-    (c) => c.handle !== "2all-the-peptides-1" && c.title !== t("catalog") && !c.nav_hidden,
+    (c) => !isAllCollection(c) && c.title !== t("catalog") && !c.nav_hidden,
   );
   const specs = p.specs || {};
 
