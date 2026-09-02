@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { link } from "../lib/links";
 import { Link } from "react-router-dom";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { cookieText } from "../i18n/cookies";
@@ -70,7 +71,7 @@ export const CookieConsent = () => {
           <h2 className="pp-cookie__title" data-testid="cookie-title">{c.title}</h2>
           <p className="pp-cookie__text">
             {c.body}{" "}
-            <Link to={lp("/pages/terms-conditions")} className="underline hover:text-coral-600" data-testid="cookie-privacy-link">
+            <Link to={lp(link("terms"))} className="underline hover:text-coral-600" data-testid="cookie-privacy-link">
               {c.privacy}
             </Link>
           </p>

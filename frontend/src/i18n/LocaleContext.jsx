@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { LOCALES, DEFAULT_LOCALE, LOCALE_META, translate, applyLocaleRoutes, isProdHost } from "./locales";
-import { api } from "../lib/api";
+import { api, setFx } from "../lib/api";
+import { setLinks } from "../lib/links";
 
 const LocaleContext = createContext({ locale: DEFAULT_LOCALE });
 
@@ -23,6 +24,16 @@ export function LocaleProvider({ children }) {
       setRoutesVersion((v) => v + 1);
     }).catch(() => {});
   }, []);
+
+  /* the storefront currency (EUR, or the local one for CZ/HU/PL/RO) with today's ECB rate */
+  useEffect(() => {
+    api.get("/currency", { params: { locale } })
+      .then(({ data }) => { setFx(data); setRoutesVersion((v) => v + 1); })
+      .catch(() => {});
+    api.get("/links", { params: { locale } })
+      .then(({ data }) => { setLinks(data); setRoutesVersion((v) => v + 1); })
+      .catch(() => {});
+  }, [locale]);
 
   /* the .eu apex is unused — English lives under /en */
   useEffect(() => {

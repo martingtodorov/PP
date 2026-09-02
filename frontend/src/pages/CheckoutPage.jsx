@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { link } from "../lib/links";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import Layout from "../components/Layout";
@@ -10,7 +11,7 @@ import { Textarea } from "../components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { api, fmtEUR, fmtBGN, formatErr, img } from "../lib/api";
+import { api, fmtPrice, fmtAmount, cartAmounts, fmtBGN, showsBGN, formatErr, img } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 
 export default function CheckoutPage() {
@@ -63,6 +64,8 @@ export default function CheckoutPage() {
   const shipping = pre ? pre.delivery.price_amount : (shippingMethod === "speedy" ? 7.49 : 5.99);
   const finalShipping = subtotal >= 100 ? 0 : shipping;
   const total = Math.max(subtotal - discountAmount, 0) + finalShipping;
+  /* the amounts actually shown: rounded per line, then summed — same rule as the backend */
+  const amt = cartAmounts({ items, shippingEur: finalShipping, discount });
 
   const submit = async (e) => {
     e.preventDefault();
@@ -143,7 +146,7 @@ export default function CheckoutPage() {
                         : `${form.city} ${form.line1}`}
                     </p>
                   </div>
-                  <span className="font-display font-bold text-slate-900">{fmtEUR(pre.delivery.price_amount)}</span>
+                  <span className="font-display font-bold text-slate-900">{fmtPrice(pre.delivery.price_amount)}</span>
                 </div>
               </section>
             ) : (
@@ -161,7 +164,7 @@ export default function CheckoutPage() {
                       <p className="font-medium text-slate-900">{s.t}</p>
                       <p className="text-xs text-slate-500">{s.d}</p>
                     </div>
-                    <span className="font-display font-bold text-slate-900">{subtotal >= 100 ? "Безплатно" : `€${s.p}`}</span>
+                    <span className="font-display font-bold text-slate-900">{subtotal >= 100 ? "Безплатно" : fmtPrice(s.p)}</span>
                   </label>
                 ))}
               </RadioGroup>
@@ -181,36 +184,36 @@ export default function CheckoutPage() {
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 sticky top-24 space-y-4">
               <h2 className="font-display font-bold text-lg text-slate-900">Вашата поръчка</h2>
               <div className="space-y-3 max-h-72 overflow-y-auto">
-                {items.map((it) => (
+                {items.map((it, i) => (
                   <div key={it.variant_sku} className="flex gap-3 text-sm">
                     <img src={img(it.image, 160)} alt={it.title} className="w-14 h-14 object-contain bg-white border border-slate-200 rounded" />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-slate-900 truncate">{it.title}</p>
                       <p className="text-xs text-slate-500">{it.variant_name} × {it.quantity}</p>
                     </div>
-                    <span className="font-semibold text-slate-900">{fmtEUR(it.price_eur * it.quantity)}</span>
+                    <span className="font-semibold text-slate-900">{fmtAmount(amt.lines[i])}</span>
                   </div>
                 ))}
               </div>
               <div className="border-t border-slate-200 pt-4 space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-slate-600">Междинна сума</span><span className="font-semibold">{fmtEUR(subtotal)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-600">Междинна сума</span><span className="font-semibold">{fmtAmount(amt.subtotal)}</span></div>
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-coral-700" data-testid="checkout-discount-row">
-                    <span>Отстъпка ({discount?.code})</span><span className="font-semibold">− {fmtEUR(discountAmount)}</span>
+                    <span>Отстъпка ({discount?.code})</span><span className="font-semibold">− {fmtAmount(amt.discountAmount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between"><span className="text-slate-600">Доставка</span><span className="font-semibold">{finalShipping === 0 ? "Безплатна" : fmtEUR(finalShipping)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-600">Доставка</span><span className="font-semibold">{amt.shipping === 0 ? "Безплатна" : fmtAmount(amt.shipping)}</span></div>
                 <div className="border-t border-slate-200 pt-2 flex justify-between">
                   <span className="font-display font-bold">Общо</span>
                   <div className="text-right">
-                    <span className="font-display font-extrabold text-lg block" data-testid="checkout-total">{fmtEUR(total)}</span>
-                    <span className="text-xs text-slate-500">{fmtBGN(total)}</span>
+                    <span className="font-display font-extrabold text-lg block" data-testid="checkout-total">{fmtAmount(amt.total)}</span>
+                    {showsBGN() && <span className="text-xs text-slate-500">{fmtBGN(total)}</span>}
                   </div>
                 </div>
               </div>
               <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
                 <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} className="mt-0.5 accent-coral-600" data-testid="checkout-terms-checkbox" />
-                <span>Съгласявам се с <Link to={lp("/pages/terms-conditions")} className="underline hover:text-coral-600">общите условия</Link> и потвърждавам, че поръчвам за научноизследователски цели.</span>
+                <span>Съгласявам се с <Link to={lp(link("terms"))} className="underline hover:text-coral-600">общите условия</Link> и потвърждавам, че поръчвам за научноизследователски цели.</span>
               </label>
               <Button type="submit" disabled={submitting || !terms} className="w-full bg-coral-600 hover:bg-coral-700" data-testid="place-order-btn">
                 {submitting ? "Обработка…" : "Завърши поръчката"}

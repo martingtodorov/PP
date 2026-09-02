@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { link } from "../lib/links";
 import { useParams, Link } from "react-router-dom";
 import Layout, { USPRow } from "../components/Layout";
 import ProductCard from "../components/ProductCard";
@@ -84,7 +85,7 @@ export default function CollectionPage() {
         <Breadcrumbs
           items={isAll
             ? [{ label: t("catalog") }]
-            : [{ label: t("catalog"), to: lp("/collections/2all-the-peptides-1") }, { label: c.title }]}
+            : [{ label: t("catalog"), to: lp(link("catalog")) }, { label: c.title }]}
         />
         {/* SEO-only H1 — the visible heading is the longer one inside the description */}
         <h1 className="pp-seo-h1" data-testid="collection-title">{c.title}</h1>
@@ -96,7 +97,7 @@ export default function CollectionPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-8">
         <div className="flex flex-wrap gap-2 mb-4 overflow-x-auto no-scrollbar" data-testid="collection-tabs">
-          <Link to={lp("/collections/2all-the-peptides-1")}
+          <Link to={lp(link("catalog"))}
             className={`px-4 py-2 rounded-full text-sm font-medium border whitespace-nowrap transition-colors ${
               isAll ? "bg-coral-600 text-white border-coral-600" : "bg-white text-slate-700 border-slate-200 hover:border-coral-400"
             }`}>

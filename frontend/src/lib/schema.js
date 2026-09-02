@@ -1,6 +1,7 @@
 /** Shared JSON-LD builders (schema.org) — Organization, WebSite, Breadcrumbs, Product, Article, FAQ. */
 
 import { siteMedia } from "./media";
+import { currencyCode, nicePrice } from "./money";
 
 const ORIGIN = () => (typeof window !== "undefined" ? window.location.origin : "https://purepeptide.bg");
 const asset = (key, fallback) => {
@@ -51,7 +52,10 @@ export const breadcrumbLd = (items = []) => ({
 export const productLd = ({ product, variant, path }) => {
   const strip = (html) => (html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   const variants = product.variants || [];
-  const prices = variants.map((v) => v.price_eur).filter((n) => typeof n === "number");
+  /* the storefront currency: EUR, or the local one on the CZ/HU/PL/RO shops */
+  const cur = currencyCode();
+  const amount = (eur) => (cur === "EUR" ? eur : nicePrice(eur));
+  const prices = variants.map((v) => v.price_eur).filter((n) => typeof n === "number").map(amount);
   const inStock = variants.some((v) => (v.stock || 0) > 0);
   return {
     "@type": "Product",
@@ -71,7 +75,7 @@ export const productLd = ({ product, variant, path }) => {
       variants.length > 1
         ? {
             "@type": "AggregateOffer",
-            priceCurrency: "EUR",
+            priceCurrency: cur,
             lowPrice: Math.min(...prices),
             highPrice: Math.max(...prices),
             offerCount: variants.length,
@@ -81,8 +85,8 @@ export const productLd = ({ product, variant, path }) => {
               "@type": "Offer",
               name: v.name,
               sku: v.sku,
-              price: v.price_eur,
-              priceCurrency: "EUR",
+              price: amount(v.price_eur),
+              priceCurrency: cur,
               availability: (v.stock || 0) > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
               url: `${ORIGIN()}${path}`,
             })),
@@ -90,7 +94,7 @@ export const productLd = ({ product, variant, path }) => {
         : {
             "@type": "Offer",
             price: prices[0] || 0,
-            priceCurrency: "EUR",
+            priceCurrency: cur,
             availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
             url: `${ORIGIN()}${path}`,
             itemCondition: "https://schema.org/NewCondition",

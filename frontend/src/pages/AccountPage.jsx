@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { link } from "../lib/links";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import Layout from "../components/Layout";
@@ -8,7 +9,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Badge } from "../components/ui/badge";
 import { useAuth } from "../context/AuthContext";
-import { api, fmtEUR, formatErr } from "../lib/api";
+import { api, fmtPrice, formatErr } from "../lib/api";
 
 const STATUS_BG = {
   awaiting_payment: { label: "Очаква плащане", cls: "bg-amber-100 text-amber-800 border-amber-300" },
@@ -74,7 +75,7 @@ export default function AccountPage() {
         <h2 className="font-display text-2xl font-bold text-slate-900 mb-4">Моите поръчки</h2>
         {orders.length === 0 ? (
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-10 text-center text-slate-500">
-            Все още нямате поръчки. <Link to="/collections/2all-the-peptides-1" className="text-coral-600 font-medium">Към каталога →</Link>
+            Все още нямате поръчки. <Link to={link("catalog")} className="text-coral-600 font-medium">Към каталога →</Link>
           </div>
         ) : (
           <div className="space-y-3">
@@ -92,7 +93,7 @@ export default function AccountPage() {
                     <Badge className={`${fs.cls} border`}>{fs.label}</Badge>
                   </div>
                   <div className="ml-auto text-right">
-                    <p className="font-display font-bold text-slate-900">{fmtEUR(o.total_eur)}</p>
+                    <p className="font-display font-bold text-slate-900">{fmtPrice(o.total_eur)}</p>
                     <p className="text-xs text-slate-500">{o.items.length} артикула</p>
                   </div>
                 </div>

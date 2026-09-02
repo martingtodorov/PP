@@ -29,6 +29,7 @@ sys.path.insert(0, str(ROOT))
 
 import storage  # noqa: E402
 from currency import rate_for  # noqa: E402
+from links_map import link_key_for  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("import")
@@ -114,6 +115,21 @@ def group_by(rows: List[Dict[str, Any]], key: str) -> Dict[str, List[Dict[str, A
 SKIP_IMAGES = "--skip-images" in sys.argv
 
 
+def _stored_ok(path: Optional[str]) -> bool:
+    """A cached image_map entry is only usable while the file is really still in storage.
+
+    A deploy to a fresh server (or a wiped media directory) leaves the mapping behind, and trusting
+    it silently published /api/files URLs that 404 for every product.
+    """
+    if not path:
+        return False
+    try:
+        storage.get_object(path)
+        return True
+    except Exception:
+        return False
+
+
 def store_image(url: Optional[str]) -> Optional[str]:
     """Download a remote image once and return our own /api/files/... URL."""
     if not url or not str(url).startswith("http"):
@@ -122,7 +138,7 @@ def store_image(url: Optional[str]) -> Optional[str]:
     if SKIP_IMAGES:
         return url
     cached = db.image_map.find_one({"src": url})
-    if cached:
+    if cached and _stored_ok(cached.get("path")):
         return cached["url"]
     try:
         resp = requests.get(url, timeout=60)
@@ -142,18 +158,20 @@ def store_image(url: Optional[str]) -> Optional[str]:
         log.warning("image upload failed %s (%s)", base, ex)
         return url
     stored = result.get("path", path)
-    db.files.insert_one({
-        "id": str(uuid.uuid4()),
-        "storage_path": stored,
-        "original_filename": base,
-        "content_type": content_type,
-        "size": len(data),
-        "is_deleted": False,
-        "created_at": now_utc(),
-        "uploaded_by": "matrixify-import",
-    })
+    db.files.update_one(
+        {"storage_path": stored},
+        {"$set": {"storage_path": stored, "original_filename": base, "content_type": content_type,
+                  "size": len(data), "is_deleted": False, "uploaded_by": "matrixify-import"},
+         "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now_utc()}},
+        upsert=True,
+    )
     our_url = f"/api/files/{stored}"
-    db.image_map.insert_one({"src": url, "path": stored, "url": our_url, "created_at": now_utc()})
+    db.image_map.update_one(
+        {"src": url},
+        {"$set": {"src": url, "path": stored, "url": our_url},
+         "$setOnInsert": {"created_at": now_utc()}},
+        upsert=True,
+    )
     log.info("stored image %s (%d kB)", base, len(data) // 1024)
     return our_url
 
@@ -224,6 +242,9 @@ def clean_body(html: str, title: str = "", drop_leading_h1: bool = True) -> str:
             out = out[m.end():].lstrip()
     out = re.sub(r"<h1(\s[^>]*)?>", "<h2>", out, flags=re.I)
     out = re.sub(r"</h1>", "</h2>", out, flags=re.I)
+    # Shopify bodies can carry app scripts (hCaptcha, tracking) — they never belong in our HTML
+    out = re.sub(r"<script\b.*?</script>", "", out, flags=re.I | re.S)
+    out = re.sub(r"<script\b[^>]*/?>", "", out, flags=re.I)
     return out.strip()
 
 
@@ -248,6 +269,7 @@ def import_collections() -> Dict[str, str]:
         db.collections_cat.insert_one({
             "id": str(uuid.uuid4()),
             "handle": our_handle,
+            "link_key": link_key_for("collection", our_handle) or "",
             "title": top.get("Title") or our_handle,
             "menu_title": menu_title,
             "menu_order": sort_order,
@@ -328,28 +350,44 @@ def import_products() -> None:
     log.info("products imported: %d", imported)
 
 
+SKIP_PAGE_HANDLES = {"ads-page", "homepage"}
+
+
+def _page_upsert(slug: str, title: str, html: str, seo: Dict[str, str],
+                 canonical_slug: Optional[str] = None) -> None:
+    fields = {"title": title, "html": html, "faq_items": [], **seo, "updated_at": now_utc(),
+              "link_key": link_key_for("page", canonical_slug or slug) or ""}
+    fields["canonical_slug"] = canonical_slug or ""
+    db.pages.update_one(
+        {"slug": slug, "locale": "bg"},
+        {"$set": fields, "$setOnInsert": {"id": str(uuid.uuid4()), "slug": slug, "locale": "bg"}},
+        upsert=True,
+    )
+
+
 def import_pages() -> None:
-    rows = sheet("Pages")
-    for r in rows:
-        slug = PAGE_MAP.get(str(r.get("Handle") or "").strip())
-        body = r.get("Body HTML") or ""
-        if not slug or not body.strip():
+    """Every page keeps its Shopify handle as the slug — that is what the storefront links to.
+
+    PAGE_MAP handles are additionally published under the app's own slug (an alias carrying
+    canonical_slug, so sitemaps skip it) to keep older internal links alive.
+    """
+    for handle, group in group_by(sheet("Pages"), "Handle").items():
+        handle = str(handle or "").strip()
+        if not handle or handle in SKIP_PAGE_HANDLES or handle.startswith("html-sitemap"):
             continue
-        db.pages.update_one(
-            {"slug": slug, "locale": "bg"},
-            {
-                "$set": {
-                    "title": r.get("Title") or slug,
-                    "html": clean_body(rewrite_body_images(body), r.get("Title") or ""),
-                    "faq_items": [],
-                    **seo_pair(r, r.get("Title") or slug, body),
-                    "updated_at": now_utc(),
-                },
-                "$setOnInsert": {"id": str(uuid.uuid4()), "slug": slug, "locale": "bg"},
-            },
-            upsert=True,
-        )
-        log.info("page imported: %s -> %s", r.get("Handle"), slug)
+        top = next((r for r in group if str(r.get("Body HTML") or "").strip()), group[0])
+        body = str(top.get("Body HTML") or "")
+        title = top.get("Title") or handle
+        html = clean_body(rewrite_body_images(body), title)
+        if not html.strip():
+            log.info("page skipped (no content): %s", handle)
+            continue
+        seo = seo_pair(top, title, body)
+        _page_upsert(handle, title, html, seo)
+        alias = PAGE_MAP.get(handle)
+        if alias and alias != handle:
+            _page_upsert(alias, title, html, seo, canonical_slug=handle)
+        log.info("page imported: %s%s", handle, f" (+ alias {alias})" if alias else "")
 
 
 def import_articles() -> None:

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ShoppingBag } from "lucide-react";
-import { fmtEUR, fmtBGN, showsBGN, img } from "../lib/api";
+import { fmtPrice, fmtBGN, showsBGN, img } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 
 /**
@@ -38,8 +38,8 @@ export const StickyBuyBar = ({ product, variant, anchorRef, onAdd, soldOut }) =>
           <span className="pp-buybar__variant">{variant.name}</span>
         </div>
         <div className="pp-buybar__price">
-          <span>{fmtEUR(variant.price_eur || 0)}</span>
-          {compare > (variant.price_eur || 0) && <s className="pp-buybar__compare">{fmtEUR(compare)}</s>}
+          <span>{fmtPrice(variant.price_eur || 0)}</span>
+          {compare > (variant.price_eur || 0) && <s className="pp-buybar__compare">{fmtPrice(compare)}</s>}
           {showsBGN() && <span className="pp-buybar__bgn">({fmtBGN(variant.price_eur || 0)})</span>}
         </div>
         <button type="button" onClick={onAdd} disabled={soldOut}

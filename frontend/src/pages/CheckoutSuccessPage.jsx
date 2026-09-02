@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import Layout from "../components/Layout";
 import { useSeo } from "../lib/seo";
 import { Button } from "../components/ui/button";
-import { api, fmtEUR, fmtBGN } from "../lib/api";
+import { api, fmtEUR, fmtAmount, amountOf, fmtBGN, showsBGN } from "../lib/api";
 
 export default function CheckoutSuccessPage() {
   useSeo({ title: "Благодарим за поръчката | PurePeptide", description: "Поръчката е получена.", path: "/checkout/success", robots: "noindex,nofollow" });
@@ -50,7 +50,8 @@ export default function CheckoutSuccessPage() {
                 ["IBAN", bank_transfer.iban],
                 ["BIC", bank_transfer.bic],
                 ["Референция (основание)", bank_transfer.reference],
-                ["Сума", `${fmtEUR(bank_transfer.amount_eur)} (${fmtBGN(bank_transfer.amount_eur)})`],
+                ["Сума", showsBGN() ? `${fmtEUR(bank_transfer.amount_eur)} (${fmtBGN(bank_transfer.amount_eur)})`
+                          : fmtEUR(bank_transfer.amount_eur)],  /* the IBAN is a euro account */
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between items-center gap-4 border-b border-slate-100 pb-2">
                   <dt className="text-slate-500">{k}</dt>
@@ -73,12 +74,14 @@ export default function CheckoutSuccessPage() {
             {order.items.map((it) => (
               <li key={it.variant_sku} className="flex justify-between">
                 <span className="text-slate-700">{it.title} — {it.variant_name} × {it.quantity}</span>
-                <span className="font-semibold">{fmtEUR(it.price_eur * it.quantity)}</span>
+                <span className="font-semibold">
+                  {fmtAmount((it.price_orig != null ? it.price_orig : amountOf(it.price_eur)) * it.quantity)}
+                </span>
               </li>
             ))}
           </ul>
           <div className="border-t border-slate-200 mt-4 pt-3 flex justify-between font-display font-bold">
-            <span>Общо</span><span>{fmtEUR(order.total_eur)}</span>
+            <span>Общо</span><span>{fmtAmount(order.total_orig != null ? order.total_orig : order.total_eur)}</span>
           </div>
         </div>
 

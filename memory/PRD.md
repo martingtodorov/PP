@@ -706,3 +706,59 @@ After the re-import: **0 records without a meta title or description** (23 produ
 19 articles, 18 bg pages). Only the non-bg page copies still lack SEO — those are AI translations made
 before the SEO data existed; re-running the page translation in the admin fills them.
 New test file `backend/tests/test_matrixify_seo.py` (7 tests) + 61 deploy tests → 68 green.
+
+### 2026-06 — page texts + broken images (root causes) 
+Owner: "импортите от матриксифай не работят, текстовете от страниците не се импортират и снимките не
+работят". Both were real and both had a precise cause:
+1. **Pages**: `PAGE_MAP` made the importer write to slugs the app never opens. The storefront routes
+   on the **Shopify handles** (`pages_seed.PAGE_SLUGS` = `terms-conditions`, `delivery-and-payment`,
+   `какво-са-пептиди`…), while the import filled `terms-of-service`, `shipping-policy`,
+   `what-are-peptides`… so /pages/terms-conditions kept its 199-char seed stub. It also imported only
+   the 11 PAGE_MAP handles. `import_pages()` now imports EVERY row of the sheet under its Shopify
+   handle (skipping `html-sitemap*`, empty bodies) and publishes the PAGE_MAP slug as an alias
+   carrying `canonical_slug` (kept out of /link-index and /api/links).
+2. **Images**: `db.image_map` cached `src -> /api/files/...` forever. On the fresh server the media
+   directory was empty, the importer trusted the cache, never re-downloaded, and published URLs that
+   404'd. `store_image()` now verifies the file is really in storage (`_stored_ok()`) before reusing a
+   mapping; `files`/`image_map` writes became idempotent upserts. Local audit after the fix: 0 missing
+   media files across products, collections, pages and articles.
+   Bonus: `clean_body()` strips `<script>` (the Shopify opt-out page shipped an hCaptcha script).
+
+### 2026-06 — full local currency for CZ/HU/PL/RO (owner's choices)
+Prices stay in EUR in the database; the CZ/HU/PL/RO storefronts are shown, charged, e-mailed and
+recorded in their own currency. BG keeps € + BGN dual pricing, other euro countries unchanged.
+- `backend/currency.py`: `LOCALE_CURRENCY`, ECB daily feed (`eurofxref-daily.xml`) with a Mongo
+  snapshot (`fx_rates`) + 6h memory cache + static fallback, `nice_price()` (psychological rounding:
+  <100 → ceil, <1000 → next x9, ≥1000 → next xx90) and `order_amounts()` (totals are built from the
+  rounded line prices, percentage discounts apply to the local subtotal).
+- `GET /api/currency?locale=` serves currency + dated rate; checkout stores `currency`,
+  `currency_rate`, `*_orig` and `items[].price_orig` (the admin already renders those).
+- E-mails: `_money(v, cur)` / `_money_of(order)` — customer and admin mails are fully in RON/CZK/…;
+  the bank-transfer block adds the EUR amount because the IBAN is a euro account. Push notification
+  uses the local total.
+- Frontend `lib/money.js` mirrors the backend rule: `amountOf`, `fmtAmount`, `fmtPrice`,
+  `cartAmounts()` — cart, checkout, modal and success page all render from `cartAmounts`, which fixed
+  the 349-vs-351 lei drift found in iteration_25. `schema.js` emits the local `priceCurrency`.
+- Verified live: 29 EUR → 159 RON / 709 CZK / 22 990 HUF everywhere; a real RON order recorded
+  638 RON and the mail rendered `318 lei / 21 lei / 339 lei`.
+
+### 2026-06 — every internal link is dynamic
+Owner: renaming Общи условия or Retatrutide must not break the site.
+- `backend/links_map.py`: `LINK_TARGETS` (15 logical keys) + `link_key_for()`; the importer stamps
+  `link_key` on pages and collections.
+- `GET /api/links?locale=` resolves each key: the doc carrying `link_key` first (so a rename follows
+  automatically), then the known handles; aliases are never returned. 5-minute cache, invalidated
+  when a page or collection is saved in the admin.
+- `frontend/src/lib/links.js` holds the defaults and `link(key)`; `LocaleContext` hydrates it from the
+  API. Every hardcoded `/pages/...` / `/collections/2all-the-peptides-1` in the storefront is gone
+  (guarded by a test). Proven by renaming `terms-conditions` → `obshti-usloviya` and
+  `retatrutide-price` → `retatrutide-5mg-10mg`: /api/links followed both instantly.
+- Tests: `tests/test_local_currency.py` (7), `tests/test_dynamic_links.py` (7),
+  `tests/test_iteration26_review.py` (15) — all green, iteration_26 report 100%.
+
+**Open item (offered, not built):** the cart/checkout/modal UI strings are still Bulgarian on the
+non-BG storefronts (product data and nav are translated, the checkout chrome is not).
+
+**Production TODO (owner):** Save to GitHub → `git pull` → `ansible-playbook -i inventory.ini
+playbooks/deploy_backend.yml -e run_catalog_import=true` (re-import to fix the page texts and the
+missing media) → `deploy_frontend.yml` → `deploy_nginx.yml`. Note: always pass `-i inventory.ini`.

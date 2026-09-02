@@ -35,6 +35,9 @@ export const fmtMoney = (n, currency = "EUR") =>
 export const fmtBGN = (eur) =>
   new Intl.NumberFormat("bg-BG", { style: "currency", currency: "BGN" }).format((Number(eur) || 0) * FX);
 
+/* Local-currency storefronts (CZ/HU/PL/RO) — see lib/money.js */
+export { fmtPrice, fmtAmount, amountOf, cartAmounts, convertPlain, setFx, currencyCode, isLocalCurrency, nicePrice } from "./money";
+
 /* BGN is only shown on the Bulgarian storefront (dual-pricing requirement) */
 export const showsBGN = () => currentLocale() === "bg";
 

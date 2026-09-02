@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { link } from "../lib/links";
 import { Link, useLocation } from "react-router-dom";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import Layout, { USPRow } from "../components/Layout";
@@ -133,10 +134,10 @@ export default function HomePage() {
               <h1 className="pp-hero__title" data-testid="hero-title">PurePeptide</h1>
               <h2 className="pp-hero__sub" data-testid="hero-subtitle">{t("heroSub")}</h2>
               <div className="pp-hero__cta">
-                <Link to={lp("/collections/2all-the-peptides-1")} className="pp-hero__btn pp-hero__btn--primary" data-testid="hero-cta-primary">
+                <Link to={lp(link("catalog"))} className="pp-hero__btn pp-hero__btn--primary" data-testid="hero-cta-primary">
                   {t("heroCta1")} ›
                 </Link>
-                <Link to={lp("/pages/chemical-analysis")} className="pp-hero__btn" data-testid="hero-cta-secondary">
+                <Link to={lp(link("chemicalAnalysis"))} className="pp-hero__btn" data-testid="hero-cta-secondary">
                   {t("heroCta2")}
                 </Link>
               </div>
@@ -180,7 +181,7 @@ export default function HomePage() {
         <div className="pp-wide">
           <div className="flex flex-row justify-between items-baseline gap-3 mb-4 sm:mb-6">
             <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">{t("bestsellers")}</h2>
-            <Link to={lp("/collections/2all-the-peptides-1")}
+            <Link to={lp(link("catalog"))}
               className="text-sm font-medium text-slate-700 hover:text-coral-600 underline-offset-4 hover:underline"
               data-testid="view-all-products-btn">
               {t("viewAll")}
@@ -208,7 +209,7 @@ export default function HomePage() {
         <div className="pp-wide py-4 sm:py-6 lg:py-7">
           <div className="flex justify-between items-baseline mb-4">
             <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{t("articles")}</h2>
-            <Link to={lp("/pages/articles")} className="text-sm font-medium text-slate-700 hover:text-coral-600">
+            <Link to={lp(link("articles"))} className="text-sm font-medium text-slate-700 hover:text-coral-600">
               {t("viewAll")}
             </Link>
           </div>

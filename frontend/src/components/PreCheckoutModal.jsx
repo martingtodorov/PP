@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { X, Minus, Plus, Trash2, Loader2, Check, Search } from "lucide-react";
 import { toast } from "sonner";
-import { api, fmtEUR, fmtBGN, showsBGN, img, formatErr } from "../lib/api";
+import { api, fmtPrice, fmtAmount, amountOf, cartAmounts, fmtBGN, showsBGN, img, formatErr } from "../lib/api";
 import { loadSaved, saveCheckout, pfBank, pfCountries, pfGeo, pfConfig, pfPickups } from "../lib/checkoutPrefetch";
 import { siteMedia } from "../lib/media";
 import { useCart } from "../context/CartContext";
@@ -393,6 +393,8 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
 
   const shipping = method?.price_amount || 0;
   const total = Math.max(subtotal - discountAmount, 0) + shipping;
+  /* the amounts actually shown: rounded per line, then summed — same rule as the backend */
+  const amt = cartAmounts({ items, shippingEur: shipping, discount });
   const nameWords = contact.name.trim().split(/\s+/).filter((w) => w.length >= 2);
   const ready = nameWords.length >= 2 && EMAIL_RE.test(contact.email)
     && contact.phone.replace(/\D/g, "").length >= 6 && method && termsAccepted
@@ -557,7 +559,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                       <input type="radio" name="pc-method" checked={method?.key === m.key}
                         onChange={() => { setMethodKey(m.key); setPickup(null); }} />
                       <span className="nc2-method-label">{methodLabel(m)}</span>
-                      <span className="nc2-method-price">{fmtEUR(m.price_amount)}</span>
+                      <span className="nc2-method-price">{fmtPrice(m.price_amount)}</span>
                     </label>
                   ))}
                 </div>
@@ -634,7 +636,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                           <button type="button" className="nc2-line-rm" onClick={() => remove(it.variant_sku)} aria-label="Премахни"><Trash2 className="h-4 w-4" /></button>
                         </div>
                       </div>
-                      <span className="nc2-line-price">{fmtEUR(it.price_eur * it.quantity)}</span>
+                      <span className="nc2-line-price">{fmtAmount(amountOf(it.price_eur) * it.quantity)}</span>
                     </div>
                   ))}
                 </div>
@@ -646,20 +648,20 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                 </div>
 
                 <div className="nc2-sum">
-                  <div className="nc2-sum-row"><span>Междинна сума</span><span>{fmtEUR(subtotal)}</span></div>
+                  <div className="nc2-sum-row"><span>Междинна сума</span><span>{fmtAmount(amt.subtotal)}</span></div>
                   {discountAmount > 0 && (
-                    <div className="nc2-sum-row"><span>Отстъпка {discount?.code}</span><span className="text-emerald-700">− {fmtEUR(discountAmount)}</span></div>
+                    <div className="nc2-sum-row"><span>Отстъпка {discount?.code}</span><span className="text-emerald-700">− {fmtAmount(amt.discountAmount)}</span></div>
                   )}
                   <div className="nc2-sum-row">
                     <span>Доставка{method ? ` · ${BG_PROVIDER[method.provider_key] || method.provider_name}` : ""}</span>
-                    <span>{method ? fmtEUR(method.price_amount) : "—"}</span>
+                    <span>{method ? fmtAmount(amt.shipping) : "—"}</span>
                   </div>
-                  <div className="nc2-sum-row nc2-sum-total"><strong>Общо</strong><strong data-testid="pc-total">{fmtEUR(total)}</strong></div>
+                  <div className="nc2-sum-row nc2-sum-total"><strong>Общо</strong><strong data-testid="pc-total">{fmtAmount(amt.total)}</strong></div>
                   {showsBGN() && <p className="nc2-muted text-right">{fmtBGN(total)}</p>}
                 </div>
 
                 <button type="button" className="nc2-cta" disabled={!ready || busy} onClick={placeOrder} data-testid="pc-continue">
-                  {busy ? "Изпращане…" : `Завърши поръчката · ${fmtEUR(total)}`}
+                  {busy ? "Изпращане…" : `Завърши поръчката · ${fmtAmount(amt.total)}`}
                 </button>
               </div>
             </div>
