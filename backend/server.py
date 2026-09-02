@@ -10,6 +10,7 @@ import os
 import csv
 import html as html_lib
 import io
+import json
 import re
 import secrets
 import sys
@@ -1604,22 +1605,49 @@ def _image_variant(data: bytes, width: int, fmt: str, cache_file: Path) -> bytes
     return out
 
 
+_NO_CACHE = {"Cache-Control": "no-store"}
+
+
+def _guess_type(path: str) -> str:
+    return storage.MIME_TYPES.get(path.rsplit(".", 1)[-1].lower(), "application/octet-stream")
+
+
+async def _ensure_file_record(path: str, uploaded_by: str) -> None:
+    await db.files.update_one(
+        {"storage_path": path},
+        {"$set": {"storage_path": path, "is_deleted": False},
+         "$setOnInsert": {"id": str(uuid.uuid4()), "original_filename": path.split("/")[-1],
+                          "content_type": _guess_type(path), "created_at": now_utc(),
+                          "uploaded_by": uploaded_by}},
+        upsert=True,
+    )
+
+
 @api.get("/files/{path:path}")
 async def serve_file(path: str, request: Request, w: int = 0):
     record = await db.files.find_one({"storage_path": path, "is_deleted": False})
     if not record:
-        raise HTTPException(404, "Файлът не е намерен")
+        # the bytes are on disk but the bookkeeping row is gone (restored DB, failed mirror…): serve
+        # the file and recreate the row instead of 404-ing on a picture we actually have
+        if not storage.local_exists(path):
+            raise HTTPException(404, "Файлът не е намерен", headers=_NO_CACHE)
+        await _ensure_file_record(path, "self-heal")
+        record = {"content_type": _guess_type(path)}
     content_type = record.get("content_type", "application/octet-stream")
     cache_file = IMAGE_CACHE / hashlib.sha1(path.encode()).hexdigest()
     if cache_file.exists():
         data = cache_file.read_bytes()
     else:
         try:
-            data, storage_type = storage.get_object(path)
-            content_type = record.get("content_type") or storage_type
+            data, storage_type = await run_in_threadpool(storage.get_object, path)
+        except Exception as ex:
+            log.warning("File %s unreadable: %s", path, ex)
+            raise HTTPException(404, "Файлът не е намерен", headers=_NO_CACHE)
+        content_type = record.get("content_type") or storage_type
+        try:
             cache_file.write_bytes(data)
-        except Exception:
-            raise HTTPException(404, "Файлът не е намерен")
+        except OSError as ex:
+            log.warning("Image cache not writable (%s): %s", IMAGE_CACHE, ex)
 
     # every raster image is served as WebP (or JPEG for older clients), resized on demand
     convertible = content_type.startswith("image/") and not any(
@@ -1650,7 +1678,7 @@ async def serve_file(path: str, request: Request, w: int = 0):
 # very same picture is on disk under a different hash. This walks every document, checks whether the
 # referenced object can actually be read and re-points it to a readable copy of the same file (or
 # downloads it again from the original source).
-_FILE_REF = re.compile(r"/api/files/(import/[A-Za-z0-9._-]+)")
+_FILE_REF = re.compile(r"/api/files/([A-Za-z0-9][A-Za-z0-9/._-]*\.(?:png|jpe?g|webp|gif|svg))")
 
 
 def _readable(path: str) -> bool:
@@ -1738,6 +1766,8 @@ async def repair_media(dry_run: bool = False, user=Depends(require_admin)):
         out = value
         for ref in set(_FILE_REF.findall(value)):
             if await ok(ref):
+                if not dry_run:
+                    await _ensure_file_record(ref, "media-repair")
                 continue
             replacement = await resolve(ref)
             if replacement:
@@ -1773,6 +1803,31 @@ async def repair_media(dry_run: bool = False, user=Depends(require_admin)):
 
     return {"scanned": scanned, "fixed": len(fixed), "unresolved": sorted(set(unresolved)),
             "changes": fixed[:50], "dry_run": dry_run}
+
+
+@api.get("/admin/media/status")
+async def media_status(user=Depends(require_admin)):
+    """Where the pictures live on THIS server and which referenced ones cannot be served."""
+    info = await run_in_threadpool(storage.diagnose)
+    refs: set = set()
+    for name in ("products", "collections", "articles", "pages", "site_settings"):
+        async for doc in db[name].find({}, {"_id": 0}):
+            refs.update(_FILE_REF.findall(json.dumps(doc, ensure_ascii=False, default=str)))
+    broken: List[Dict[str, Any]] = []
+    for ref in sorted(refs):
+        rec = await db.files.find_one({"storage_path": ref, "is_deleted": False}, {"_id": 0, "storage_path": 1})
+        on_disk = storage.local_exists(ref)
+        if rec and on_disk:
+            continue
+        broken.append({"path": ref, "record": bool(rec), "on_disk": on_disk})
+    info.update({
+        "files_in_db": await db.files.count_documents({"is_deleted": False}),
+        "referenced": len(refs),
+        "broken": broken,
+        "image_cache": str(IMAGE_CACHE),
+        "image_cache_writable": os.access(IMAGE_CACHE, os.W_OK),
+    })
+    return info
 
 
 # ---------- Static pages (editable per locale) ----------

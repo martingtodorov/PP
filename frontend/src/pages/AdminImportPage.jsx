@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Upload, FileText, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import AdminLayout from "../components/AdminLayout";
+import { MediaStatusPanel } from "../components/admin/MediaStatusPanel";
 import { Button } from "../components/ui/button";
 import { api, formatErr } from "../lib/api";
 
@@ -148,6 +149,7 @@ export default function AdminImportPage() {
                 </div>
               )}
             </div>
+            <MediaStatusPanel />
           </div>
 
           {job && (
