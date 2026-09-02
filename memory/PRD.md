@@ -621,3 +621,18 @@ fine (pp-back failed=0, pp-front 50 ok).
   per-locale origins (`i18n.SITE_ORIGINS`, overridable via the `site.locale_routes` admin setting),
   so every domain already has its own sitemap.
 102 nginx/deploy/nextcart tests green.
+
+### 2026-06 — ROOT CAUSE of the Cloudflare 521: handlers never ran
+`ss -ltnp` on pp-front showed nginx listening on **:80 only**, while `nginx -T` already contained
+`listen 443 ssl` for all five domains — and `journalctl -u nginx` had no reload after 06:09 UTC.
+Ansible handlers run at the END of a play: every earlier run aborted on the verification task, so the
+`reload nginx` handler was never reached, the freshly enabled `purepeptide.conf` was never loaded and
+Cloudflare got a refused connection (521). The site had been down since.
+- `deploy_nginx.yml` / `deploy_backend.yml`: `meta: flush_handlers` before the verification block.
+- `deploy_nginx.yml`: new self-healing task **"nginx must be listening on 443"** — if no `:443`
+  socket exists it restarts nginx and waits for the socket (covers a master process that predates the
+  config).
+- Verification now uses `curl --resolve` against 127.0.0.1 / private IP / public IP, prints
+  `ss -ltnp` on every run and dumps `nginx -T`, `systemctl status nginx` and all attempts on failure.
+- 5 new guards in `tests/test_deploy_config.py` (flush_handlers before verify, 443 self-heal, no
+  public-DNS dependency, canonical_domain, courier snapshot shipped). 57 deploy tests green.
