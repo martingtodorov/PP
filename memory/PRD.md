@@ -539,3 +539,12 @@ children of MainPID (`pgrep -P`), failing only on a real multi-worker setup. Ver
 matrix (1/1, 1/0 pass; 1/4, 4/4 fail).
 MongoDB is `active` on pp-back after the rseq drop-in (kernel 7.0.0-30, Ubuntu 26.04 LTS).
 51 deploy-config tests green.
+
+### 2026-06 — NextCart host auto-corrected in the deploy
+The server's rendered backend.env still carried `NEXTCART_BASE_URL=https://client.nextcartmanager.com`
+from the owner's (gitignored) group_vars/all.yml → `/api/nextcart/countries` returned 502
+("Услугата за доставки върна грешка") and the courier verification failed. `tasks/infra_defaults.yml`
+now rewrites that dead host to `https://api.nextcartmanager.com` (with a warning) and defaults to it
+when unset, so a stale vault file cannot break the checkout. The courier verification in
+deploy_backend.yml gained a rescue that prints the NEXTCART_* lines from backend.env plus the upstream
+HTTP status. Verified with a real playbook run (client → api). 52 deploy-config tests green.

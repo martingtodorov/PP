@@ -64,6 +64,23 @@
     site_domains: "{{ site_domains | default(['purepeptide.bg'], true) }}"
   tags: [always]
 
+# client.nextcartmanager.com is dead (404/302) and makes every courier call return 502, which kills
+# the checkout. The working host is api.nextcartmanager.com — correct it even when an old
+# group_vars/all.yml still carries the broken value.
+- name: NextCart upstream
+  set_fact:
+    nextcart_base_url: >-
+      {{ 'https://api.nextcartmanager.com'
+         if (nextcart_base_url | default('', true)) is search('client\.nextcartmanager\.com')
+         else (nextcart_base_url | default('https://api.nextcartmanager.com', true)) }}
+  tags: [always]
+
+- name: Warn when a stale NextCart host was corrected
+  debug:
+    msg: "nextcart_base_url was pointing at client.nextcartmanager.com — using api.nextcartmanager.com instead. Fix it in group_vars/all.yml."
+  when: nextcart_base_url == 'https://api.nextcartmanager.com'
+  tags: [always]
+
 - name: Derived defaults
   set_fact:
     # pp-back has NO public route before the tunnel exists -> the peer endpoint is the PRIVATE
