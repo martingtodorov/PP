@@ -75,6 +75,13 @@
          else (nextcart_base_url | default('https://api.nextcartmanager.com', true)) }}
   tags: [always]
 
+# api.nextcartmanager.com answers 403 to the server's IP, so production serves the committed
+# snapshot in backend/data/nextcart/ instead of wasting a timeout on every checkout request.
+- name: NextCart snapshot mode
+  set_fact:
+    nextcart_snapshot_only: "{{ nextcart_snapshot_only | default(true, true) }}"
+  tags: [always]
+
 - name: Warn when a stale NextCart host was corrected
   debug:
     msg: "nextcart_base_url was pointing at client.nextcartmanager.com — using api.nextcartmanager.com instead. Fix it in group_vars/all.yml."

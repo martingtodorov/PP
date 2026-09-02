@@ -5,8 +5,10 @@ pre-checkout. Their storefront API is keyed only by the shop domain, so we proxy
 (fixed shop/country/locale, short-lived caching, graceful degradation) instead of calling it
 from the browser.
 """
+import json
 import logging
 import os
+import pathlib
 import time
 from typing import Any, Dict, Optional
 
@@ -56,6 +58,22 @@ _client = httpx.AsyncClient(
 )
 _cache: Dict[str, tuple] = {}
 
+# The production server's IP is rejected by the upstream (HTTP 403), so the checkout falls back to
+# the committed snapshot in data/nextcart/ (refresh it with scripts/refresh_nextcart_snapshot.py).
+SNAPSHOT_DIR = pathlib.Path(__file__).resolve().parent / "data" / "nextcart"
+SNAPSHOT_ONLY = os.environ.get("NEXTCART_SNAPSHOT_ONLY", "").lower() in ("1", "true", "yes")
+
+
+def _snapshot(name: str) -> Optional[Any]:
+    path = SNAPSHOT_DIR / name
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except ValueError:
+        log.warning("NextCart snapshot %s is not valid JSON", name)
+        return None
+
 
 def _cached(key: str) -> Optional[Any]:
     hit = _cache.get(key)
@@ -84,6 +102,22 @@ async def _get(path: str, params: Dict[str, Any]) -> Any:
         raise HTTPException(502, "Услугата за доставки върна невалиден отговор")
 
 
+async def _get_or_snapshot(path: str, params: Dict[str, Any], snapshot: str) -> Any:
+    """Upstream first, bundled snapshot when the upstream is blocked / unreachable."""
+    if SNAPSHOT_ONLY:
+        local = _snapshot(snapshot)
+        if local is not None:
+            return local
+    try:
+        return await _get(path, params)
+    except HTTPException:
+        local = _snapshot(snapshot)
+        if local is None:
+            raise
+        log.warning("NextCart %s unavailable — serving snapshot %s", path, snapshot)
+        return local
+
+
 async def _probe_pickups(country: str, provider_key: str, destination_type: str) -> bool:
     """Does the courier actually have pickup points in that country? (cached, used for fallbacks)"""
     key = f"probe:{country}:{provider_key}:{destination_type}"
@@ -91,10 +125,11 @@ async def _probe_pickups(country: str, provider_key: str, destination_type: str)
     if cached is not None:
         return cached
     try:
-        data = await _get(
+        data = await _get_or_snapshot(
             "/api/shopify-app/storefront/delivery-offices",
             {"shop": SHOP, "provider_key": provider_key, "destination_type": destination_type,
              "country": country, "limit": 1},
+            f"offices_{country}_{provider_key}_{destination_type}.json",
         )
         ok = bool(data.get("offices"))
     except HTTPException:
@@ -203,9 +238,10 @@ async def nextcart_config(country: str = Query("", max_length=2)):
     cached = _cached(key)
     if cached is not None:
         return cached
-    data = await _get(
+    data = await _get_or_snapshot(
         "/api/shopify-app/storefront/config",
         {"shop": SHOP, "country": iso, "locale": LOCALE},
+        f"config_{iso}.json",
     )
     return _store(key, 600, await _shape_delivery(data, iso))
 
@@ -222,10 +258,11 @@ async def nextcart_pickups(
     cached = _cached(key)
     if cached is not None:
         return cached
-    data = await _get(
+    data = await _get_or_snapshot(
         "/api/shopify-app/storefront/delivery-offices",
         {"shop": SHOP, "provider_key": provider_key, "destination_type": destination_type,
          "country": iso, "limit": 3000},
+        f"offices_{iso}_{provider_key}_{destination_type}.json",
     )
     offices = [
         {"id": o.get("id") or o.get("code"), "code": o.get("code", ""), "name": o.get("name", ""),
@@ -249,12 +286,25 @@ async def nextcart_offices(
     cached = _cached(key)
     if cached is not None:
         return cached
-    data = await _get(
-        "/api/shopify-app/storefront/delivery-offices",
-        {"shop": SHOP, "provider_key": provider_key, "destination_type": destination_type,
-         "country": iso, "limit": limit, "q": q.strip()},
-    )
-    return _store(key, 180, data)
+    if not SNAPSHOT_ONLY:
+        try:
+            data = await _get(
+                "/api/shopify-app/storefront/delivery-offices",
+                {"shop": SHOP, "provider_key": provider_key, "destination_type": destination_type,
+                 "country": iso, "limit": limit, "q": q.strip()},
+            )
+            return _store(key, 180, data)
+        except HTTPException:
+            log.warning("NextCart offices unavailable — serving snapshot for %s/%s", iso, provider_key)
+    local = _snapshot(f"offices_{iso}_{provider_key}_{destination_type}.json")
+    if local is None:
+        raise HTTPException(503, "Услугата за доставки е временно недостъпна")
+    needle = q.strip().lower()
+    offices = local.get("offices") or []
+    if needle:
+        offices = [o for o in offices if needle in " ".join(
+            str(o.get(f) or "") for f in ("name", "city", "address", "address1", "postal_code")).lower()]
+    return _store(key, 180, {**local, "offices": offices[:limit]})
 
 
 @router.get("/address-suggestions")
@@ -266,11 +316,17 @@ async def nextcart_address_suggestions(
     post: str = Query("", max_length=20),
     country: str = Query("", max_length=2),
 ):
-    return await _get(
-        "/api/shopify-app/storefront/address-suggestions",
-        {"shop": SHOP, "mode": mode, "q": q.strip(), "country": (country or COUNTRY).upper(),
-         "provider_key": provider_key, "place_id": place_id, "post": post, "offset": 0},
-    )
+    if SNAPSHOT_ONLY:
+        return {"suggestions": []}
+    try:
+        return await _get(
+            "/api/shopify-app/storefront/address-suggestions",
+            {"shop": SHOP, "mode": mode, "q": q.strip(), "country": (country or COUNTRY).upper(),
+             "provider_key": provider_key, "place_id": place_id, "post": post, "offset": 0},
+        )
+    except HTTPException:
+        # No snapshot possible for a free-text database — the customer types the address manually.
+        return {"suggestions": []}
 
 
 @router.post("/event")

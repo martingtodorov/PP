@@ -81,6 +81,8 @@ nextcart_shop: "etb7zb-gy.myshopify.com"
 nextcart_country: "BG"
 nextcart_locale: "bg"
 nextcart_currency: "EUR"
+# the server's IP is blocked by NextCart (403) — serve backend/data/nextcart/ snapshots
+nextcart_snapshot_only: true
 
 vapid_public_key: "REAL_VAPID_PUBLIC_KEY"
 vapid_private_key: "REAL_VAPID_PRIVATE_KEY"
