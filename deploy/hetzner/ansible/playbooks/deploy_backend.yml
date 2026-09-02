@@ -299,6 +299,26 @@
 
         # Non-blocking on purpose: a dead courier upstream must not stop the site from going live.
         # Run with -e require_couriers=true to make it a hard gate again.
+        - name: Ask the upstream directly for the storefront config
+          shell: |
+            url=$(grep -m1 '^NEXTCART_BASE_URL=' {{ env_dir }}/backend.env | cut -d= -f2-)
+            shop=$(grep -m1 '^NEXTCART_SHOP=' {{ env_dir }}/backend.env | cut -d= -f2-)
+            curl -sS -o /tmp/pp-nextcart.json \
+              -w 'storefront/config -> %{http_code}\n' --max-time 20 \
+              "$url/api/shopify-app/storefront/config?shop=$shop&country=BG&locale=bg" || true
+            head -c 300 /tmp/pp-nextcart.json 2>/dev/null; echo
+          args: { executable: /bin/bash }
+          register: nextcart_direct
+          changed_when: false
+          failed_when: false
+
+        - name: What the backend logged about NextCart
+          shell: "journalctl -u {{ app_name }}-backend -n 300 --no-pager | grep -i nextcart | tail -10 || true"
+          args: { executable: /bin/bash }
+          register: nextcart_log
+          changed_when: false
+          failed_when: false
+
         - name: Warn about the courier failure (the checkout will not offer delivery)
           debug:
             msg: |
@@ -307,6 +327,11 @@
               {{ nextcart_conf.stdout | default('(no NEXTCART_* lines)') }}
               --- upstream reachability ---
               {{ nextcart_probe.stdout | default('') }}
+              --- direct call to the storefront API (this is the decisive status) ---
+              {{ nextcart_direct.stdout | default('') }}
+              {{ nextcart_direct.stderr | default('') }}
+              --- backend log ---
+              {{ nextcart_log.stdout | default('') }}
               NOTE: the working host is https://api.nextcartmanager.com —
               https://client.nextcartmanager.com answers 404 and breaks every courier call.
               Fix nextcart_base_url in group_vars/all.yml and re-run.

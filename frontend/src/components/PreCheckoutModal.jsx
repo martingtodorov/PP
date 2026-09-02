@@ -579,6 +579,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                     <AddressSuggest mode="street" testId="pc-street" placeId={addr.place_id}
                       placeholder="Улица / квартал"
                       value={addr.street} country={contact.country} providerKey={provider} geoCity={geo?.city}
+                      onChangeText={(t) => setAddr((a) => ({ ...a, street: t }))}
                       onPick={(s) => setAddr({
                         ...addr,
                         city: addr.city || s.city || "",

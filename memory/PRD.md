@@ -559,3 +559,31 @@ gate. The catalog check stays fatal.
 while the same code works from the preview pod, so it is environment/upstream specific (candidate
 causes: NextCart rejecting the server's egress IP 2.28.79.24, or a missing shop credential in
 group_vars/all.yml).
+
+### 2026-06 — NextCart 403 solved with a committed snapshot (P0 CLOSED)
+The Hetzner egress IP is rejected by `api.nextcartmanager.com` with **403 Forbidden** (not a URL or
+credential problem — the same code works from the preview pod). The checkout no longer depends on the
+upstream:
+- `backend/data/nextcart/` now ships **23 snapshot JSON files**: `config_XX.json` for all 11 shipping
+  countries + `offices_XX_<courier>_<dest>.json` (BG econt/office 589, BG econt/locker 41,
+  BG boxnow/locker 926, BG pigeon/office 186, RO fancourier/locker 3194, GR speedex/office 968,
+  HU 914, PL 5000, SK 763, SI 607, HR 185, DE 5000 GLS offices). CZ and IT sell address-only upstream.
+- `backend/nextcart.py`: new `_snapshot()` + `_get_or_snapshot()`. `/config`, `/pickups`, `/offices`
+  and `_probe_pickups` fall back to the snapshot on any upstream failure; `/offices` filters `q` and
+  `limit` locally. `/address-suggestions` returns `{"suggestions": []}` instead of 502 (no snapshot is
+  possible for a free-text database — the customer types the address manually, owner's choice).
+- New env flag **`NEXTCART_SNAPSHOT_ONLY`** (rendered by `templates/backend.env.j2`, defaulted to
+  `true` in `tasks/infra_defaults.yml` and `group_vars/all.yml.example`): production reads the files
+  directly, without burning a timeout per request. Set to `false` to go back to live upstream.
+- `frontend/src/components/PreCheckoutModal.jsx`: the street `AddressSuggest` was missing
+  `onChangeText`, so with an empty suggestion list `addr.street` never filled and the place-order CTA
+  stayed disabled — fixed.
+- Refresh the snapshot from a machine that can reach the API:
+  `python backend/scripts/refresh_nextcart_snapshot.py` (now covers office **and** locker lists).
+Tested: iteration_22 (backend 26/26 pytest, 3/4 frontend) and iteration_23 (address flow 3/3 —
+BG/Pigeon COD order placed, GR/Speedex and DE/GLS address CTA enabled). Test orders removed from the DB.
+
+**Remaining backlog**
+- P1: RevOrder webhook sync — blocked, waiting for the NextLevel webhook URL from the owner.
+- P2: verify `purepeptide.bg` in the Resend dashboard (emails stay in sandbox until then).
+- P2: Apple/iOS Safari autofill verification in the checkout.
