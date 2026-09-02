@@ -2,6 +2,7 @@
    bg = purepeptide.bg (alias: purepeptide-labs.bg) · en = purepeptide.eu
    gr = purepeptide.gr · ro = purepeptide.ro
    fr/de/cz/hu/pl/sk/si live under purepeptide.eu/<prefix> */
+import { CHECKOUT_STRINGS } from "./checkoutStrings";
 
 export const LOCALES = ["bg", "en", "fr", "de", "cz", "hu", "pl", "sk", "si", "gr", "ro"];
 export const DEFAULT_LOCALE = "bg";
@@ -508,7 +509,25 @@ export const FAQ_ITEMS = {
 
 export const pick = (dict, locale) => dict[locale] || dict.en || dict.bg;
 
-export const translate = (locale, key) => {
+/* cart + checkout copy lives in its own file (it is the largest block and admin-editable) */
+Object.entries(CHECKOUT_STRINGS).forEach(([loc, strings]) => {
+  S[loc] = { ...(S[loc] || {}), ...strings };
+});
+
+/** Admin overrides from GET /api/ui-strings — {locale: {key: text}}; empty values are ignored. */
+const OVERRIDES = {};
+export const applyUiOverrides = (data) => {
+  Object.entries(data || {}).forEach(([loc, strings]) => {
+    OVERRIDES[loc] = { ...(OVERRIDES[loc] || {}) };
+    Object.entries(strings || {}).forEach(([k, v]) => {
+      if (typeof v === "string" && v.trim()) OVERRIDES[loc][k] = v;
+    });
+  });
+};
+
+export const translate = (locale, key, vars) => {
   const table = S[locale] || S.en;
-  return table[key] ?? S.en[key] ?? S.bg[key] ?? key;
+  const raw = OVERRIDES[locale]?.[key] ?? table[key] ?? S.en[key] ?? S.bg[key] ?? key;
+  if (!vars) return raw;
+  return String(raw).replace(/\{(\w+)\}/g, (m, name) => (vars[name] ?? m));
 };

@@ -272,7 +272,7 @@ const CartDrawer = () => {
     setBusy(true);
     try {
       const data = await applyDiscount(code.trim());
-      toast.success(`Код ${data.code} е приложен`);
+      toast.success(t("codeApplied", { code: data.code }));
       setCode("");
     } catch (e) {
       toast.error(formatErr(e));
@@ -281,7 +281,7 @@ const CartDrawer = () => {
 
   const goCheckout = () => {
     if (!terms) {
-      toast.error(locale === "bg" ? "Моля, приемете общите условия" : "Please accept the terms & conditions");
+      toast.error(t("termsRequired"));
       return;
     }
     setOpen(false);
@@ -333,7 +333,7 @@ const CartDrawer = () => {
                   data-testid="cart-note-toggle"
                 >
                   <MessageSquare className="h-4 w-4 text-coral-600" />
-                  {locale === "bg" ? "Специални инструкции към поръчката" : "Special instructions"}
+                  {t("specialInstructions")}
                   <span className="ml-auto text-slate-400">{noteOpen ? "−" : "+"}</span>
                 </button>
                 {noteOpen && (
@@ -342,7 +342,7 @@ const CartDrawer = () => {
                       value={note}
                       onChange={(e) => setNote(e.target.value)}
                       rows={3}
-                      placeholder={locale === "bg" ? "Напр. предпочитан офис на Спиди, час за доставка…" : "e.g. preferred pickup point, delivery time…"}
+                      placeholder={t("specialInstructionsPh")}
                       className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-coral-600"
                       data-testid="cart-note-input"
                     />
@@ -354,7 +354,7 @@ const CartDrawer = () => {
               <div className="border border-slate-200 rounded-lg px-3 py-3">
                 <label className="flex items-center gap-2 text-sm font-medium text-slate-800 mb-2">
                   <Tag className="h-4 w-4 text-coral-600" />
-                  {locale === "bg" ? "Код за отстъпка" : "Discount code"}
+                  {t("discountCodePh")}
                 </label>
                 {discount ? (
                   <div className="flex items-center justify-between text-sm" data-testid="cart-discount-applied">
@@ -378,7 +378,7 @@ const CartDrawer = () => {
                       className="px-4 py-2 rounded-md bg-slate-900 text-white text-sm font-medium disabled:opacity-50"
                       data-testid="cart-discount-apply"
                     >
-                      {locale === "bg" ? "Приложи" : "Apply"}
+                      {t("applyBtn")}
                     </button>
                   </div>
                 )}
@@ -395,12 +395,12 @@ const CartDrawer = () => {
             </div>
             {discountAmount > 0 && (
               <div className="flex justify-between text-sm text-coral-700" data-testid="cart-discount-row">
-                <span>{locale === "bg" ? "Отстъпка" : "Discount"} ({discount?.code})</span>
+                <span>{t("discountLabel")} ({discount?.code})</span>
                 <span className="font-semibold">− {fmtPrice(discountAmount)}</span>
               </div>
             )}
             <div className="flex justify-between text-base border-t border-slate-100 pt-3">
-              <span className="font-semibold text-slate-900">{locale === "bg" ? "Общо" : "Total"}</span>
+              <span className="font-semibold text-slate-900">{t("totalLabel")}</span>
               <Price eur={total} className="font-bold" />
             </div>
 
@@ -413,11 +413,9 @@ const CartDrawer = () => {
                 data-testid="cart-terms-checkbox"
               />
               <span>
-                {locale === "bg"
-                  ? "Аз съм на 18+, купувам за научно-изследователски цели и съм съгласен/а с "
-                  : "I am 18+, buying for research purposes and I agree with the "}
+                {t("termsConsent18")}{" "}
                 <Link to={lp(link("terms"))} className="underline hover:text-coral-600" target="_blank">
-                  {locale === "bg" ? "Общите условия" : "Terms & conditions"}
+                  {t("termsLinkLabel")}
                 </Link>
               </span>
             </label>
