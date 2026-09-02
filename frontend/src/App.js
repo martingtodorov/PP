@@ -25,6 +25,7 @@ import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AdminDelistedLinksPage from "./pages/AdminDelistedLinksPage";
 import AdminLocalesPage from "./pages/AdminLocalesPage";
 import AdminPagesPage from "./pages/AdminPagesPage";
+import AdminIntegrationsPage from "./pages/AdminIntegrationsPage";
 import AdminCollectionsPage from "./pages/AdminCollectionsPage";
 import AdminMessagesPage from "./pages/AdminMessagesPage";
 import AdminAnalyticsPage from "./pages/AdminAnalyticsPage";
@@ -97,6 +98,7 @@ function App() {
                 <Route path="/admin/delisted-links" element={<AdminDelistedLinksPage />} />
                 <Route path="/admin/locales" element={<AdminLocalesPage />} />
                 <Route path="/admin/pages" element={<AdminPagesPage />} />
+                <Route path="/admin/integrations" element={<AdminIntegrationsPage />} />
               </Routes>
             </LocaleProvider>
           </BrowserRouter>
