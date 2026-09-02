@@ -61,6 +61,8 @@ let webpackConfig = {
 };
 
 webpackConfig.devServer = (devServerConfig) => {
+  // preview only: NextLevel's WooCommerce client calls https://<host>/wp-json/… — hand it to FastAPI
+  devServerConfig.proxy = { ...(devServerConfig.proxy || {}), "/wp-json": { target: "http://localhost:8001", changeOrigin: false } };
   // Add health check endpoints if enabled
   if (config.enableHealthCheck && setupHealthEndpoints && healthPluginInstance) {
     const originalSetupMiddlewares = devServerConfig.setupMiddlewares;

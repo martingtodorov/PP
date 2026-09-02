@@ -311,7 +311,12 @@ def init(db_, get_cfg) -> APIRouter:
 
     async def guard(request: Request) -> Dict[str, Any]:
         cfg = await get_cfg()
-        await _auth(request, cfg)
+        try:
+            await _auth(request, cfg)
+        except WCError:
+            await _log("inbound", request.method, request.url.path.split("/wc/v3", 1)[-1] or "/", 401,
+                       {"query": dict(request.query_params), "auth": request.headers.get("authorization", "")[:6], "ua": request.headers.get("user-agent", "")[:80]})
+            raise
         return cfg
 
     @router.get("")

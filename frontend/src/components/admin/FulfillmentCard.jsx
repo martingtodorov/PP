@@ -18,7 +18,7 @@ export const FulfillmentCard = () => {
   const [test, setTest] = useState(null);
   const [plainSecret, setPlainSecret] = useState("");
   const [log, setLog] = useState(null);
-  const storeUrl = `${window.location.origin}/api/wc`;
+  const storeUrl = window.location.origin;
   const copyText = (value) => { navigator.clipboard?.writeText(value); toast.success("Копирано"); };
 
   const load = () => api.get("/admin/integrations/nextlevel-fulfillment").then(({ data }) => { setCfg(data); setForm({}); }).catch((e) => toast.error(formatErr(e)));

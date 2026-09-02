@@ -2945,6 +2945,14 @@ api.include_router(nextlevel.init(db, require_admin))
 api.include_router(fulfillment.init(db, require_admin))
 _wc_router = wc_api.init(db, fulfillment.get_config)
 app.add_exception_handler(wc_api.WCError, wc_api.wc_error_handler)
+
+
+@app.get("/wp-json")
+@app.get("/wp-json/")
+async def wp_json_index():
+    """WordPress discovery document — WooCommerce clients probe it before calling wc/v3."""
+    return {"name": "PurePeptide", "description": "PurePeptide store", "url": email_templates.base_url("bg"),
+            "namespaces": ["wc/v3", "wc/v2", "wc/v1"], "authentication": {}, "routes": {"/wc/v3": {"namespace": "wc/v3"}}}
 app.include_router(_wc_router, prefix="/wp-json/wc/v3")
 app.include_router(_wc_router, prefix="/api/wc/wp-json/wc/v3")
 api.include_router(abandoned.init(db, require_admin))
