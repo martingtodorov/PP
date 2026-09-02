@@ -195,6 +195,24 @@ def norm_text(value: str) -> str:
     return re.sub(r"[^0-9a-zа-я]+", "", (value or "").lower())
 
 
+def meta(row: Dict[str, Any], key: str) -> str:
+    """A Shopify metafield export can carry either column type — read both."""
+    for col in (f"Metafield: {key} [string]", f"Metafield: {key} [single_line_text_field]"):
+        value = str(row.get(col) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def seo_pair(row: Dict[str, Any], title: str, body: str, limit: int = 160) -> Dict[str, str]:
+    """Every record must ship a meta title and description — fall back to the title / body text."""
+    return {
+        "seo_title": meta(row, "title_tag") or (title or "").strip(),
+        "seo_description": (meta(row, "description_tag") or strip_html(body, limit)
+                            or (title or "").strip()),
+    }
+
+
 def clean_body(html: str, title: str = "", drop_leading_h1: bool = True) -> str:
     """Remove the Shopify body's own H1 (the page already renders a title) and demote the rest to H2."""
     if not html:
@@ -237,8 +255,7 @@ def import_collections() -> Dict[str, str]:
             # published landing collections without products (SEO pages) stay reachable but out of the nav
             "nav_hidden": count == 0,
             "description": clean_body(rewrite_body_images(body), top.get("Title") or ""),
-            "seo_title": top.get("Metafield: title_tag [string]") or "",
-            "seo_description": top.get("Metafield: description_tag [string]") or "",
+            **seo_pair(top, top.get("Title") or our_handle, body),
             "image": store_image(top.get("Image Src")),
             "shopify_id": str(top.get("ID") or ""),
             "translations": {},
@@ -299,8 +316,7 @@ def import_products() -> None:
             "collections": cols,
             "tags": tags,
             "specs": extract_specs(top.get("Body HTML") or "") or seed_specs.get(handle, {}),
-            "seo_title": top.get("Metafield: title_tag [string]") or "",
-            "seo_description": top.get("Metafield: description_tag [string]") or "",
+            **seo_pair(top, top.get("Title") or handle, top.get("Body HTML") or ""),
             "featured": False,
             "active": True,
             "shopify_status": str(top.get("Status") or ""),
@@ -326,8 +342,7 @@ def import_pages() -> None:
                     "title": r.get("Title") or slug,
                     "html": clean_body(rewrite_body_images(body), r.get("Title") or ""),
                     "faq_items": [],
-                    "seo_title": r.get("Metafield: title_tag [string]") or "",
-                    "seo_description": r.get("Metafield: description_tag [string]") or "",
+                    **seo_pair(r, r.get("Title") or slug, body),
                     "updated_at": now_utc(),
                 },
                 "$setOnInsert": {"id": str(uuid.uuid4()), "slug": slug, "locale": "bg"},
@@ -367,8 +382,7 @@ def import_articles() -> None:
             "author": top.get("Author") or "PurePeptide",
             "published": str(top.get("Published")) in ("True", "true", "1"),
             "product_handle": linked,
-            "seo_title": top.get("Metafield: title_tag [string]") or "",
-            "seo_description": top.get("Metafield: description_tag [string]") or "",
+            **seo_pair(top, title, top.get("Summary HTML") or body),
             "published_at": parse_dt(top.get("Published At") or top.get("Created At")),
             "translations": {},
         })

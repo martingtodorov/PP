@@ -696,3 +696,13 @@ before because the seed catalog pointed at absolute Shopify CDN URLs; imported m
 `deploy_nginx.yml` (fixes the images) → `deploy_frontend.yml` (hides the "Всички" card) →
 `deploy_backend.yml -e run_catalog_import=true` (re-import so the catch-all handle becomes the
 canonical `2all-the-peptides-1`).
+
+### 2026-06 — Matrixify import fills every meta title / meta description
+`matrixify_import.py` now has `meta()` (reads BOTH metafield column types — the Blog Posts sheet
+carries `Metafield: title_tag [string]` AND `[single_line_text_field]`) and `seo_pair()`, used by the
+collections, products, pages and articles importers. Fallback chain: metafield → record title for the
+meta title, metafield → first 160 chars of the body text → title for the meta description.
+After the re-import: **0 records without a meta title or description** (23 products, 8 collections,
+19 articles, 18 bg pages). Only the non-bg page copies still lack SEO — those are AI translations made
+before the SEO data existed; re-running the page translation in the admin fills them.
+New test file `backend/tests/test_matrixify_seo.py` (7 tests) + 61 deploy tests → 68 green.
