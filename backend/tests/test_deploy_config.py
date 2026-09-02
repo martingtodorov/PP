@@ -442,3 +442,11 @@ def test_single_worker_check_counts_children_not_matching_processes():
     assert "pgrep -P" in text
     unit = (TEMPLATES / "purepeptide-backend.service.j2").read_text()
     assert "--workers 1" in unit
+
+
+def test_dead_nextcart_host_is_corrected_automatically():
+    """client.nextcartmanager.com makes every courier call 502 and kills the checkout."""
+    defaults = (TASKS / "infra_defaults.yml").read_text()
+    assert "client\\\\.nextcartmanager\\\\.com" in defaults or "client\\.nextcartmanager\\.com" in defaults
+    assert "https://api.nextcartmanager.com" in defaults
+    assert EXAMPLE_VARS["nextcart_base_url"] == "https://api.nextcartmanager.com"
