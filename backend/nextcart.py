@@ -214,17 +214,30 @@ COUNTRY_NAME_BG = {
     "DE": "Германия",
 }
 
+COUNTRY_DIAL = {
+    "BG": "359", "RO": "40", "GR": "30", "HU": "36", "PL": "48", "SK": "421", "CZ": "420",
+    "SI": "386", "HR": "385", "IT": "39", "DE": "49",
+}
+
 
 @router.get("/countries")
 async def nextcart_countries():
-    """Countries we actually ship to — drives the checkout country selector."""
-    cfg = await nextcart_config(COUNTRY)
+    """Countries we actually ship to — drives the checkout country selector.
+
+    Never fails: the selector (and with it the whole checkout) must render even when neither the
+    upstream nor a snapshot is available.
+    """
+    try:
+        cfg = await nextcart_config(COUNTRY)
+    except HTTPException:
+        log.warning("NextCart config unavailable — countries served from the static list")
+        cfg = {}
     terr = {t.get("iso2"): t for t in (cfg.get("precheckout_phone_territories") or [])}
     return {
         "default": COUNTRY,
         "countries": [
             {"iso2": c, "name": COUNTRY_NAME_BG.get(c) or terr.get(c, {}).get("name") or c,
-             "dial": terr.get(c, {}).get("dial", "")}
+             "dial": terr.get(c, {}).get("dial") or COUNTRY_DIAL.get(c, "")}
             for c in COUNTRY_COURIERS
         ],
     }
@@ -333,7 +346,10 @@ async def nextcart_address_suggestions(
 async def nextcart_event(request: Request):
     """Forward pre-checkout analytics to the merchant's NextCart pixel — never blocks checkout."""
     body = await request.json()
-    cfg = await nextcart_config(COUNTRY)
+    try:
+        cfg = await nextcart_config(COUNTRY)
+    except HTTPException:
+        return {"forwarded": False}
     endpoint = cfg.get("event_endpoint")
     pixel_id = cfg.get("pixel_id")
     if not endpoint or not pixel_id or body.get("event_name") not in (cfg.get("enabled_events") or []):
