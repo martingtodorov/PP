@@ -106,13 +106,14 @@
             set -o pipefail
             ok=0
             for target in 127.0.0.1 {{ frontend_private_ip }} {{ frontend_public_ip }}; do
-              code=$(curl -ksS -o /tmp/pp-smoke.json -w '%{http_code}' --max-time 15 \
+              code=$(curl -ksS -o /tmp/pp-smoke.json -w '%{http_code} %{size_download}b' --max-time 15 \
                      --resolve '{{ canonical_domain }}:443:'"$target" \
-                     'https://{{ canonical_domain }}/api/settings' 2>/dev/null || echo 000)
+                     'https://{{ canonical_domain }}/api/settings' 2>/dev/null || echo '000 0b')
               echo "$target:443 -> $code"
-              if [ "$code" = "200" ]; then ok=1; echo "$target" > /tmp/pp-target; break; fi
+              if [ "${code%% *}" = "200" ]; then ok=1; echo "$target" > /tmp/pp-target; break; fi
             done
-            head -c 200 /tmp/pp-smoke.json 2>/dev/null; echo
+            # never echo the response body: it is Cyrillic and a byte-truncated cut makes Ansible
+            # refuse the whole result ("invalid UTF8 string value")
             test "$ok" = "1"
           args: { executable: /bin/bash }
           register: api_check
@@ -175,7 +176,9 @@
         curl -ksS -o /tmp/pp-couriers.json -w 'countries -> %{http_code}\n' --max-time 20 \
           --resolve '{{ canonical_domain }}:443:'"$target" \
           'https://{{ canonical_domain }}/api/nextcart/countries' || true
-        head -c 200 /tmp/pp-couriers.json 2>/dev/null; echo
+        # ASCII-only summary — the payload holds Cyrillic country names
+        python3 -c "import json;d=json.load(open('/tmp/pp-couriers.json'));print('countries in the reply:',len(d.get('countries') or []))" 2>/dev/null \
+          || echo "could not parse the courier reply"
       args: { executable: /bin/bash }
       register: courier_check
       changed_when: false

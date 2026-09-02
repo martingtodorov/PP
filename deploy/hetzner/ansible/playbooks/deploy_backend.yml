@@ -312,7 +312,9 @@
             curl -sS -o /tmp/pp-nextcart.json \
               -w 'storefront/config -> %{http_code}\n' --max-time 20 \
               "$url/api/shopify-app/storefront/config?shop=$shop&country=BG&locale=bg" || true
-            head -c 300 /tmp/pp-nextcart.json 2>/dev/null; echo
+            # iconv -c drops the character the byte cut broke — an invalid UTF-8 byte makes Ansible
+            # refuse the whole task result
+            head -c 300 /tmp/pp-nextcart.json 2>/dev/null | iconv -c -f UTF-8 -t UTF-8; echo
           args: { executable: /bin/bash }
           register: nextcart_direct
           changed_when: false
