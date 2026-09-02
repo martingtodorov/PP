@@ -12,11 +12,16 @@ import { graph, articleLd, breadcrumbLd, organizationLd } from "../lib/schema";
 export default function ArticlePage() {
   const { handle } = useParams();
   const [articles, setArticles] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   const [product, setProduct] = useState(null);
   const { lp, t, locale } = useLocaleCtx();
 
   useEffect(() => {
-    api.get("/articles").then(({ data }) => setArticles(data.articles));
+    setLoaded(false);
+    api.get("/articles")
+      .then(({ data }) => setArticles(data.articles))
+      .catch(() => setArticles([]))
+      .finally(() => setLoaded(true));
   }, [locale]);
 
   const article = articles.find((a) => a.handle === handle);
@@ -46,7 +51,23 @@ export default function ArticlePage() {
   });
 
   if (!article) {
-    return <Layout><div className="max-w-3xl mx-auto px-4 py-20 text-slate-500">{t("loading")}</div></Layout>;
+    // a draft or a retired slug: say so instead of spinning forever
+    return (
+      <Layout>
+        <div className="max-w-3xl mx-auto px-4 py-20 text-center" data-testid="article-not-found">
+          {loaded ? (
+            <>
+              <p className="text-lg font-semibold text-slate-900">{t("articleMissing")}</p>
+              <Link to={lp(link("articles"))} className="inline-block mt-4 text-coral-600 font-semibold hover:underline">
+                {t("articles")}
+              </Link>
+            </>
+          ) : (
+            <p className="text-slate-500">{t("loading")}</p>
+          )}
+        </div>
+      </Layout>
+    );
   }
 
   return (

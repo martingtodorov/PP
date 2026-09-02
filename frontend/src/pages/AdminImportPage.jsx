@@ -23,6 +23,8 @@ export default function AdminImportPage() {
   const [busy, setBusy] = useState(false);
   const [job, setJob] = useState(null);
   const [jobs, setJobs] = useState([]);
+  const [repairing, setRepairing] = useState(false);
+  const [repair, setRepair] = useState(null);
   const timer = useRef(null);
 
   const loadJobs = useCallback(() => {
@@ -49,6 +51,17 @@ export default function AdminImportPage() {
   useEffect(() => () => clearInterval(timer.current), []);
 
   const toggle = (key) => setSteps((c) => (c.includes(key) ? c.filter((k) => k !== key) : [...c, key]));
+
+  const repairMedia = async () => {
+    setRepairing(true);
+    try {
+      const { data } = await api.post("/admin/media/repair");
+      setRepair(data);
+      if (data.fixed) toast.success(`Поправени ${data.fixed} снимки`);
+      else if (data.unresolved?.length) toast.error(`${data.unresolved.length} снимки не могат да се възстановят`);
+      else toast.info("Всички снимки са налични");
+    } catch (e) { toast.error(formatErr(e)); } finally { setRepairing(false); }
+  };
 
   const upload = async () => {
     if (!file || !steps.length) return;
@@ -114,6 +127,26 @@ export default function AdminImportPage() {
                 Продуктите, колекциите, статиите и клиентите се заместват изцяло от файла (по handle / имейл).
                 Свалянето на снимките отнема няколко минути.
               </p>
+            </div>
+
+            <div className="mt-6 border-t border-slate-200 pt-6">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-bold mb-2">Липсващи снимки</p>
+              <p className="text-sm text-slate-600">
+                Ако някъде се вижда счупена снимка, това пренасочва продуктите, статиите и страниците към
+                работещото копие на същия файл, а ако липсва — го сваля наново от източника.
+              </p>
+              <Button onClick={repairMedia} disabled={repairing} variant="outline" className="mt-3"
+                data-testid="repair-media-btn">
+                {repairing ? "Поправям…" : "Поправи липсващите снимки"}
+              </Button>
+              {repair && (
+                <div className="mt-3 text-sm text-slate-700" data-testid="repair-media-result">
+                  Проверени {repair.scanned} записа · поправени <strong>{repair.fixed}</strong>
+                  {repair.unresolved?.length ? (
+                    <span className="text-red-600"> · невъзстановими: {repair.unresolved.length}</span>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
 

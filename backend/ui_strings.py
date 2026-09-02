@@ -20,6 +20,7 @@ log = logging.getLogger("purepeptide.ui_strings")
 # (the storefront runs on a different host, so the bulk translate job needs its own copy;
 # tests/test_ui_strings.py guards that the two key sets stay identical).
 SOURCE_BG = {
+    "articleMissing": "Статията не е намерена",
     "cartTitle": "Количка",
     "toCatalog": "Към каталога",
     "summary": "Обобщение",
