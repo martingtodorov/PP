@@ -1,4 +1,5 @@
 import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
+import { link } from "../lib/links";
 import { useEffect, useRef, useState } from "react";
 import {
   ShoppingBag, Search, X, Truck, Banknote, Atom, Menu, ChevronLeft, ChevronRight, ChevronDown,
@@ -10,7 +11,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { LOCALES, LOCALE_META } from "../i18n/locales";
-import { api, fmtEUR, fmtBGN, showsBGN, formatErr, img } from "../lib/api";
+import { api, fmtPrice, fmtBGN, showsBGN, formatErr, img } from "../lib/api";
 import { toast } from "sonner";
 import PreCheckoutModal from "./PreCheckoutModal";
 import CookieConsent from "./CookieConsent";
@@ -19,7 +20,7 @@ import { prefetchCheckout } from "../lib/checkoutPrefetch";
 
 const Price = ({ eur, className = "" }) => (
   <span className={className}>
-    {fmtEUR(eur)}
+    {fmtPrice(eur)}
     {showsBGN() && <span className="text-slate-500 font-normal text-[12px] ml-1.5">({fmtBGN(eur)})</span>}
   </span>
 );
@@ -165,12 +166,12 @@ const NavDrawer = ({ open, setOpen, collections }) => {
 
   const links = [
     { to: lp("/"), label: t("home") },
-    { to: lp("/pages/какво-са-пептиди"), label: t("whatArePeptides") },
-    { to: lp("/pages/articles"), label: t("articles") },
-    { to: lp("/pages/contact-1"), label: t("contacts") },
-    { to: lp("/pages/chemical-analysis"), label: t("chemicalAnalysis") },
-    { to: lp("/pages/faq"), label: t("faq") },
-    { to: lp("/pages/become-a-distributor"), label: t("partners") },
+    { to: lp(link("whatArePeptides")), label: t("whatArePeptides") },
+    { to: lp(link("articles")), label: t("articles") },
+    { to: lp(link("contacts")), label: t("contacts") },
+    { to: lp(link("chemicalAnalysis")), label: t("chemicalAnalysis") },
+    { to: lp(link("faq")), label: t("faq") },
+    { to: lp(link("partners")), label: t("partners") },
   ];
 
   return (
@@ -207,7 +208,7 @@ const NavDrawer = ({ open, setOpen, collections }) => {
             <ul className="pp-drawer__sub" data-testid="drawer-shop-submenu">
               <li>
                 <Link
-                  to={lp("/collections/2all-the-peptides-1")}
+                  to={lp(link("catalog"))}
                   onClick={close}
                   className="pp-drawer__sublink"
                   data-testid="drawer-collection-all"
@@ -395,7 +396,7 @@ const CartDrawer = () => {
             {discountAmount > 0 && (
               <div className="flex justify-between text-sm text-coral-700" data-testid="cart-discount-row">
                 <span>{locale === "bg" ? "Отстъпка" : "Discount"} ({discount?.code})</span>
-                <span className="font-semibold">− {fmtEUR(discountAmount)}</span>
+                <span className="font-semibold">− {fmtPrice(discountAmount)}</span>
               </div>
             )}
             <div className="flex justify-between text-base border-t border-slate-100 pt-3">
@@ -415,7 +416,7 @@ const CartDrawer = () => {
                 {locale === "bg"
                   ? "Аз съм на 18+, купувам за научно-изследователски цели и съм съгласен/а с "
                   : "I am 18+, buying for research purposes and I agree with the "}
-                <Link to={lp("/pages/terms-conditions")} className="underline hover:text-coral-600" target="_blank">
+                <Link to={lp(link("terms"))} className="underline hover:text-coral-600" target="_blank">
                   {locale === "bg" ? "Общите условия" : "Terms & conditions"}
                 </Link>
               </span>
@@ -450,13 +451,13 @@ const Header = ({ collections, settings }) => {
 
   const topNav = [
     { to: lp("/"), label: t("home"), exact: true },
-    { to: lp("/collections/2all-the-peptides-1"), label: t("shop"), dropdown: true },
-    { to: lp("/pages/какво-са-пептиди"), label: t("whatArePeptides") },
-    { to: lp("/pages/articles"), label: t("articles") },
-    { to: lp("/pages/contact-1"), label: t("contacts") },
-    { to: lp("/pages/chemical-analysis"), label: t("chemicalAnalysis") },
-    { to: lp("/pages/faq"), label: t("faq") },
-    { to: lp("/pages/become-a-distributor"), label: t("partners") },
+    { to: lp(link("catalog")), label: t("shop"), dropdown: true },
+    { to: lp(link("whatArePeptides")), label: t("whatArePeptides") },
+    { to: lp(link("articles")), label: t("articles") },
+    { to: lp(link("contacts")), label: t("contacts") },
+    { to: lp(link("chemicalAnalysis")), label: t("chemicalAnalysis") },
+    { to: lp(link("faq")), label: t("faq") },
+    { to: lp(link("partners")), label: t("partners") },
   ];
 
   const menuCollections = [...collections].sort((a, b) => (a.menu_order ?? 99) - (b.menu_order ?? 99));
@@ -549,7 +550,7 @@ const Header = ({ collections, settings }) => {
                         </li>
                       ))}
                       <li className="pp-megamenu__all">
-                        <Link to={lp("/collections/2all-the-peptides-1")} data-testid="dropdown-collection-all">
+                        <Link to={lp(link("catalog"))} data-testid="dropdown-collection-all">
                           {t("viewAll")} →
                         </Link>
                       </li>
@@ -660,9 +661,9 @@ const Footer = ({ collections, articles, settings }) => {
           </ul>
           <p className="text-xs uppercase tracking-[0.2em] text-coral-500 mb-3 mt-6 font-bold">{t("help")}</p>
           <ul className="space-y-2 text-sm text-slate-300">
-            <li><Link to={lp("/pages/faq")} className="hover:text-white">{t("faq")}</Link></li>
-            <li><Link to={lp("/pages/chemical-analysis")} className="hover:text-white">{t("chemicalAnalysis")}</Link></li>
-            <li><Link to={lp("/pages/contact-1")} className="hover:text-white">{t("contacts")}</Link></li>
+            <li><Link to={lp(link("faq"))} className="hover:text-white">{t("faq")}</Link></li>
+            <li><Link to={lp(link("chemicalAnalysis"))} className="hover:text-white">{t("chemicalAnalysis")}</Link></li>
+            <li><Link to={lp(link("contacts"))} className="hover:text-white">{t("contacts")}</Link></li>
             <li><Link to={lp("/account")} className="hover:text-white">{t("account")}</Link></li>
           </ul>
         </div>
@@ -670,10 +671,10 @@ const Footer = ({ collections, articles, settings }) => {
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-coral-500 mb-4 font-bold">{t("policies")}</p>
           <ul className="space-y-2 text-sm text-slate-300">
-            <li><Link to={lp("/pages/privacy-policy")} className="hover:text-white">{t("policyPrivacy")}</Link></li>
-            <li><Link to={lp("/pages/refund-policy")} className="hover:text-white">{t("policyRefund")}</Link></li>
-            <li><Link to={lp("/pages/terms-conditions")} className="hover:text-white">{t("policyTerms")}</Link></li>
-            <li><Link to={lp("/pages/delivery-and-payment")} className="hover:text-white">{t("policyShipping")}</Link></li>
+            <li><Link to={lp(link("privacy"))} className="hover:text-white">{t("policyPrivacy")}</Link></li>
+            <li><Link to={lp(link("refund"))} className="hover:text-white">{t("policyRefund")}</Link></li>
+            <li><Link to={lp(link("terms"))} className="hover:text-white">{t("policyTerms")}</Link></li>
+            <li><Link to={lp(link("shipping"))} className="hover:text-white">{t("policyShipping")}</Link></li>
             <li><Link to={lp("/pages/html-sitemap")} className="hover:text-white" data-testid="footer-html-sitemap">Карта на сайта</Link></li>
           </ul>
           <p className="text-xs uppercase tracking-[0.2em] text-coral-500 mb-3 mt-6 font-bold">{t("otherCountries")}</p>

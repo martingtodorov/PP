@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { link } from "../lib/links";
 import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
 import PreCheckoutModal from "../components/PreCheckoutModal";
 import { useSeo } from "../lib/seo";
 import { Button } from "../components/ui/button";
 import { useCart } from "../context/CartContext";
-import { fmtEUR, fmtBGN, img } from "../lib/api";
+import { fmtPrice, fmtAmount, cartAmounts, fmtBGN, showsBGN, img } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { formatErr } from "../lib/api";
 import { toast } from "sonner";
@@ -21,6 +22,8 @@ export default function CartPage() {
   const { lp } = useLocaleCtx();
   const shipping = subtotal === 0 ? 0 : subtotal >= 100 ? 0 : 5.99;
   const total = Math.max(subtotal - discountAmount, 0) + shipping;
+  /* the amounts actually shown: rounded per line, then summed — same rule as the backend */
+  const amt = cartAmounts({ items, shippingEur: shipping, discount });
 
   return (
     <Layout>
@@ -29,14 +32,14 @@ export default function CartPage() {
         {items.length === 0 ? (
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-12 text-center">
             <p className="text-slate-600">Количката е празна.</p>
-            <Link to={lp("/collections/2all-the-peptides-1")}>
+            <Link to={lp(link("catalog"))}>
               <Button className="mt-6 bg-coral-600 hover:bg-coral-700">Към каталога</Button>
             </Link>
           </div>
         ) : (
           <div className="grid lg:grid-cols-3 gap-10">
             <div className="lg:col-span-2 space-y-3">
-              {items.map((it) => (
+              {items.map((it, i) => (
                 <div key={it.variant_sku} className="bg-white border border-slate-200 rounded-xl p-4 flex gap-4" data-testid={`cart-line-${it.variant_sku}`}>
                   <img src={img(it.image, 300)} alt={it.title} className="w-24 h-24 object-contain bg-white border border-slate-200 rounded" />
                   <div className="flex-1 min-w-0">
@@ -52,8 +55,8 @@ export default function CartPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-display font-bold text-slate-900">{fmtEUR(it.price_eur * it.quantity)}</p>
-                    <p className="text-xs text-slate-500">({fmtBGN(it.price_eur * it.quantity)})</p>
+                    <p className="font-display font-bold text-slate-900">{fmtAmount(amt.lines[i])}</p>
+                    {showsBGN() && <p className="text-xs text-slate-500">({fmtBGN(it.price_eur * it.quantity)})</p>}
                   </div>
                 </div>
               ))}
@@ -62,21 +65,21 @@ export default function CartPage() {
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 space-y-4 sticky top-24">
                 <h2 className="font-display font-bold text-lg text-slate-900">Обобщение</h2>
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-slate-600">Междинна сума</span><span className="font-semibold">{fmtEUR(subtotal)}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-600">Междинна сума</span><span className="font-semibold">{fmtAmount(amt.subtotal)}</span></div>
                   {discountAmount > 0 && (
-                    <div className="flex justify-between text-coral-700"><span>Отстъпка ({discount?.code})</span><span className="font-semibold">− {fmtEUR(discountAmount)}</span></div>
+                    <div className="flex justify-between text-coral-700"><span>Отстъпка ({discount?.code})</span><span className="font-semibold">− {fmtAmount(amt.discountAmount)}</span></div>
                   )}
-                  <div className="flex justify-between"><span className="text-slate-600">Доставка</span><span className="font-semibold">{shipping === 0 ? "Безплатна" : fmtEUR(shipping)}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-600">Доставка</span><span className="font-semibold">{amt.shipping === 0 ? "Безплатна" : fmtAmount(amt.shipping)}</span></div>
                   {subtotal < 100 && subtotal > 0 && (
                     <p className="text-xs text-coral-700 bg-coral-50 border border-coral-200 rounded p-2">
-                      Добавете още {fmtEUR(100 - subtotal)} за безплатна доставка.
+                      Добавете още {fmtPrice(100 - subtotal)} за безплатна доставка.
                     </p>
                   )}
                   <div className="border-t border-slate-200 pt-3 flex justify-between text-base">
                     <span className="font-display font-bold text-slate-900">Общо</span>
-                    <span className="font-display font-extrabold text-slate-900" data-testid="cart-total">{fmtEUR(total)}</span>
+                    <span className="font-display font-extrabold text-slate-900" data-testid="cart-total">{fmtAmount(amt.total)}</span>
                   </div>
-                  <p className="text-right text-xs text-slate-500">≈ {fmtBGN(total)}</p>
+                  {showsBGN() && <p className="text-right text-xs text-slate-500">≈ {fmtBGN(total)}</p>}
                 </div>
                 <div className="mb-4">
                   {discount ? (
@@ -109,7 +112,7 @@ export default function CartPage() {
                     className="mt-0.5 accent-coral-600" data-testid="cart-terms-checkbox" />
                   <span>
                     Аз съм на 18+, купувам за научно-изследователски цели и съм съгласен/а с{" "}
-                    <Link to={lp("/pages/terms-conditions")} className="underline hover:text-coral-600" target="_blank">
+                    <Link to={lp(link("terms"))} className="underline hover:text-coral-600" target="_blank">
                       Общите условия
                     </Link>
                   </span>

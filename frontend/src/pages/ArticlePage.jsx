@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { link } from "../lib/links";
 import { useParams, Link } from "react-router-dom";
 import Layout, { USPRow } from "../components/Layout";
 import Breadcrumbs from "../components/Breadcrumbs";
@@ -37,7 +38,7 @@ export default function ArticlePage() {
       articleLd({ article, path: `/articles/${handle}` }),
       breadcrumbLd([
         { name: "Начало", path: "/" },
-        { name: "Научни статии", path: "/pages/articles" },
+        { name: "Научни статии", path: link("articles") },
         { name: article.title, path: `/articles/${handle}` },
       ]),
       organizationLd(),
@@ -51,7 +52,7 @@ export default function ArticlePage() {
   return (
     <Layout>
       <article className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-14">
-        <Breadcrumbs items={[{ label: t("articles"), to: lp("/pages/articles") }, { label: article.title }]} />
+        <Breadcrumbs items={[{ label: t("articles"), to: lp(link("articles")) }, { label: article.title }]} />
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-4 leading-tight" data-testid="article-title">
           {article.title}
         </h1>

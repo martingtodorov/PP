@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { link } from "../lib/links";
 import { useParams, Link } from "react-router-dom";
 import { Truck, Minus, Plus, ShieldCheck, Droplets } from "lucide-react";
 import { toast } from "sonner";
@@ -6,7 +7,7 @@ import Layout, { USPRow } from "../components/Layout";
 import ProductsCarousel from "../components/ProductsCarousel";
 import Breadcrumbs from "../components/Breadcrumbs";
 import StickyBuyBar from "../components/StickyBuyBar";
-import { api, fmtEUR, fmtBGN, showsBGN, img } from "../lib/api";
+import { api, fmtPrice, fmtBGN, showsBGN, img } from "../lib/api";
 import { useCart } from "../context/CartContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { PRODUCT_BLOCKS, pick, LOCALES } from "../i18n/locales";
@@ -91,7 +92,7 @@ export default function ProductPage() {
       productLd({ product: p, variant: v, path: `/products/${handle}` }),
       breadcrumbLd([
         { name: "Начало", path: "/" },
-        { name: "Всички пептиди", path: "/collections/2all-the-peptides-1" },
+        { name: "Всички пептиди", path: link("catalog") },
         { name: p.title, path: `/products/${handle}` },
       ]),
       organizationLd(),
@@ -113,7 +114,7 @@ export default function ProductPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-12">
         <Breadcrumbs
           items={[
-            { label: t("catalog"), to: lp("/collections/2all-the-peptides-1") },
+            { label: t("catalog"), to: lp(link("catalog")) },
             ...(primaryCollection ? [{ label: primaryCollection.title, to: lp(`/collections/${primaryCollection.handle}`) }] : []),
             { label: p.title },
           ]}
@@ -151,10 +152,10 @@ export default function ProductPage() {
             </div>
 
             <div className="text-2xl font-bold text-slate-900 flex flex-wrap items-baseline gap-2" data-testid="product-price">
-              <span>{fmtEUR(v?.price_eur || 0)}</span>
+              <span>{fmtPrice(v?.price_eur || 0)}</span>
               {(v?.compare_at_eur || 0) > (v?.price_eur || 0) && (
                 <>
-                  <s className="text-lg font-normal text-slate-400" data-testid="product-compare-price">{fmtEUR(v.compare_at_eur)}</s>
+                  <s className="text-lg font-normal text-slate-400" data-testid="product-compare-price">{fmtPrice(v.compare_at_eur)}</s>
                   <span className="text-xs font-bold uppercase tracking-wide bg-coral-600 text-white rounded-md px-2 py-1" data-testid="product-sale-badge">
                     −{Math.round(((v.compare_at_eur - v.price_eur) / v.compare_at_eur) * 100)}%
                   </span>
@@ -243,7 +244,7 @@ export default function ProductPage() {
                   {c.title}
                 </Link>
               ))}
-              <Link to={lp("/collections/2all-the-peptides-1")}
+              <Link to={lp(link("catalog"))}
                 className="px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-700 hover:border-coral-600 hover:text-coral-700 transition-colors">
                 {t("catalog")}
               </Link>

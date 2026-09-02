@@ -149,6 +149,33 @@
               {{ nginx_status.stdout | default('') }}
       tags: [verify]
 
+    # Regression guard for the bug that broke every imported product image: nginx matches the
+    # static-image regex before the /api/ prefix, so /api/files/*.png must be proven to reach the
+    # backend (which answers JSON 404 for a missing file, not nginx's HTML 404 page).
+    - name: Media must be served by the backend, not by the static image regex
+      block:
+        - name: Probe /api/files/*.png
+          shell: |
+            set -o pipefail
+            target=$(cat /tmp/pp-target 2>/dev/null || echo {{ frontend_public_ip }})
+            ct=$(curl -ksS -o /dev/null -w '%{content_type}' --max-time 15 \
+                 --resolve '{{ canonical_domain }}:443:'"$target" \
+                 'https://{{ canonical_domain }}/api/files/__ansible_probe__.png' || echo none)
+            echo "content-type: $ct"
+            case "$ct" in application/json*) exit 0 ;; *) exit 1 ;; esac
+          args: { executable: /bin/bash }
+          register: media_probe
+          changed_when: false
+      rescue:
+        - name: Report the media routing problem
+          fail:
+            msg: |
+              /api/files/*.png is NOT reaching the backend ({{ media_probe.stdout | default('no output') }}).
+              nginx evaluates regex locations before prefix ones, so the static image regex is
+              swallowing the media route. The rendered config must use "location ^~ /api/" and
+              "location ^~ /api/files/" — re-render it and reload nginx.
+      tags: [verify]
+
     - name: Which of the domains actually reach this server? (informational)
       shell: |
         for d in {{ site_domains | join(' ') }}; do

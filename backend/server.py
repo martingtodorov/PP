@@ -14,6 +14,7 @@ import re
 import secrets
 import sys
 import tempfile
+import time
 import asyncio
 from urllib.parse import urlparse
 import hashlib
@@ -40,6 +41,9 @@ from pages_seed import PAGE_SLUGS, PAGE_LABELS, DEFAULT_PAGES
 import storage
 import email_service
 from starlette.concurrency import run_in_threadpool
+
+import currency
+from links_map import LINK_TARGETS
 import email_templates
 import push_service
 
@@ -672,6 +676,12 @@ async def validate_discount(payload: DiscountIn):
     return await _resolve_discount(payload.code, payload.subtotal_eur)
 
 
+@api.get("/currency")
+async def currency_for(locale: str = DEFAULT_LOCALE):
+    """Which currency (and daily ECB rate) the given storefront is priced in."""
+    return await currency.rate_for_locale(db, normalize_locale(locale))
+
+
 def _calc_totals(line_items: List[Dict[str, Any]], shipping_method: str, discount_eur: float = 0.0,
                  shipping_override: Optional[float] = None) -> Dict[str, float]:
     subtotal = sum(li["price_eur"] * li["quantity"] for li in line_items)
@@ -721,6 +731,11 @@ async def checkout(payload: CheckoutIn, request: Request):
     totals = _calc_totals(line_items, payload.shipping_method, discount.get("discount_eur", 0.0),
                           payload.delivery.price_amount if payload.delivery else None)
     user = await get_user_from_request(request)
+    loc = (payload.locale or "bg").lower()
+    fx = await currency.rate_for_locale(db, loc)
+    local = currency.order_amounts(line_items, totals, discount, fx["currency"], fx["rate"])
+    for li, price in zip(line_items, local.pop("item_prices", [])):
+        li["price_orig"] = price
 
     order = {
         "id": str(uuid.uuid4()),
@@ -736,9 +751,9 @@ async def checkout(payload: CheckoutIn, request: Request):
         "notes": payload.notes,
         "discount": discount,
         "terms_accepted": payload.terms_accepted,
-        "locale": (payload.locale or "bg").lower(),
+        "locale": loc,
         **totals,
-        "currency": "EUR",
+        **local,
         "payment_status": "awaiting_payment",
         "fulfillment_status": "unfulfilled",
         "payment_method": payload.payment_method if payload.payment_method in ("bank_transfer", "cod") else "bank_transfer",
@@ -787,7 +802,8 @@ async def checkout(payload: CheckoutIn, request: Request):
     )[:180]
     try:
         await notify_admin_push_bg(
-            "Нова поръчка {} · {:.2f} €".format(order["order_number"], totals["total_eur"]),
+            "Нова поръчка {} · {}".format(order["order_number"], email_templates._money(
+                local.get("total_orig", totals["total_eur"]), order["currency"])),
             "{} · {}".format(order.get("customer_name") or "", items_summary),
             "/admin/orders/{}".format(order["id"]),
             "order-{}".format(order["id"]),
@@ -1415,6 +1431,7 @@ async def admin_update_collection(collection_id: str, payload: CollectionIn, use
     res = await db.collections_cat.update_one({"id": collection_id}, {"$set": payload.model_dump()})
     if res.matched_count == 0:
         raise HTTPException(404, "Колекцията не е намерена")
+    _links_cache.clear()
     return {"ok": True}
 
 
@@ -1683,6 +1700,7 @@ async def admin_update_page(slug: str, locale: str, payload: PageIn, user=Depend
         upsert=True,
     )
     doc = await db.pages.find_one({"slug": slug, "locale": loc}, {"_id": 0})
+    _links_cache.clear()
     return {"ok": True, "page": _page_out(doc)}
 
 
@@ -2337,6 +2355,41 @@ async def admin_bulk_translate_status(user=Depends(require_admin)):
     return {"job": job}
 
 
+# resolved navigation paths per locale, invalidated whenever a page/collection is saved
+_links_cache: Dict[str, tuple] = {}
+
+
+@api.get("/links")
+async def resolve_links(locale: str = Query(DEFAULT_LOCALE)):
+    """Resolve every logical navigation key to a path that exists right now (see links_map.py)."""
+    loc = normalize_locale(locale)
+    cached = _links_cache.get(loc)
+    if cached and time.time() - cached[0] < 300:
+        return cached[1]
+
+    out: Dict[str, str] = {}
+    for key, (kind, candidates) in LINK_TARGETS.items():
+        if kind == "collection":
+            doc = (await db.collections_cat.find_one({"link_key": key}, {"_id": 0})
+                   or await db.collections_cat.find_one({"handle": {"$in": candidates}}, {"_id": 0}))
+            if doc:
+                handle = ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc["handle"]
+                out[key] = f"/collections/{handle}"
+        else:
+            doc = await db.pages.find_one({"link_key": key, "locale": "bg",
+                                          "canonical_slug": {"$in": [None, ""]}}, {"_id": 0})
+            if not doc:
+                for candidate in candidates:
+                    found = await db.pages.find_one({"slug": candidate, "locale": "bg"}, {"_id": 0})
+                    if found and not found.get("canonical_slug"):
+                        doc = found
+                        break
+            if doc:
+                out[key] = f"/pages/{doc['slug']}"
+    _links_cache[loc] = (time.time(), out)
+    return out
+
+
 @api.get("/link-index")
 async def link_index(locale: str = Query(DEFAULT_LOCALE)):
     """Everything that has a URL — powers the HTML sitemap pages."""
@@ -2355,7 +2408,7 @@ async def link_index(locale: str = Query(DEFAULT_LOCALE)):
         "products": [slim(p) for p in localize_list(prods, loc)],
         "articles": [slim(a) for a in localize_list(arts, loc)],
         "pages": [{"slug": s, "title": (d.get("title") or PAGE_LABELS.get(s, s))}
-                  for s, d in by_slug.items() if s in PAGE_SLUGS],
+                  for s, d in by_slug.items() if s in PAGE_SLUGS and not d.get("canonical_slug")],
     }
 
 

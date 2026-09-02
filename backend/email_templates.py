@@ -260,11 +260,27 @@ def _abs(url: str, base: str) -> str:
     return f"{base}{url if url.startswith('/') else '/' + url}"
 
 
-def _money(v: Any) -> str:
+SYMBOLS = {"EUR": "€", "RON": "lei", "PLN": "zł", "CZK": "Kč", "HUF": "Ft", "BGN": "лв."}
+
+
+def _money(v: Any, cur: str = "EUR") -> str:
+    code = (cur or "EUR").upper()
+    symbol = SYMBOLS.get(code, code)
     try:
-        return f"€{float(v or 0):.2f}"
+        amount = float(v or 0)
     except (TypeError, ValueError):
-        return "€0.00"
+        amount = 0.0
+    if code == "EUR":
+        return f"€{amount:.2f}"
+    return f"{amount:,.0f} {symbol}".replace(",", " ")
+
+
+def _money_of(order: Dict[str, Any]):
+    """Format in the currency the order was placed in — EUR orders keep the euro layout."""
+    code = str(order.get("currency") or "EUR").upper()
+    if code == "EUR":
+        return lambda eur, orig=None: _money(eur, "EUR")
+    return lambda eur, orig=None: _money(orig if orig is not None else eur, code)
 
 
 def _shell(locale: str, order_label: str, title: str, content: str, contact_email: str) -> str:
@@ -295,13 +311,16 @@ def _shell(locale: str, order_label: str, title: str, content: str, contact_emai
 </table></td></tr></table></body></html>"""
 
 
-def _lines(items: List[Dict[str, Any]], locale: str, base: str) -> str:
+def _lines(items: List[Dict[str, Any]], locale: str, base: str, money=None) -> str:
+    money = money or (lambda eur, orig=None: _money(eur))
     rows = []
     for it in items or []:
         img = _abs(it.get("image") or "", base)
         thumb = (f'<img src="{img}" width="56" height="56" alt="" '
                  f'style="border-radius:10px;border:1px solid #eef2f6;object-fit:cover;">') if img else ""
-        price = _money(float(it.get("price_eur") or 0) * int(it.get("quantity") or 1))
+        qty = int(it.get("quantity") or 1)
+        price = money(float(it.get("price_eur") or 0) * qty,
+                      float(it["price_orig"]) * qty if it.get("price_orig") is not None else None)
         rows.append(
             f'<tr><td width="72" style="padding:12px 0;border-bottom:1px solid #f1f5f9;">{thumb}</td>'
             f'<td style="padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:14px;color:{DARK};">'
@@ -337,15 +356,18 @@ def render_order(order: Dict[str, Any], bank: Optional[Dict[str, Any]], locale: 
     pay_key = order.get("payment_method") or "cod"
     intro = tr(loc, "body_bank") if pay_key == "bank_transfer" else tr(loc, "body_ship")
     order_url = f"{base}/checkout/success/{order.get('id')}"
+    money = _money_of(order)
 
-    summary = [_sum_row(tr(loc, "subtotal"), _money(order.get("subtotal_eur")))]
+    summary = [_sum_row(tr(loc, "subtotal"), money(order.get("subtotal_eur"), order.get("subtotal_orig")))]
     if float(order.get("discount_eur") or 0) > 0:
-        summary.append(_sum_row(tr(loc, "discount"), f"− {_money(order.get('discount_eur'))}"))
+        summary.append(_sum_row(tr(loc, "discount"),
+                                f"− {money(order.get('discount_eur'), order.get('discount_orig'))}"))
     ship_cost = float(order.get("shipping_eur") or 0)
     summary.append(_sum_row(
         f"{tr(loc, 'shipping')}{' · ' + delivery.get('provider_name') if delivery.get('provider_name') else ''}",
-        _money(ship_cost) if ship_cost else tr(loc, "free")))
-    summary.append(_sum_row(tr(loc, "total"), _money(order.get("total_eur")), strong=True))
+        money(ship_cost, order.get("shipping_orig")) if ship_cost else tr(loc, "free")))
+    summary.append(_sum_row(tr(loc, "total"), money(order.get("total_eur"), order.get("total_orig")),
+                            strong=True))
 
     office = (delivery.get("office") or {})
     addr_html = "<br>".join(x for x in [
@@ -370,7 +392,11 @@ def render_order(order: Dict[str, Any], bank: Optional[Dict[str, Any]], locale: 
             f'<td align="right">{tr(loc, "bic")}: <strong>{bank.get("bic", "")}</strong></td></tr>'
             f'<tr><td colspan="2" style="padding-top:6px;">{tr(loc, "reference")}: '
             f'<strong>{bank.get("reference") or order.get("order_number", "")}</strong></td></tr>'
-            f'</table></td></tr>'
+            # the IBAN is a euro account — a local-currency order still transfers the EUR amount
+            + (f'<tr><td colspan="2" style="padding-top:6px;color:#64748b;">'
+               f'{_money(order.get("total_eur"), "EUR")}</td></tr>'
+               if str(order.get("currency") or "EUR").upper() != "EUR" else "")
+            + f'</table></td></tr>'
         )
 
     content = f"""
@@ -385,7 +411,7 @@ def render_order(order: Dict[str, Any], bank: Optional[Dict[str, Any]], locale: 
   </td></tr>
   <tr><td style="padding:22px 28px 0;">
     <h2 style="margin:0 0 4px;font-size:15px;color:{DARK};">{tr(loc, 'summary')}</h2>
-    {_lines(order.get('items') or [], loc, base)}
+    {_lines(order.get('items') or [], loc, base, money)}
     <table role="presentation" width="100%" style="margin-top:12px;">{''.join(summary)}</table>
   </td></tr>
   {bank_block}
@@ -486,7 +512,8 @@ def render_admin_order(order: Dict[str, Any]) -> tuple:
     office = delivery.get("office") or {}
     ship = order.get("shipping") or {}
     pay = "Банков превод" if order.get("payment_method") == "bank_transfer" else "Наложен платеж"
-    total = _money(order.get("total_eur"))
+    money = _money_of(order)
+    total = money(order.get("total_eur"), order.get("total_orig"))
     rows = [
         ("Клиент", order.get("customer_name") or ""),
         ("Имейл", f'<a href="mailto:{order.get("customer_email", "")}" style="color:{BRAND};">'
@@ -509,7 +536,7 @@ def render_admin_order(order: Dict[str, Any]) -> tuple:
   </td></tr>
   <tr><td style="padding:18px 28px 0;">{_kv_table(rows)}</td></tr>
   <tr><td style="padding:16px 28px 20px;">
-    {_lines(order.get('items') or [], 'bg', base)}
+    {_lines(order.get('items') or [], 'bg', base, money)}
   </td></tr>"""
     subject = f"Нова поръчка {order.get('order_number', '')} · {total}"
     html = _admin_shell("НОВА ПОРЪЧКА", f"Поръчка {order.get('order_number', '')}", content,

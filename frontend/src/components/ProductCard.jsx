@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { fmtEUR, fmtBGN, showsBGN, img } from "../lib/api";
+import { fmtPrice, fmtBGN, showsBGN, img } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { useCart } from "../context/CartContext";
 
@@ -64,8 +64,8 @@ export default function ProductCard({ product, showAddToCart = false }) {
 
         <div className="product-card__price">
           {variants.length > 1 && <span className="text-slate-500 mr-1">{t("from")}</span>}
-          <span>{fmtEUR(minPrice)}</span>
-          {hasCompare && <s className="text-slate-400 font-normal ml-1.5">{fmtEUR(compareAt)}</s>}
+          <span>{fmtPrice(minPrice)}</span>
+          {hasCompare && <s className="text-slate-400 font-normal ml-1.5">{fmtPrice(compareAt)}</s>}
           {showsBGN() && <span className="text-slate-500 ml-1.5 text-[12px]">({fmtBGN(minPrice)})</span>}
         </div>
       </Link>
