@@ -677,3 +677,22 @@ the homepage showed a "Всички пептиди" card that 404s (the code can
 **Production TODO (owner):** after Save to GitHub + `git pull`, run
 `ansible-playbook playbooks/deploy_backend.yml -e run_catalog_import=true` once — without it prod
 keeps the 16 demo products.
+
+### 2026-06 — broken images after the Matrixify import (nginx regex precedence)
+Owner ran the catalog import on production (23 products live) and every product image 404'd.
+Root cause: **nginx evaluates regex locations BEFORE prefix locations**, so
+`location ~* \.(png|jpe?g|webp|svg|gif|ico|woff2?)$ { try_files $uri =404; }` captured every
+`/api/files/import/*.png` and answered with nginx's own 404 (162 bytes, text/html). It never showed
+before because the seed catalog pointed at absolute Shopify CDN URLs; imported media is local.
+- `templates/nginx-purepeptide.conf.j2`: `location ^~ /api/` and `location ^~ /api/files/` — `^~`
+  stops the regex evaluation. **Proven locally** with a real nginx in the pod + stub backend:
+  old config → 404, fixed config → 200 with the backend's body.
+- `server.py` `get_collection`: the catch-all collection now resolves under BOTH handles
+  (`2all-the-peptides-1` and legacy `all-peptides`), so the hero CTA / "Виж всички" cannot 404 on a
+  database imported with the older script. Verified: both handles → 200 with 23 products.
+- New guard test; 61 deploy tests green.
+
+**Production TODO (owner), in this order:** Save to GitHub → `git pull` →
+`deploy_nginx.yml` (fixes the images) → `deploy_frontend.yml` (hides the "Всички" card) →
+`deploy_backend.yml -e run_catalog_import=true` (re-import so the catch-all handle becomes the
+canonical `2all-the-peptides-1`).

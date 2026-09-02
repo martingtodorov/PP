@@ -45,7 +45,10 @@ server {
     gzip_types text/plain text/css application/javascript application/json image/svg+xml application/xml;
 
     # ---------- API ----------
-    location /api/ {
+    # ^~ is mandatory: nginx evaluates regex locations BEFORE prefix ones, so without it every
+    # /api/files/*.png|jpg|webp request is captured by the static image regex below and answered with
+    # nginx's own 404 (this is what broke every product image after the Matrixify import).
+    location ^~ /api/ {
         proxy_pass http://{{ backend_private_ip }}:8001;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -61,7 +64,7 @@ server {
     }
 
     # media is content-addressed and served as WebP/JPEG by the backend
-    location /api/files/ {
+    location ^~ /api/files/ {
         proxy_pass http://{{ backend_private_ip }}:8001;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

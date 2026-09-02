@@ -518,3 +518,11 @@ def test_importer_uses_the_handle_the_backend_canonicalises_to():
     srv = (ROOT / "backend" / "server.py").read_text()
     all_collection = re.search(r'ALL_COLLECTION = "([^"]+)"', srv).group(1)
     assert f'ALL_HANDLE = "{all_collection}"' in imp
+
+
+def test_api_locations_win_over_the_static_image_regex():
+    """nginx matches regex locations first: without ^~ every /api/files/*.png answers 404."""
+    conf = (TEMPLATES / "nginx-purepeptide.conf.j2").read_text()
+    assert "location ^~ /api/ {" in conf
+    assert "location ^~ /api/files/ {" in conf
+    assert "location /api/ {" not in conf
