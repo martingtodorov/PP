@@ -902,6 +902,8 @@ h1, h2, h3, h4, h5, h6, .font-display {
 /* Rich product description (HTML from admin) */
 .pp-rte { color: #334155; line-height: 1.75; }
 .pp-rte h1, .pp-rte h2 { font-size: 1.5rem; font-weight: 700; color: #0f172a; margin: 1.6em 0 0.6em; letter-spacing: -0.01em; }
+.pp-rte h1 { font-size: 1.9rem; letter-spacing: -0.02em; }
+.pp-rte > h1:first-child, .pp-rte > h2:first-child { margin-top: 0; }
 .pp-rte h3 { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 1.4em 0 0.5em; }
 .pp-rte p { margin: 0 0 1em; }
 .pp-rte ul, .pp-rte ol { margin: 0 0 1.2em 1.15em; }

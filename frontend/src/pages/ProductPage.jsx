@@ -120,9 +120,9 @@ export default function ProductPage() {
           ]}
         />
 
-        <div className="grid lg:grid-cols-2 gap-5 lg:gap-14 mt-0">
-          {/* Gallery */}
-          <div className="min-w-0">
+        <div className="grid lg:grid-cols-2 gap-5 lg:gap-14 mt-0 lg:items-start">
+          {/* Gallery — sticks while the text on the right scrolls (desktop) */}
+          <div className="min-w-0 lg:sticky lg:top-24 lg:self-start" data-testid="product-gallery">
             <div className="aspect-square w-full max-w-full bg-white rounded-xl overflow-hidden">
               <img src={img(images[imgIdx], 900)} alt={p.title} className="w-full h-full object-contain px-2 sm:px-4 py-0" data-testid="product-main-image" />
             </div>
@@ -141,9 +141,16 @@ export default function ProductPage() {
 
           {/* Purchase panel */}
           <div className="space-y-5">
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight py-1.5" data-testid="product-title">
-              {p.title}
-            </h1>
+            {/* like purepeptide.bg: the body's "Какво е X?" is the H1, the product name an H2 */}
+            {/<h1[\s>]/i.test(p.description || "") ? (
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight py-1.5" data-testid="product-title">
+                {p.title}
+              </h2>
+            ) : (
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight py-1.5" data-testid="product-title">
+                {p.title}
+              </h1>
+            )}
             {p.subtitle && <p className="text-sm text-slate-500 -mt-3">{p.subtitle}</p>}
 
             <div className="space-y-1.5 text-sm text-slate-700">
@@ -223,15 +230,15 @@ export default function ProductPage() {
               <ShieldCheck className="h-4 w-4 text-slate-400 flex-shrink-0" />
               {t("disclaimer")}
             </p>
+
+            {/* Long description — in the right column under the buy panel, like purepeptide.bg */}
+            {p.description && (
+              <section className="pt-6 border-t border-slate-200">
+                <div className="pp-rte" dangerouslySetInnerHTML={{ __html: p.description }} data-testid="product-description" />
+              </section>
+            )}
           </div>
         </div>
-
-        {/* Long description */}
-        {p.description && (
-          <section className="mt-14 max-w-3xl">
-            <div className="pp-rte" dangerouslySetInnerHTML={{ __html: p.description }} data-testid="product-description" />
-          </section>
-        )}
 
         {/* Internal linking: collections this product belongs to */}
         {data.collections?.length > 0 && (

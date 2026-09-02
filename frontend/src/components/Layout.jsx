@@ -622,7 +622,7 @@ const Footer = ({ collections, articles, settings }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 grid grid-cols-1 md:grid-cols-4 gap-10">
         <div>
           <img src={siteMedia("logo_light", "/logo-white.svg")} alt="PurePeptide" className="h-8 w-auto" />
-          <p className="text-slate-300 text-sm mt-3 leading-relaxed">{locale === "bg" ? (settings.tagline || t("tagline")) : t("tagline")}</p>
+          <p className="text-slate-300 text-sm mt-3 leading-relaxed">{(settings.tagline_i18n || {})[locale] || (locale === "bg" ? (settings.tagline || t("tagline")) : t("tagline"))}</p>
           <p className="text-sm font-semibold mt-5">{t("newsletter")}</p>
           <p className="text-xs text-slate-400 mt-1">{t("newsletterSub")}</p>
           <div className="mt-3 flex gap-2">
@@ -689,7 +689,7 @@ const Footer = ({ collections, articles, settings }) => {
       </div>
       <div className="border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-xs text-slate-500 space-y-2">
-          <p>{locale === "bg" ? (settings.footer_text || t("footerDisclaimer")) : t("footerDisclaimer")}</p>
+          <p>{(settings.footer_text_i18n || {})[locale] || (locale === "bg" ? (settings.footer_text || t("footerDisclaimer")) : t("footerDisclaimer"))}</p>
           <p>© 2026 PurePeptide · Janoshik Labs tested · &gt;99% purity</p>
         </div>
       </div>
