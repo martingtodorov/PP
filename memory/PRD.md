@@ -548,3 +548,14 @@ now rewrites that dead host to `https://api.nextcartmanager.com` (with a warning
 when unset, so a stale vault file cannot break the checkout. The courier verification in
 deploy_backend.yml gained a rescue that prints the NEXTCART_* lines from backend.env plus the upstream
 HTTP status. Verified with a real playbook run (client → api). 52 deploy-config tests green.
+
+### 2026-06 — courier check downgraded to a warning (owner's decision: ship first)
+`/api/nextcart/countries` still 502s on pp-back even after the host correction (upstream refuses the
+server; to be investigated later). Per the owner's instruction the courier verification in
+`deploy_backend.yml` now prints the full diagnostics (NEXTCART_* env lines + upstream HTTP status) as a
+WARNING and continues, so the site can go live. `-e require_couriers=true` turns it back into a hard
+gate. The catalog check stays fatal.
+**OPEN P1: checkout/couriers are broken in production** — `/api/nextcart/*` returns 502 from pp-back
+while the same code works from the preview pod, so it is environment/upstream specific (candidate
+causes: NextCart rejecting the server's egress IP 2.28.79.24, or a missing shop credential in
+group_vars/all.yml).

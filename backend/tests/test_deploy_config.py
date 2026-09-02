@@ -326,6 +326,8 @@ def test_deploy_verifies_the_public_apis_after_restart():
     text = (PLAYBOOKS / "deploy_backend.yml").read_text()
     assert "/api/nextcart/countries" in text   # couriers / checkout
     assert "/api/products?locale=bg" in text   # catalog
+    # couriers are reported but do not block going live unless explicitly required
+    assert "require_couriers | default(false) | bool" in text
 
 
 def test_requirements_prod_is_tracked_by_git_and_installable():
