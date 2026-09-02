@@ -452,3 +452,46 @@ def test_dead_nextcart_host_is_corrected_automatically():
     assert "client\\\\.nextcartmanager\\\\.com" in defaults or "client\\.nextcartmanager\\.com" in defaults
     assert "https://api.nextcartmanager.com" in defaults
     assert EXAMPLE_VARS["nextcart_base_url"] == "https://api.nextcartmanager.com"
+
+
+def test_handlers_are_flushed_before_verification():
+    """A failing check must not abort the play before nginx/backend picked up the new config.
+
+    This is what took the site down with Cloudflare 521: the site config was enabled, the smoke test
+    failed, the play aborted and the `reload nginx` handler never ran, so nginx kept listening on
+    :80 only.
+    """
+    for name in ("deploy_nginx.yml", "deploy_backend.yml"):
+        text = (PLAYBOOKS / name).read_text()
+        assert "meta: flush_handlers" in text, name
+        verify_at = min(i for i in (text.find("smoke test"), text.find("Health check")) if i > 0)
+        assert text.index("meta: flush_handlers") < verify_at, name
+
+
+def test_nginx_443_socket_is_self_healing():
+    text = (PLAYBOOKS / "deploy_nginx.yml").read_text()
+    assert "nginx must be listening on 443" in text
+    assert "systemctl restart nginx" in text
+
+
+def test_nginx_verification_does_not_depend_on_public_dns():
+    """purepeptide.bg still resolves to the old Shopify store — checks must target this server."""
+    text = (PLAYBOOKS / "deploy_nginx.yml").read_text()
+    assert "--resolve" in text
+    assert "https://{{ site_domains[0] }}/api" not in text
+
+
+def test_canonical_domain_is_a_separate_variable():
+    defaults = (TASKS / "infra_defaults.yml").read_text()
+    assert "canonical_domain" in defaults
+    assert "canonical_domain in site_domains" in defaults
+    assert EXAMPLE_VARS["canonical_domain"] in EXAMPLE_VARS["site_domains"]
+    assert "https://{{ canonical_domain }}" in (PLAYBOOKS / "deploy_frontend.yml").read_text()
+
+
+def test_courier_snapshot_is_shipped_and_enabled():
+    snap = ROOT / "backend" / "data" / "nextcart"
+    assert (snap / "config_BG.json").is_file()
+    assert len(list(snap.glob("offices_*.json"))) >= 9
+    assert "NEXTCART_SNAPSHOT_ONLY" in (TEMPLATES / "backend.env.j2").read_text()
+    assert EXAMPLE_VARS["nextcart_snapshot_only"] is True

@@ -59,27 +59,99 @@
 
     # DNS-independent on purpose: some of site_domains still point at the old Shopify store
     # (purepeptide.bg answers 404 from Cloudflare), so a public request proves nothing about this
-    # server. Ask the local nginx with the Host header instead.
-    - name: Public API smoke test (local nginx -> backend, no DNS involved)
+    # server. Resolve the canonical host to this machine instead and try every address it may be
+    # bound to — nginx here does NOT listen on 127.0.0.1.
+    # Handlers normally run at the very end of the play, i.e. AFTER the checks below. When a check
+    # failed, the play aborted BEFORE the reload, so the freshly enabled site config was never
+    # loaded and nginx kept listening on :80 only -> Cloudflare 521. Flush them here.
+    - name: Apply pending nginx reloads before verifying
+      meta: flush_handlers
+      tags: [verify]
+
+    # Self-healing: the config on disk asks for 443, but the running master may predate it (a
+    # previous run died before its handler). A reload/restart is the only way to open the socket.
+    - name: nginx must be listening on 443
       shell: |
         set -o pipefail
-        code=$(curl -ksS -o /tmp/pp-smoke.json -w '%{http_code}' --max-time 20 \
-               -H 'Host: {{ canonical_domain }}' https://127.0.0.1/api/settings)
-        echo "GET /api/settings (Host: {{ canonical_domain }}) -> $code"
-        head -c 200 /tmp/pp-smoke.json; echo
-        test "$code" = "200"
+        if ss -ltn | grep -qE ':443\s'; then echo "already listening on 443"; exit 0; fi
+        echo "no 443 socket — restarting nginx"
+        systemctl restart nginx
+        for i in 1 2 3 4 5; do
+          sleep 2
+          ss -ltn | grep -qE ':443\s' && { echo "443 is up"; exit 0; }
+        done
+        echo "nginx still does not listen on 443" >&2
+        exit 1
       args: { executable: /bin/bash }
-      register: api_check
-      retries: 5
-      delay: 5
-      until: api_check is succeeded
+      register: nginx_443
+      changed_when: "'restarting nginx' in nginx_443.stdout"
+      tags: [verify, config]
+
+    - name: Where does nginx listen?
+      shell: "ss -ltnp 2>/dev/null | grep -E ':443|:80|nginx' || true"
+      register: nginx_listen
       changed_when: false
+      failed_when: false
+      tags: [verify]
+
+    - name: Listening sockets on pp-front
+      debug:
+        msg: "{{ nginx_listen.stdout_lines | default(['(ss produced no output)']) }}"
+      tags: [verify]
+
+    - name: Public API smoke test (nginx -> backend on this server, no DNS involved)
+      block:
+        - name: Ask nginx for /api/settings on every local address
+          shell: |
+            set -o pipefail
+            ok=0
+            for target in 127.0.0.1 {{ frontend_private_ip }} {{ frontend_public_ip }}; do
+              code=$(curl -ksS -o /tmp/pp-smoke.json -w '%{http_code}' --max-time 15 \
+                     --resolve '{{ canonical_domain }}:443:'"$target" \
+                     'https://{{ canonical_domain }}/api/settings' 2>/dev/null || echo 000)
+              echo "$target:443 -> $code"
+              if [ "$code" = "200" ]; then ok=1; echo "$target" > /tmp/pp-target; break; fi
+            done
+            head -c 200 /tmp/pp-smoke.json 2>/dev/null; echo
+            test "$ok" = "1"
+          args: { executable: /bin/bash }
+          register: api_check
+          retries: 3
+          delay: 5
+          until: api_check is succeeded
+          changed_when: false
+      rescue:
+        - name: nginx status
+          command: systemctl status nginx --no-pager -l
+          register: nginx_status
+          changed_when: false
+          failed_when: false
+
+        - name: The listen directives nginx really uses
+          shell: "nginx -T 2>/dev/null | grep -nE 'server_name|listen ' | head -40 || true"
+          register: nginx_conf
+          changed_when: false
+          failed_when: false
+
+        - name: Report why nginx did not answer
+          fail:
+            msg: |
+              /api/settings did not answer 200 on any local address.
+              --- attempts ---
+              {{ api_check.stdout | default('(no output)') }}
+              {{ api_check.stderr | default('') }}
+              --- listening sockets ---
+              {{ nginx_listen.stdout | default('(none)') }}
+              --- nginx -T (server_name / listen) ---
+              {{ nginx_conf.stdout | default('') }}
+              --- systemctl status nginx ---
+              {{ nginx_status.stdout | default('') }}
       tags: [verify]
 
     - name: Which of the domains actually reach this server? (informational)
       shell: |
         for d in {{ site_domains | join(' ') }}; do
-          code=$(curl -sS -o /tmp/pp-dom.json -w '%{http_code}' --max-time 15 "https://$d/api/settings" || echo 000)
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "https://$d/api/settings" || echo 000)
           srv=$(curl -sSI --max-time 15 "https://$d/api/settings" 2>/dev/null | grep -i '^server:' | tr -d '\r')
           echo "$d -> $code   ${srv:-no server header}"
         done
@@ -99,9 +171,11 @@
 
     - name: Courier endpoint (informational only)
       shell: |
+        target=$(cat /tmp/pp-target 2>/dev/null || echo {{ frontend_public_ip }})
         curl -ksS -o /tmp/pp-couriers.json -w 'countries -> %{http_code}\n' --max-time 20 \
-          -H 'Host: {{ canonical_domain }}' https://127.0.0.1/api/nextcart/countries || true
-        head -c 200 /tmp/pp-couriers.json; echo
+          --resolve '{{ canonical_domain }}:443:'"$target" \
+          'https://{{ canonical_domain }}/api/nextcart/countries' || true
+        head -c 200 /tmp/pp-couriers.json 2>/dev/null; echo
       args: { executable: /bin/bash }
       register: courier_check
       changed_when: false

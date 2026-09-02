@@ -222,6 +222,12 @@
       tags: [media]
 
     # ---------------- verify ----------------
+    # Handlers run at the end of the play, so a failing check would abort the run BEFORE the
+    # backend was restarted with the new code. Flush them first.
+    - name: Apply pending backend restarts before verifying
+      meta: flush_handlers
+      tags: [verify, publish]
+
     # NB: there is no GET /api/ route — use a real endpoint, otherwise the health check 404s forever.
     - name: Health check
       block:
