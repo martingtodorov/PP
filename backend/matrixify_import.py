@@ -285,7 +285,7 @@ def import_collections() -> Dict[str, str]:
             "sort_order": sort_order,
             # published landing collections without products (SEO pages) stay reachable but out of the nav
             "nav_hidden": count == 0,
-            # heading levels exactly as on purepeptide.bg: the body's "Какво е X?" is the page H1
+            # like purepeptide.bg: the body's own <h1> ("Пептиди, изследвани за…") is the page heading
             "description": clean_body(rewrite_body_images(body), top.get("Title") or "", keep_h1=True),
             **seo_pair(top, top.get("Title") or our_handle, body),
             "image": store_image(top.get("Image Src")),
@@ -307,7 +307,8 @@ def import_products() -> None:
     imported = 0
     for handle, group in groups.items():
         top = group[0]
-        body = clean_body(rewrite_body_images(top.get("Body HTML")), top.get("Title") or handle)
+        # like purepeptide.bg: the body's "Какво е X?" is the page H1, the product name an H2
+        body = clean_body(rewrite_body_images(top.get("Body HTML")), top.get("Title") or handle, keep_h1=True)
         images: List[str] = []
         seen = set()
         for r in sorted(group, key=lambda x: num(x.get("Image Position"), 99)):

@@ -396,9 +396,9 @@ async def on_startup():
         log.error("Storage init failed: %s", ex)
     import abandoned as _abandoned
     asyncio.create_task(_abandoned.sweeper_loop())
-    from restore_headings import restore_product_headings
+    from restore_headings import restore_headings
     try:
-        await restore_product_headings(db, storage)
+        await restore_headings(db, storage)
     except Exception as ex:
         log.error("Heading restore failed: %s", ex)
     await resume_translate_jobs()
@@ -2417,7 +2417,16 @@ class BulkTranslateIn(BaseModel):
 
 async def _translate_one(coll, doc, targets: List[str], overwrite: bool) -> List[str]:
     existing = doc.get("translations") or {}
-    todo = [l for l in targets if overwrite or not (existing.get(l) or {}).get("title")]
+
+    def stale(loc: str) -> bool:
+        tr = existing.get(loc) or {}
+        if not tr.get("title"):
+            return True
+        # the Bulgarian text gained its "<h1>" heading after this translation was made
+        src_h1 = bool(re.match(r"\s*<h1[\s>]", doc.get("description") or "", re.I))
+        return src_h1 and not re.match(r"\s*<h1[\s>]", tr.get("description") or "", re.I)
+
+    todo = [l for l in targets if overwrite or stale(l)]
     if not todo:
         return []
     source = {

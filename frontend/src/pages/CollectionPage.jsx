@@ -87,10 +87,11 @@ export default function CollectionPage() {
             ? [{ label: t("catalog") }]
             : [{ label: t("catalog"), to: lp(link("catalog")) }, { label: c.title }]}
         />
-        {/* the H1 stays visually hidden only when the description brings its own heading */}
-        <h1 className={/<h[1-3][\s>]/i.test(c.description || "") ? "pp-seo-h1"
-          : "text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-3"}
-          data-testid="collection-title">{isAll ? t("catalog") : c.title}</h1>
+        {/* like purepeptide.bg: the description carries the page H1 ("Пептиди, изследвани за…") */}
+        {!/<h1[\s>]/i.test(c.description || "") && (
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-3"
+            data-testid="collection-title">{isAll ? t("catalog") : c.title}</h1>
+        )}
         {c.description && (
           <div className="pp-rte pp-rte--tight text-slate-600 mt-2 max-w-3xl leading-relaxed"
             dangerouslySetInnerHTML={{ __html: c.description }} data-testid="collection-description" />
