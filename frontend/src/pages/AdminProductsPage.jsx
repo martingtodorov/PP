@@ -27,7 +27,7 @@ export default function AdminProductsPage() {
   }, [job?.status]);
 
   const startBulk = async () => {
-    if (!window.confirm("Да преведа ли АБСОЛЮТНО ВСИЧКО (продукти, категории, научни статии и страници, вкл. SEO мета) на всички езици с Claude? Това отнема няколко минути.")) return;
+    if (!window.confirm("Да преведа ли АБСОЛЮТНО ВСИЧКО (продукти, категории, научни статии, страници, текстовете на количката и чекаута, вкл. SEO мета) на всички езици с Claude? Това отнема няколко минути.")) return;
     try {
       const { data } = await api.post("/admin/translate/bulk", { resource: "everything", overwrite: false });
       toast.success(data.message || "Преводът стартира във фонов режим");

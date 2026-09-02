@@ -15,12 +15,12 @@ import { api, fmtPrice, fmtAmount, cartAmounts, fmtBGN, showsBGN, formatErr, img
 import { useLocaleCtx } from "../i18n/LocaleContext";
 
 export default function CheckoutPage() {
-  useSeo({ title: "Плащане | PurePeptide", description: "Завършване на поръчка.", path: "/checkout", robots: "noindex,nofollow" });
+  const { lp, t } = useLocaleCtx();
+  useSeo({ title: `${t("seoCheckoutTitle")} | PurePeptide`, description: t("seoCheckoutDesc"), path: "/checkout", robots: "noindex,nofollow" });
 
   const { items, subtotal, clear, note, setNote, discount, discountAmount } = useCart();
   const { user } = useAuth();
   const nav = useNavigate();
-  const { lp } = useLocaleCtx();
   const [shippingMethod, setShippingMethod] = useState("speedy");
   const [terms, setTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -102,40 +102,40 @@ export default function CheckoutPage() {
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <h1 className="font-display text-4xl font-extrabold text-slate-900 mb-8">Поръчка</h1>
+        <h1 className="font-display text-4xl font-extrabold text-slate-900 mb-8">{t("orderTitle")}</h1>
         <form onSubmit={submit} className="grid lg:grid-cols-3 gap-10">
           <div className="lg:col-span-2 space-y-8">
             <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="font-display font-bold text-lg text-slate-900 mb-5">Контакт</h2>
+              <h2 className="font-display font-bold text-lg text-slate-900 mb-5">{t("contactSection")}</h2>
               <div className="grid sm:grid-cols-2 gap-4">
-                <div><Label>Имена</Label><Input required value={form.full_name} onChange={(e) => setForm({...form, full_name: e.target.value})} data-testid="checkout-name" /></div>
-                <div><Label>Имейл</Label><Input type="email" required value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} data-testid="checkout-email" /></div>
-                <div className="sm:col-span-2"><Label>Телефон</Label><Input required value={form.phone} onChange={(e) => setForm({...form, phone: e.target.value})} data-testid="checkout-phone" /></div>
+                <div><Label>{t("namesLabel")}</Label><Input required value={form.full_name} onChange={(e) => setForm({...form, full_name: e.target.value})} data-testid="checkout-name" /></div>
+                <div><Label>{t("emailLabel")}</Label><Input type="email" required value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} data-testid="checkout-email" /></div>
+                <div className="sm:col-span-2"><Label>{t("phoneLabel")}</Label><Input required value={form.phone} onChange={(e) => setForm({...form, phone: e.target.value})} data-testid="checkout-phone" /></div>
               </div>
               {!user && (
                 <p className="text-xs text-slate-500 mt-4">
-                  Имате профил? <Link to={lp("/account")} className="text-coral-600 font-medium">Влезте</Link>, за да следите поръчките си.
+                  {t("haveAccount")} <Link to={lp("/account")} className="text-coral-600 font-medium">{t("loginLink")}</Link>{t("trackOrdersTail")}
                 </p>
               )}
             </section>
 
             <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="font-display font-bold text-lg text-slate-900 mb-5">Адрес за доставка</h2>
+              <h2 className="font-display font-bold text-lg text-slate-900 mb-5">{t("shippingAddressSection")}</h2>
               <div className="grid sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2"><Label>Адрес</Label><Input required value={form.line1} onChange={(e) => setForm({...form, line1: e.target.value})} data-testid="checkout-address" /></div>
-                <div><Label>Град</Label><Input required value={form.city} onChange={(e) => setForm({...form, city: e.target.value})} data-testid="checkout-city" /></div>
-                <div><Label>Пощенски код</Label><Input required value={form.postal_code} onChange={(e) => setForm({...form, postal_code: e.target.value})} data-testid="checkout-postal" /></div>
-                <div className="sm:col-span-2"><Label>Специални инструкции (по желание)</Label><Textarea value={note} onChange={(e) => setNote(e.target.value)} data-testid="checkout-note" /></div>
+                <div className="sm:col-span-2"><Label>{t("addressLabel")}</Label><Input required value={form.line1} onChange={(e) => setForm({...form, line1: e.target.value})} data-testid="checkout-address" /></div>
+                <div><Label>{t("cityLabel")}</Label><Input required value={form.city} onChange={(e) => setForm({...form, city: e.target.value})} data-testid="checkout-city" /></div>
+                <div><Label>{t("postalLabel")}</Label><Input required value={form.postal_code} onChange={(e) => setForm({...form, postal_code: e.target.value})} data-testid="checkout-postal" /></div>
+                <div className="sm:col-span-2"><Label>{t("notesOptional")}</Label><Textarea value={note} onChange={(e) => setNote(e.target.value)} data-testid="checkout-note" /></div>
               </div>
             </section>
 
             {pre ? (
               <section className="bg-white border border-slate-200 rounded-xl p-6" data-testid="checkout-chosen-delivery">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-display font-bold text-lg text-slate-900">Метод за доставка</h2>
+                  <h2 className="font-display font-bold text-lg text-slate-900">{t("deliveryMethodSection")}</h2>
                   <button type="button" className="text-sm font-semibold text-coral-700 hover:underline"
                     onClick={() => { sessionStorage.removeItem("pp_precheckout"); nav(lp("/cart")); }}
-                    data-testid="checkout-change-delivery">Промени</button>
+                    data-testid="checkout-change-delivery">{t("changeBtn")}</button>
                 </div>
                 <div className="flex items-center gap-4 border-2 border-coral-600 bg-coral-50/40 rounded-lg p-4">
                   <div className="flex-1">
@@ -151,12 +151,12 @@ export default function CheckoutPage() {
               </section>
             ) : (
             <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="font-display font-bold text-lg text-slate-900 mb-5">Метод за доставка</h2>
+              <h2 className="font-display font-bold text-lg text-slate-900 mb-5">{t("deliveryMethodSection")}</h2>
               <RadioGroup value={shippingMethod} onValueChange={setShippingMethod} className="space-y-3" data-testid="shipping-method">
                 {[
-                  { v: "speedy", t: "Спиди – до офис", d: "Доставка до избран офис на Спиди", p: "5.99" },
-                  { v: "econt_address", t: "Спиди – до адрес", d: "Куриер до посочения адрес", p: "5.99" },
-                  { v: "econt_office", t: "Еконт – до офис", d: "Доставка до избран офис на Еконт", p: "5.99" },
+                  { v: "speedy", t: t("methodToOffice", { courier: "Speedy" }), d: t("destOffice"), p: "5.99" },
+                  { v: "econt_address", t: t("methodToAddress", { courier: "Speedy" }), d: t("destAddress"), p: "5.99" },
+                  { v: "econt_office", t: t("methodToOffice", { courier: "Econt" }), d: t("destOffice"), p: "5.99" },
                 ].map((s) => (
                   <label key={s.v} className={`flex items-center gap-4 border rounded-lg p-4 cursor-pointer ${shippingMethod === s.v ? "border-coral-600 bg-coral-50/40" : "border-slate-200"}`}>
                     <RadioGroupItem value={s.v} id={s.v} />
@@ -164,7 +164,7 @@ export default function CheckoutPage() {
                       <p className="font-medium text-slate-900">{s.t}</p>
                       <p className="text-xs text-slate-500">{s.d}</p>
                     </div>
-                    <span className="font-display font-bold text-slate-900">{subtotal >= 100 ? "Безплатно" : fmtPrice(s.p)}</span>
+                    <span className="font-display font-bold text-slate-900">{subtotal >= 100 ? t("freeLabel") : fmtPrice(s.p)}</span>
                   </label>
                 ))}
               </RadioGroup>
@@ -172,17 +172,17 @@ export default function CheckoutPage() {
             )}
 
             <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="font-display font-bold text-lg text-slate-900 mb-3">Метод за плащане</h2>
+              <h2 className="font-display font-bold text-lg text-slate-900 mb-3">{t("paymentMethodSection")}</h2>
               <div className="border-2 border-coral-600 bg-coral-50/40 rounded-lg p-4">
-                <p className="font-medium text-slate-900">Банков превод</p>
-                <p className="text-sm text-slate-600 mt-1">След потвърждение ще получите банкови данни и референция на поръчката. Поръчката се обработва след получаване на превода.</p>
+                <p className="font-medium text-slate-900">{t("bankTransferLabel")}</p>
+                <p className="text-sm text-slate-600 mt-1">{t("bankNoteCheckout")}</p>
               </div>
             </section>
           </div>
 
           <div>
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 sticky top-24 space-y-4">
-              <h2 className="font-display font-bold text-lg text-slate-900">Вашата поръчка</h2>
+              <h2 className="font-display font-bold text-lg text-slate-900">{t("yourOrder")}</h2>
               <div className="space-y-3 max-h-72 overflow-y-auto">
                 {items.map((it, i) => (
                   <div key={it.variant_sku} className="flex gap-3 text-sm">
@@ -196,15 +196,15 @@ export default function CheckoutPage() {
                 ))}
               </div>
               <div className="border-t border-slate-200 pt-4 space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-slate-600">Междинна сума</span><span className="font-semibold">{fmtAmount(amt.subtotal)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-600">{t("subtotal")}</span><span className="font-semibold">{fmtAmount(amt.subtotal)}</span></div>
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-coral-700" data-testid="checkout-discount-row">
-                    <span>Отстъпка ({discount?.code})</span><span className="font-semibold">− {fmtAmount(amt.discountAmount)}</span>
+                    <span>{t("discountLabel")} ({discount?.code})</span><span className="font-semibold">− {fmtAmount(amt.discountAmount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between"><span className="text-slate-600">Доставка</span><span className="font-semibold">{amt.shipping === 0 ? "Безплатна" : fmtAmount(amt.shipping)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-600">{t("shippingLabel")}</span><span className="font-semibold">{amt.shipping === 0 ? t("shippingFree") : fmtAmount(amt.shipping)}</span></div>
                 <div className="border-t border-slate-200 pt-2 flex justify-between">
-                  <span className="font-display font-bold">Общо</span>
+                  <span className="font-display font-bold">{t("totalLabel")}</span>
                   <div className="text-right">
                     <span className="font-display font-extrabold text-lg block" data-testid="checkout-total">{fmtAmount(amt.total)}</span>
                     {showsBGN() && <span className="text-xs text-slate-500">{fmtBGN(total)}</span>}
@@ -213,10 +213,10 @@ export default function CheckoutPage() {
               </div>
               <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
                 <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} className="mt-0.5 accent-coral-600" data-testid="checkout-terms-checkbox" />
-                <span>Съгласявам се с <Link to={lp(link("terms"))} className="underline hover:text-coral-600">общите условия</Link> и потвърждавам, че поръчвам за научноизследователски цели.</span>
+                <span>{t("agreeTermsPre")} <Link to={lp(link("terms"))} className="underline hover:text-coral-600">{t("termsLower")}</Link> {t("agreeTermsTail")}</span>
               </label>
               <Button type="submit" disabled={submitting || !terms} className="w-full bg-coral-600 hover:bg-coral-700" data-testid="place-order-btn">
-                {submitting ? "Обработка…" : "Завърши поръчката"}
+                {submitting ? t("processingText") : t("submitOrder")}
               </Button>
             </div>
           </div>

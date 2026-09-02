@@ -7,22 +7,38 @@ import { loadSaved, saveCheckout, pfBank, pfCountries, pfGeo, pfDeviceGeo, pfCon
 import { siteMedia } from "../lib/media";
 import { useCart } from "../context/CartContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
+import { LOCALE_META } from "../i18n/locales";
 
 const BG_PROVIDER = {
   econt: "Еконт", boxnow: "BoxNow", pigeon: "Pigeon Express", speedy: "Спиди",
   gls: "GLS", fancourier: "FAN Courier", speedex: "Speedex", acs: "ACS",
   postasi: "Pošta Slovenije", brt: "BRT",
 };
-const DEST_WORD = { office: "до офис", locker: "до кутия", address: "до адрес" };
+/* the two Bulgarian couriers are written in Latin outside the Bulgarian storefront */
+const LATIN_PROVIDER = { econt: "Econt", speedy: "Speedy" };
+const providerName = (m, locale) => (locale === "bg" ? null : LATIN_PROVIDER[m.provider_key])
+  || BG_PROVIDER[m.provider_key] || m.provider_name;
+
+/** Country name in the visitor's own language — the courier API only knows Bulgarian names.
+    Our locale keys are shop codes (cz/si/gr), so Intl needs the real BCP-47 tag. */
+const countryName = (iso2, locale, fallback) => {
+  try {
+    const tag = LOCALE_META[locale]?.hreflang || locale;
+    return new Intl.DisplayNames([tag], { type: "region" }).of(iso2) || fallback || iso2;
+  } catch (e) {
+    return fallback || iso2;
+  }
+};
+const DEST_KEY = { office: "destOffice", locker: "destLocker", address: "destAddress" };
 const track = (event_name, event_data = {}) => {
   api.post("/nextcart/event", { event_name, event_data }).catch(() => {});
 };
 
-const methodLabel = (m) => {
-  const p = BG_PROVIDER[m.provider_key] || m.provider_name;
-  if (m.destination_type === "locker") return `До автомат на ${p}`;
-  if (m.destination_type === "address") return `До адрес с ${p}`;
-  return `До офис на ${p}`;
+const methodLabel = (m, t, locale) => {
+  const courier = providerName(m, locale);
+  if (m.destination_type === "locker") return t("methodToLocker", { courier });
+  if (m.destination_type === "address") return t("methodToAddress", { courier });
+  return t("methodToOffice", { courier });
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
@@ -67,6 +83,10 @@ const dedupeCity = (city, text) => {
 
 /** Searchable dropdown over the full pickup list (Econt offices / BoxNow lockers / GLS points). */
 const PickupSelect = ({ options, value, onChange, placeholder, loading, geoCity }) => {
+  const { t: tr } = useLocaleCtx();
+  const loadingLabel = tr("loadingText");
+  const noResultsText = tr("noResults");
+  const moreText = tr("showMoreRefine");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const box = useRef(null);
@@ -109,7 +129,7 @@ const PickupSelect = ({ options, value, onChange, placeholder, loading, geoCity 
       <div className="nc2-combo" onClick={() => setOpen(true)}>
         <Search className="h-4 w-4 text-slate-400 shrink-0" />
         <input className="nc2-combo-inp" value={open ? q : value ? dedupeCity(value.city, value.name) : q}
-          placeholder={loading ? "Зареждане…" : placeholder}
+          placeholder={loading ? loadingLabel : placeholder}
           onFocus={() => setOpen(true)}
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           data-testid="pc-pickup-search" />
@@ -117,7 +137,7 @@ const PickupSelect = ({ options, value, onChange, placeholder, loading, geoCity 
       </div>
       {open && (
         <div className="nc2-dropdown" data-testid="pc-pickup-results">
-          {hits.length === 0 && <p className="nc2-muted px-3 py-2">Няма резултати</p>}
+          {hits.length === 0 && <p className="nc2-muted px-3 py-2">{noResultsText}</p>}
           {hits.map((o) => (
             <button type="button" key={o.id} className="nc2-opt"
               onClick={() => { onChange(o); setOpen(false); setQ(""); track("checkout_pickup_selected", { id: o.id }); }}>
@@ -125,7 +145,7 @@ const PickupSelect = ({ options, value, onChange, placeholder, loading, geoCity 
               <span className="nc2-opt-2">{o.postal_code} · {o.address}</span>
             </button>
           ))}
-          {options.length > hits.length && <p className="nc2-muted px-3 py-2">Покажи още — уточни търсенето</p>}
+          {options.length > hits.length && <p className="nc2-muted px-3 py-2">{moreText}</p>}
         </div>
       )}
     </div>
@@ -238,7 +258,7 @@ const AddressSuggest = ({ mode, value, onPick, onChangeText, placeholder, placeI
 
 export default function PreCheckoutModal({ open, onClose, termsAccepted = false }) {
   const nav = useNavigate();
-  const { lp, locale } = useLocaleCtx();
+  const { lp, locale, t } = useLocaleCtx();
   const { items, updateQty, remove, subtotal, discount, discountAmount, applyDiscount, clear } = useCart();
   const [cfg, setCfg] = useState(null);
   const [err, setErr] = useState("");
@@ -323,11 +343,11 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   const providerSub = (key) => {
     const seen = [];
     (cfg?.delivery_methods || []).forEach((m) => {
-      if (m.provider_key === key && DEST_WORD[m.destination_type] && !seen.includes(m.destination_type)) {
+      if (m.provider_key === key && DEST_KEY[m.destination_type] && !seen.includes(m.destination_type)) {
         seen.push(m.destination_type);
       }
     });
-    return seen.map((d) => DEST_WORD[d]).join(" / ");
+    return seen.map((d) => t(DEST_KEY[d])).join(" / ");
   };
 
   // cash on delivery is the default everywhere we ship (unless the visitor changed it before)
@@ -437,7 +457,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   }, [open, items, contact.email, contact.name, contact.phone, contact.dial, locale]);
 
   const applyCode = async () => {
-    try { await applyDiscount(code); toast.success("Кодът е приложен"); }
+    try { await applyDiscount(code); toast.success(t("codeApplied", { code })); }
     catch (e) { toast.error(formatErr(e)); }
   };
 
@@ -464,10 +484,10 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
         payment_method: payment,
         delivery: {
           provider_key: method.provider_key,
-          provider_name: BG_PROVIDER[method.provider_key] || method.provider_name,
+          provider_name: providerName(method, locale),
           method_key: method.key,
           destination_type: method.destination_type,
-          label: methodLabel(method),
+          label: methodLabel(method, t, locale),
           price_amount: shipping,
           currency: method.currency || "EUR",
           office: pickup ? { id: pickup.id, name: pickup.name, address: pickup.address, city: pickup.city, postal_code: pickup.postal_code } : null,
@@ -495,51 +515,51 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
       <div className="nc2-dialog">
         <div className="nc2-hd">
           <img src={siteMedia("logo", "/logo-header.png")} alt="PurePeptide" className="nc2-logo" />
-          <span className="nc2-hd-title">Бърза поръчка</span>
-          <button type="button" className="nc2-x" aria-label="Затвори" onClick={onClose} data-testid="precheckout-close">
+          <span className="nc2-hd-title">{t("quickOrder")}</span>
+          <button type="button" className="nc2-x" aria-label={t("close")} onClick={onClose} data-testid="precheckout-close">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="nc2-body">
           {err && <p className="nc2-err" data-testid="precheckout-error">{err}</p>}
-          {!cfg && !err && <p className="nc2-muted"><Loader2 className="h-4 w-4 animate-spin inline mr-2" />Зареждане…</p>}
+          {!cfg && !err && <p className="nc2-muted"><Loader2 className="h-4 w-4 animate-spin inline mr-2" />{t("loadingText")}</p>}
 
           {cfg && (
             <div className="nc2-grid">
               <div className="nc2-left">
-                <h2 className="nc2-sec-title">Вашите данни</h2>
-                <input className="nc2-inp" placeholder="Име и фамилия" autoComplete="name" value={contact.name}
+                <h2 className="nc2-sec-title">{t("yourDetails")}</h2>
+                <input className="nc2-inp" placeholder={t("fullNamePh")} autoComplete="name" value={contact.name}
                   onChange={(e) => setContact({ ...contact, name: e.target.value })}
                   onBlur={(e) => setContact((c) => ({ ...c, name: e.target.value }))}
                   data-testid="pc-name" />
-                <input className="nc2-inp" type="email" placeholder="Имейл" autoComplete="email" value={contact.email}
+                <input className="nc2-inp" type="email" placeholder={t("emailPh")} autoComplete="email" value={contact.email}
                   onChange={(e) => setContact({ ...contact, email: e.target.value })}
                   onBlur={(e) => setContact((c) => ({ ...c, email: e.target.value }))}
                   data-testid="pc-email" />
                 <div className="nc2-row2">
-                  <select className="nc2-inp" value={contact.country} aria-label="Държава"
+                  <select className="nc2-inp" value={contact.country} aria-label={t("countryLabel")}
                     onChange={(e) => setContact({ ...contact, country: e.target.value })} data-testid="pc-country">
                     {(countries.length ? countries : [{ iso2: contact.country, name: contact.country }]).map((tt) => (
-                      <option key={tt.iso2} value={tt.iso2}>{tt.name || tt.iso2}</option>
+                      <option key={tt.iso2} value={tt.iso2}>{countryName(tt.iso2, locale, tt.name)}</option>
                     ))}
                   </select>
                   <div className="nc2-phone">
-                    <select className="nc2-dial-select" value={contact.dial} aria-label="Код на страната"
+                    <select className="nc2-dial-select" value={contact.dial} aria-label={t("dialLabel")}
                       onChange={(e) => { dialTouched.current = true; setContact({ ...contact, dial: e.target.value }); }}
                       data-testid="pc-dial">
                       {dialOptions.map((d) => (
                         <option key={`${d.iso2}-${d.dial}`} value={d.dial}>+{d.dial} {d.iso2}</option>
                       ))}
                     </select>
-                    <input className="nc2-inp" placeholder="Телефон" autoComplete="tel" value={contact.phone}
+                    <input className="nc2-inp" placeholder={t("phonePh")} autoComplete="tel" value={contact.phone}
                       onChange={(e) => setContact({ ...contact, phone: e.target.value })}
                       onBlur={(e) => setContact((c) => ({ ...c, phone: e.target.value }))}
                       data-testid="pc-phone" />
                   </div>
                 </div>
 
-                <h2 className="nc2-sec-title mt-6">Доставка</h2>
+                <h2 className="nc2-sec-title mt-6">{t("deliverySection")}</h2>
                 <div className="nc2-couriers" data-testid="pc-couriers">
                   {(cfg.delivery_providers || []).map((p) => (
                     <button key={p.key} type="button"
@@ -552,14 +572,14 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                         track("checkout_courier_selected", { provider: p.key });
                       }}
                       data-testid={`pc-courier-${p.key}`}>
-                      <img src={p.logo_url} alt={BG_PROVIDER[p.key] || p.name} />
+                      <img src={p.logo_url} alt={p.name || p.key} />
                       <span className="nc2-courier-sub">{providerSub(p.key)}</span>
                     </button>
                   ))}
                 </div>
                 {!(cfg.delivery_providers || []).length && (
                   <p className="nc2-err" data-testid="pc-no-delivery">
-                    {cfg.delivery_unavailable_message || "За тази държава все още не предлагаме доставка."}
+                    {cfg.delivery_unavailable_message || t("noDelivery")}
                   </p>
                 )}
 
@@ -569,7 +589,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                       data-testid={`pc-method-${m.key}`}>
                       <input type="radio" name="pc-method" checked={method?.key === m.key}
                         onChange={() => { setMethodKey(m.key); setPickup(null); }} />
-                      <span className="nc2-method-label">{methodLabel(m)}</span>
+                      <span className="nc2-method-label">{methodLabel(m, t, locale)}</span>
                       <span className="nc2-method-price">{fmtPrice(m.price_amount)}</span>
                     </label>
                   ))}
@@ -579,26 +599,26 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                   <button type="button" className="nc2-locate" onClick={() => locate({ prompt: true })}
                     disabled={locating} data-testid="pc-locate-btn">
                     {locating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                    {locating ? "Търся те..." : "Намери най-близките до мен"}
+                    {locating ? t("locatingText") : t("locateBtn")}
                   </button>
                 )}
 
                 {needsPickup && (
                   <PickupSelect options={pickups} value={pickup} onChange={setPickup} loading={loadingPickups}
                     geoCity={geo?.city}
-                    placeholder={`${method.destination_type === "locker" ? "Избери автомат" : "Избери офис"}`
+                    placeholder={`${method.destination_type === "locker" ? t("chooseLocker") : t("chooseOffice")}`
                       + ` (${pickups.length})`
-                      + (geo?.city ? ` — най-близки до ${geo.city}` : "")} />
+                      + (geo?.city ? ` — ${t("nearestTo", { city: geo.city })}` : "")} />
                 )}
 
                 {needsAddress && (
                   <div className="space-y-0">
-                    <AddressSuggest mode="city" testId="pc-city" placeholder="Град"
+                    <AddressSuggest mode="city" testId="pc-city" placeholder={t("cityPh")}
                       value={addr.city} country={contact.country} providerKey={provider} geoCity={geo?.city}
                       onChangeText={(t) => setAddr((a) => ({ ...a, city: t, place_id: null }))}
                       onPick={(s) => setAddr({ ...addr, city: s.city, postal_code: s.postal_code, place_id: s.place_id, street: "" })} />
                     <AddressSuggest mode="street" testId="pc-street" placeId={addr.place_id}
-                      placeholder="Улица / квартал"
+                      placeholder={t("streetPh")}
                       value={addr.street} country={contact.country} providerKey={provider} geoCity={geo?.city}
                       onChangeText={(t) => setAddr((a) => ({ ...a, street: t }))}
                       onPick={(s) => setAddr({
@@ -609,17 +629,19 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                         postal_code: s.postal_code || addr.postal_code,
                       })} />
                     <div className="nc2-row2">
-                      <input className="nc2-inp" placeholder="№ / бл. / вх. / ап." value={addr.number}
+                      <input className="nc2-inp" placeholder={t("numberPh")} value={addr.number}
                         onChange={(e) => setAddr({ ...addr, number: e.target.value })} data-testid="pc-number" />
-                      <input className="nc2-inp" placeholder="Пощенски код" value={addr.postal_code}
+                      <input className="nc2-inp" placeholder={t("postalPh")} value={addr.postal_code}
                         onChange={(e) => setAddr({ ...addr, postal_code: e.target.value })} data-testid="pc-postal" />
                     </div>
                   </div>
                 )}
 
-                <h2 className="nc2-sec-title mt-6">Плащане</h2>
+                <h2 className="nc2-sec-title mt-6">{t("paymentSection")}</h2>
                 <div className="nc2-methods">
-                  {(cfg.payment_methods || [{ key: "cod", label: "Наложен платеж при получаване" }, { key: "bank_transfer", label: "Банков превод" }]).map((pm) => (
+                  {[{ key: "cod", label: t("codLabel") }, { key: "bank_transfer", label: t("bankTransferLabel") }]
+                    .filter((pm) => !(cfg.payment_methods || []).length
+                      || (cfg.payment_methods || []).some((x) => x.key === pm.key)).map((pm) => (
                     <label key={pm.key} className={`nc2-method${payment === pm.key ? " nc2-method--on" : ""}`} data-testid={`pc-payment-${pm.key}`}>
                       <input type="radio" name="pc-payment" checked={payment === pm.key} onChange={() => setPayment(pm.key)} />
                       <span className="nc2-method-label">{pm.label}</span>
@@ -628,11 +650,11 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                 </div>
                 {payment === "bank_transfer" && bank && (
                   <div className="nc2-bank" data-testid="pc-bank-details">
-                    <p className="nc2-bank-row"><span>Банка</span><strong>{bank.name}</strong></p>
-                    <p className="nc2-bank-row"><span>Получател</span><strong>{bank.holder}</strong></p>
+                    <p className="nc2-bank-row"><span>{t("bankLabel")}</span><strong>{bank.name}</strong></p>
+                    <p className="nc2-bank-row"><span>{t("holderLabel")}</span><strong>{bank.holder}</strong></p>
                     <p className="nc2-bank-row"><span>IBAN</span><strong>{bank.iban}</strong></p>
                     <p className="nc2-bank-row"><span>BIC</span><strong>{bank.bic}</strong></p>
-                    <p className="nc2-muted">Като основание за плащане въведете номера на поръчката, който ще видите веднага след завършване.</p>
+                    <p className="nc2-muted">{t("bankRefNote")}</p>
                   </div>
                 )}
                 <div className="hidden">
@@ -640,7 +662,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
               </div>
 
               <div className="nc2-right">
-                <h2 className="nc2-sec-title">Вашата поръчка</h2>
+                <h2 className="nc2-sec-title">{t("yourOrder")}</h2>
                 <div className="nc2-items">
                   {items.map((it) => (
                     <div key={it.variant_sku} className="nc2-line" data-testid={`pc-line-${it.variant_sku}`}>
@@ -652,7 +674,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                           <button type="button" onClick={() => updateQty(it.variant_sku, Math.max(1, it.quantity - 1))} aria-label="−"><Minus className="h-4 w-4" /></button>
                           <span data-testid={`pc-qty-${it.variant_sku}`}>{it.quantity}</span>
                           <button type="button" onClick={() => updateQty(it.variant_sku, it.quantity + 1)} aria-label="+"><Plus className="h-4 w-4" /></button>
-                          <button type="button" className="nc2-line-rm" onClick={() => remove(it.variant_sku)} aria-label="Премахни"><Trash2 className="h-4 w-4" /></button>
+                          <button type="button" className="nc2-line-rm" onClick={() => remove(it.variant_sku)} aria-label={t("remove")}><Trash2 className="h-4 w-4" /></button>
                         </div>
                       </div>
                       <span className="nc2-line-price">{fmtAmount(amountOf(it.price_eur) * it.quantity)}</span>
@@ -661,26 +683,26 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                 </div>
 
                 <div className="nc2-disco">
-                  <input className="nc2-inp" placeholder="Код за отстъпка" value={code}
+                  <input className="nc2-inp" placeholder={t("discountCodePh")} value={code}
                     onChange={(e) => setCode(e.target.value)} data-testid="pc-discount-code" />
-                  <button type="button" className="nc2-apply" onClick={applyCode} data-testid="pc-discount-apply">Приложи</button>
+                  <button type="button" className="nc2-apply" onClick={applyCode} data-testid="pc-discount-apply">{t("applyBtn")}</button>
                 </div>
 
                 <div className="nc2-sum">
-                  <div className="nc2-sum-row"><span>Междинна сума</span><span>{fmtAmount(amt.subtotal)}</span></div>
+                  <div className="nc2-sum-row"><span>{t("subtotal")}</span><span>{fmtAmount(amt.subtotal)}</span></div>
                   {discountAmount > 0 && (
-                    <div className="nc2-sum-row"><span>Отстъпка {discount?.code}</span><span className="text-emerald-700">− {fmtAmount(amt.discountAmount)}</span></div>
+                    <div className="nc2-sum-row"><span>{t("discountLabel")} {discount?.code}</span><span className="text-emerald-700">− {fmtAmount(amt.discountAmount)}</span></div>
                   )}
                   <div className="nc2-sum-row">
-                    <span>Доставка{method ? ` · ${BG_PROVIDER[method.provider_key] || method.provider_name}` : ""}</span>
+                    <span>{t("shippingLabel")}{method ? ` · ${providerName(method, locale)}` : ""}</span>
                     <span>{method ? fmtAmount(amt.shipping) : "—"}</span>
                   </div>
-                  <div className="nc2-sum-row nc2-sum-total"><strong>Общо</strong><strong data-testid="pc-total">{fmtAmount(amt.total)}</strong></div>
+                  <div className="nc2-sum-row nc2-sum-total"><strong>{t("totalLabel")}</strong><strong data-testid="pc-total">{fmtAmount(amt.total)}</strong></div>
                   {showsBGN() && <p className="nc2-muted text-right">{fmtBGN(total)}</p>}
                 </div>
 
                 <button type="button" className="nc2-cta" disabled={!ready || busy} onClick={placeOrder} data-testid="pc-continue">
-                  {busy ? "Изпращане…" : `Завърши поръчката · ${fmtAmount(amt.total)}`}
+                  {busy ? t("submittingText") : `${t("submitOrder")} · ${fmtAmount(amt.total)}`}
                 </button>
               </div>
             </div>

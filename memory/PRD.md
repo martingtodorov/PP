@@ -839,3 +839,34 @@ purepeptide.ro.
   от `site_tls_certs`.
 - Проверено с истински nginx: `nginx -t` минава и с една, и с три различни двойки; 68 deploy теста
   зелени.
+
+### 2026-06 — количката и чекаутът говорят езика на клиента
+Собственик: „Преведи текстовете в количката и чекаута за RO/PL/CZ/HU“ + „екран в админа за редакция“
++ „AI превод“ + „кой бутон превежда абсолютно всичко“.
+- `frontend/src/i18n/checkoutStrings.js` (нов): 93 текста × 11 езика (bg, en, ro, pl, cz, hu, de, fr,
+  sk, si, gr) — ръчно написани, не машинни. `locales.js` ги слива в речника и `translate()` вече
+  поддържа заместители: `{amount}`, `{code}`, `{city}`, `{courier}`.
+- Пренаписани без нито един твърдо зашит български текст: `CartPage`, `CheckoutPage`,
+  `CheckoutSuccessPage`, кошницата в `Layout`, `PreCheckoutModal`. Куриерите излизат на латиница
+  извън BG магазина (`Econt`, `Speedy`), а имената на държавите се вземат от `Intl.DisplayNames` с
+  истинския BCP-47 таг от `LOCALE_META.hreflang` (иначе cz/si/gr падаха на английски).
+- Админ екран **„Текстове на чекаута“** (`/admin/ui-strings`): избор на език, таблица с ключ +
+  български източник + поле за редакция, запис, връщане на оригинала и бутон „AI превод от
+  български“ (Claude, пази заместителите). Записаното се пази в `settings.ui.strings` и се налага
+  върху вградените текстове през `GET /api/ui-strings` — без ново качване на сайта.
+- **Един бутон за всичко:** Админ → Продукти → „Преведи всичко с AI (всички езици)“
+  (`POST /api/admin/translate/bulk {resource:"everything"}`) вече включва и текстовете на чекаута —
+  `_run_bulk_translate` извиква `ui_strings.translate_locale()` за всеки език и го отчита в прогреса.
+- Тестове: `tests/test_ui_strings.py` (парност на ключовете, заместители, нула кирилица в чуждите
+  езици) + `tests/test_iteration29_ui_strings.py`; iteration_29 отчет — 100%.
+- Остава на собственика: да натисне „Преведи всичко“, за да се преведат и заглавията/описанията на
+  продуктите (интерфейсът вече е преведен, продуктовите данни идват от базата).
+
+### Origin сертификати — къде да ги сложиш
+1. Cloudflare → зоната (purepeptide.eu / .ro / .gr) → SSL/TLS → Origin Server → Create Certificate.
+2. Качи файловете на **pp-front** (frontend сървъра), примерни пътища:
+   `/etc/ssl/cloudflare/purepeptide.eu.pem` + `.key`, същото за `.ro` и `.gr` (права 600, root).
+3. Попълни ги в `deploy/hetzner/ansible/group_vars/all.yml` под `site_tls_certs:` (примерът е
+   закоментиран в `all.yml.example`) и пусни `deploy_nginx.yml`. Домейн без запис ползва общата двойка
+   `ssl_cert_path`/`ssl_key_path`. .eu е една зона → един сертификат покрива всички /en /de /fr /cz
+   /hu /pl /sk /si префикси.

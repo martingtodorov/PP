@@ -2282,12 +2282,15 @@ async def _run_bulk_translate(job_id: str, resource: str, targets: List[str], ov
     if resource in ("everything", "article"):
         steps.append(("article", db.articles))
     include_pages = resource in ("everything", "page")
+    include_ui = resource in ("everything", "ui")
 
     total = 0
     for _, coll in steps:
         total += await coll.count_documents({})
     if include_pages:
         total += len(PAGE_SLUGS)
+    if include_ui:
+        total += len(targets)
     await db.translate_jobs.update_one(
         {"id": job_id},
         {"$set": {"status": "running", "total": total, "done": 0, "failed": [], "updated_at": now_utc()}},
@@ -2323,6 +2326,20 @@ async def _run_bulk_translate(job_id: str, resource: str, targets: List[str], ov
             await db.translate_jobs.update_one(
                 {"id": job_id},
                 {"$set": {"done": done, "failed": failed, "current": f"page: {slug}", "updated_at": now_utc()}},
+            )
+    if include_ui:
+        import ui_strings as ui_strings_mod
+        for loc in targets:
+            try:
+                await ui_strings_mod.translate_locale(loc)
+            except Exception as ex:
+                log.error("Bulk translate failed for checkout copy %s: %s", loc, ex)
+                failed.append(f"checkout:{loc}")
+            done += 1
+            await db.translate_jobs.update_one(
+                {"id": job_id},
+                {"$set": {"done": done, "failed": failed, "current": f"чекаут: {loc}",
+                          "updated_at": now_utc()}},
             )
     await db.translate_jobs.update_one(
         {"id": job_id}, {"$set": {"status": "finished", "current": "", "updated_at": now_utc()}}
@@ -2571,11 +2588,13 @@ from nextcart import router as nextcart_router  # noqa: E402
 from geo import router as geo_router  # noqa: E402
 import revorder  # noqa: E402
 import abandoned  # noqa: E402
+import ui_strings  # noqa: E402
 
 api.include_router(nextcart_router)
 api.include_router(geo_router)
 api.include_router(revorder.init(db, require_admin))
 api.include_router(abandoned.init(db, require_admin))
+api.include_router(ui_strings.init(db, require_admin))
 app.include_router(api)
 
 _origins_env = os.environ.get("CORS_ORIGINS", "*")

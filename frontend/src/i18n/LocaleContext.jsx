@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LOCALES, DEFAULT_LOCALE, LOCALE_META, translate, applyLocaleRoutes, isProdHost } from "./locales";
+import { LOCALES, DEFAULT_LOCALE, LOCALE_META, translate, applyLocaleRoutes, applyUiOverrides, isProdHost } from "./locales";
 import { api, setFx } from "../lib/api";
 import { setLinks } from "../lib/links";
 
@@ -21,6 +21,10 @@ export function LocaleProvider({ children }) {
   useEffect(() => {
     api.get("/locales").then(({ data }) => {
       applyLocaleRoutes(data.routes);
+      setRoutesVersion((v) => v + 1);
+    }).catch(() => {});
+    api.get("/ui-strings").then(({ data }) => {
+      applyUiOverrides(data.strings);
       setRoutesVersion((v) => v + 1);
     }).catch(() => {});
   }, []);
@@ -68,7 +72,7 @@ export function LocaleProvider({ children }) {
     })();
 
     const homePath = LOCALE_META[locale]?.home_path || "/";
-    return { locale, prefix, lp, localeUrl, basePath, homePath, t: (k) => translate(locale, k) };
+    return { locale, prefix, lp, localeUrl, basePath, homePath, t: (k, vars) => translate(locale, k, vars) };
   }, [locale, pathname, routesVersion]);
 
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
