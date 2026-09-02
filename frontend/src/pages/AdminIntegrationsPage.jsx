@@ -66,8 +66,11 @@ const DomainCard = ({ domain, cfg, onChanged }) => {
 
   const test = () => run("test", async () => {
     const { data } = await api.post("/admin/integrations/revorder/test", { domain });
-    if (data.sent) toast.success(`RevOrder отговори ${data.status}`);
-    else toast.error(`Неуспешно: ${data.reason || data.status} ${data.response || ""}`.trim());
+    if (data.inbound?.ok) toast.success(`Нашият webhook отговаря (${data.inbound.status}) и подписът е валиден`);
+    else toast.error(`Webhook-ът ни не отговаря: ${data.inbound?.status || ""} ${data.inbound?.response || ""}`.trim());
+    if (data.outbound?.skipped) toast(data.outbound.reason, { duration: 9000 });
+    else if (data.outbound?.sent) toast.success(`RevOrder прие тестовата поръчка (${data.outbound.status})`);
+    else if (data.outbound) toast.error(`RevOrder отказа тестовата поръчка: ${data.outbound.reason || data.outbound.status}`);
     onChanged();
   });
 

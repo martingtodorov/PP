@@ -228,14 +228,39 @@ async def save_revorder_settings(payload: Dict[str, Any] = Body(...), admin=Depe
 
 @router.post("/admin/integrations/revorder/test")
 async def test_revorder(payload: Dict[str, Any] = Body(...), admin=Depends(_admin_guard)):
+    """Prove the part we own: our public webhook URL answers and accepts a correctly signed event.
+
+    The outbound push is attempted only when the merchant has entered a real orders endpoint —
+    RevOrder has not published one, and their default host answers 405 to POST /api/orders.
+    """
     domain = (payload.get("domain") or "").strip().lower()
     cfg = await domain_config(domain)
     if not cfg:
         raise HTTPException(400, "Домейнът не е конфигуриран или е изключен")
-    probe = {"id": "test", "order_number": "TEST-0000", "total_eur": 0, "shipping_eur": 0,
-             "customer_name": "Test", "customer_email": "test@example.com", "line_items": [],
-             "created_at": _now()}
-    return await push_order(probe, domain)
+    result: Dict[str, Any] = {"domain": domain, "webhook_url": webhook_url(domain)}
+
+    event = {"id": f"selftest-{secrets.token_hex(4)}", "event": "selftest", "external_id": "selftest",
+             "status": "selftest", "sent_at": _now()}
+    body = json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode()
+    try:
+        r = await _client.post(result["webhook_url"], content=body, headers={
+            "Content-Type": "application/json", "X-Signature": f"sha256={sign(cfg['secret_key'], body)}"})
+        result["inbound"] = {"ok": r.is_success, "status": r.status_code, "response": r.text[:300]}
+    except Exception as ex:
+        result["inbound"] = {"ok": False, "status": 0, "response": str(ex)[:300]}
+
+    custom_endpoint = (cfg.get("orders_path") or DEFAULT_ORDERS_PATH) != DEFAULT_ORDERS_PATH \
+        or (cfg.get("api_base") or DEFAULT_BASE).rstrip("/") != DEFAULT_BASE.rstrip("/")
+    if custom_endpoint:
+        probe = {"id": "test", "order_number": "TEST-0000", "total_eur": 0, "shipping_eur": 0,
+                 "customer_name": "Test", "customer_email": "test@example.com", "line_items": [],
+                 "created_at": _now()}
+        result["outbound"] = await push_order(probe, domain)
+    else:
+        result["outbound"] = {"sent": False, "skipped": True,
+                              "reason": "RevOrder не е дал адрес за приемане на поръчки — попълни го в „API адрес“/„Път за поръчки“, когато го получиш"}
+    result["ok"] = bool(result["inbound"]["ok"])
+    return result
 
 
 # ---------- inbound webhook ----------
