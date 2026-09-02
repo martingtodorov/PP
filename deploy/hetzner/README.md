@@ -190,8 +190,28 @@ The admin password is only re-synced from the env when `admin_password_reset: tr
 /var/lib/purepeptide/media                  PERSISTENT images
 /var/www/purepeptide/build                  SPA (build.previous = rollback)
 /etc/ssl/cloudflare/origin.{pem,key}        Cloudflare Origin, managed by hand
-/var/backups/purepeptide                    nightly mongodump, 14 days
+/var/backups/purepeptide                    nightly backup: mongodump + media tar + backend.env, 14 days
 ```
+
+## Backups (database + pictures together)
+
+`/usr/local/sbin/pp-backup` runs every night at 03:20 (cron, installed by `deploy_backend.yml` and the
+bootstrap). One run produces `<db>-<day>.gz` (mongodump), `media-<day>.tar.gz` (the whole
+`/var/lib/purepeptide/media`) and `backend.env-<day>`; both archives are integrity-checked and
+`latest-db.gz` / `latest-media.tar.gz` always point at the newest pair. Retention: `backup_keep_days`.
+Set `backup_offsite` (an rsync target such as a Hetzner Storage Box) to mirror the directory off the
+server after every run.
+
+```bash
+sudo pp-backup                                   # run one now
+tail /var/backups/purepeptide/backup.log
+ansible-playbook -i inventory.ini playbooks/deploy_backend.yml --tags backup -e run_backup_now=true --ask-vault-pass
+sudo pp-restore                                  # list the available days
+sudo pp-restore 2026-06-30                       # database AND media back to that night (asks for confirmation)
+```
+
+New server: bootstrap it, copy `<db>-<day>.gz` + `media-<day>.tar.gz` into `/var/backups/purepeptide`,
+run `deploy_backend.yml`, then `sudo pp-restore <day>` — the site comes back with every picture.
 
 ## Rollback
 

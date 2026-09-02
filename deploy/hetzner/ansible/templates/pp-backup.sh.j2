@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# {{ app_name }} nightly backup — MongoDB dump + media disk + backend.env. Rendered by Ansible.
+# Everything a NEW server needs to come back identical lives in {{ backup_dir }} (and, when
+# configured, on the off-site target). Restore with: pp-restore <YYYY-MM-DD>
+set -euo pipefail
+umask 077
+
+BACKUP_DIR="{{ backup_dir }}"
+MEDIA_DIR="{{ media_dir }}"
+ENV_FILE="{{ env_dir }}/backend.env"
+DB="{{ db_name }}"
+KEEP_DAYS="{{ backup_keep_days }}"
+OFFSITE="{{ backup_offsite }}"
+STAMP="$(date +%F)"
+LOG="$BACKUP_DIR/backup.log"
+
+mkdir -p "$BACKUP_DIR"
+log() { echo "$(date '+%F %T') $*" | tee -a "$LOG"; }
+fail() { log "FAILED: $*"; exit 1; }
+
+log "start $STAMP"
+
+# ---- database ----
+DB_ARCHIVE="$BACKUP_DIR/$DB-$STAMP.gz"
+mongodump --db "$DB" --archive="$DB_ARCHIVE" --gzip --quiet || fail "mongodump"
+gzip -t "$DB_ARCHIVE" || fail "database archive is corrupt"
+log "database  $(du -h "$DB_ARCHIVE" | cut -f1)  $DB_ARCHIVE"
+
+# ---- media (the pictures are NOT in the database) ----
+MEDIA_ARCHIVE="$BACKUP_DIR/media-$STAMP.tar.gz"
+[ -d "$MEDIA_DIR" ] || fail "media directory $MEDIA_DIR does not exist"
+tar -C "$MEDIA_DIR" -czf "$MEDIA_ARCHIVE" . || fail "media tar"
+tar -tzf "$MEDIA_ARCHIVE" >/dev/null || fail "media archive is corrupt"
+log "media     $(du -h "$MEDIA_ARCHIVE" | cut -f1)  $(find "$MEDIA_DIR" -type f | wc -l) files"
+
+# ---- secrets (0600, root only) ----
+if [ -f "$ENV_FILE" ]; then
+  cp "$ENV_FILE" "$BACKUP_DIR/backend.env-$STAMP"
+  chmod 600 "$BACKUP_DIR/backend.env-$STAMP"
+fi
+
+# ---- retention ----
+find "$BACKUP_DIR" -maxdepth 1 -name "$DB-*.gz" -mtime +"$KEEP_DAYS" -delete
+find "$BACKUP_DIR" -maxdepth 1 -name "media-*.tar.gz" -mtime +"$KEEP_DAYS" -delete
+find "$BACKUP_DIR" -maxdepth 1 -name "backend.env-*" -mtime +"$KEEP_DAYS" -delete
+ln -sfn "$DB_ARCHIVE" "$BACKUP_DIR/latest-db.gz"
+ln -sfn "$MEDIA_ARCHIVE" "$BACKUP_DIR/latest-media.tar.gz"
+
+# ---- off-site copy (rsync target, e.g. a Hetzner Storage Box) ----
+if [ -n "$OFFSITE" ]; then
+  rsync -az --delete --exclude 'latest-*' "$BACKUP_DIR/" "$OFFSITE/" || fail "off-site rsync to $OFFSITE"
+  log "off-site  synced to $OFFSITE"
+fi
+
+log "done  $(du -sh "$BACKUP_DIR" | cut -f1) in $BACKUP_DIR"

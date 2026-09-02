@@ -222,6 +222,11 @@
       changed_when: false
       tags: [publish]
 
+    # ---------------- backups ----------------
+    - name: Nightly backup of database + media + env (pp-backup / pp-restore)
+      import_tasks: ../tasks/backup.yml
+      tags: [backup]
+
     # ---------------- optional, never automatic ----------------
     - name: Import media from the managed storage (only with -e run_media_import=true)
       command: "{{ app_dir }}/venv/bin/python export_media_to_disk.py"

@@ -1,0 +1,50 @@
+---
+# Nightly backup of the database, the media disk and backend.env — one job, one directory.
+# Idempotent; imported by bootstrap_backend_base.yml and deploy_backend.yml (tag: backup).
+- name: Backup directory (root only)
+  file:
+    path: "{{ backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  tags: [backup]
+
+- name: Install pp-backup (mongodump + media tar + env, retention, optional off-site rsync)
+  template:
+    src: ../templates/pp-backup.sh.j2
+    dest: /usr/local/sbin/pp-backup
+    owner: root
+    group: root
+    mode: "0750"
+  tags: [backup]
+
+- name: Install pp-restore (database + media from one backup day)
+  template:
+    src: ../templates/pp-restore.sh.j2
+    dest: /usr/local/sbin/pp-restore
+    owner: root
+    group: root
+    mode: "0750"
+  tags: [backup]
+
+- name: Nightly backup at 03:20 (replaces the old mongodump-only cron entry)
+  cron:
+    name: "{{ app_name }} mongodump"
+    minute: "20"
+    hour: "3"
+    job: "/usr/local/sbin/pp-backup >/dev/null 2>&1"
+  tags: [backup]
+
+- name: Run a backup right now (only with -e run_backup_now=true)
+  command: /usr/local/sbin/pp-backup
+  register: backup_now
+  changed_when: true
+  when: run_backup_now | default(false) | bool
+  tags: [backup]
+
+- name: Backup output
+  debug:
+    msg: "{{ backup_now.stdout_lines }}"
+  when: run_backup_now | default(false) | bool
+  tags: [backup]
