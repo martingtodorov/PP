@@ -10,6 +10,7 @@ import { FAQ_ITEMS, pick } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
 import { ContactForm } from "../components/ContactForm";
 import { graph, faqLd, breadcrumbLd, organizationLd } from "../lib/schema";
+import { isAllCollection } from "../lib/collections";
 
 const BODY = {
   bg: {
@@ -76,7 +77,7 @@ export default function StaticPage() {
 
   useEffect(() => {
     api.get("/articles").then(({ data }) => setArticles(data.articles));
-    api.get("/collections").then(({ data }) => setCollections(data.collections.filter((c) => (c.base_handle || c.handle) !== "2all-the-peptides-1" && !c.nav_hidden)));
+    api.get("/collections").then(({ data }) => setCollections(data.collections.filter((c) => !isAllCollection(c) && !c.nav_hidden)));
   }, [locale]);
 
   useEffect(() => {

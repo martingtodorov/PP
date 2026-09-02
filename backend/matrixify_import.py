@@ -36,7 +36,7 @@ log = logging.getLogger("import")
 XLSX = ROOT / "data" / "matrixify-export.xlsx"
 db = MongoClient(os.environ["MONGO_URL"])[os.environ["DB_NAME"]]
 
-ALL_HANDLE = "all-peptides"
+ALL_HANDLE = "2all-the-peptides-1"   # must match server.ALL_COLLECTION, otherwise the catch-all 404s
 SHOPIFY_ALL = "2all-the-peptides-1"
 
 # Shopify page handle -> our static page slug
@@ -220,7 +220,7 @@ def import_collections() -> Dict[str, str]:
         top = group[0]
         published = str(top.get("Published")) in ("True", "true", "1")
         count = int(num(top.get("Products Count")))
-        if not published or count == 0:
+        if not published:
             continue
         our_handle = ALL_HANDLE if handle == SHOPIFY_ALL else handle
         menu_title, sort_order = COLLECTION_META.get(our_handle, (top.get("Title") or our_handle, order_extra))
@@ -234,6 +234,8 @@ def import_collections() -> Dict[str, str]:
             "menu_title": menu_title,
             "menu_order": sort_order,
             "sort_order": sort_order,
+            # published landing collections without products (SEO pages) stay reachable but out of the nav
+            "nav_hidden": count == 0,
             "description": clean_body(rewrite_body_images(body), top.get("Title") or ""),
             "seo_title": top.get("Metafield: title_tag [string]") or "",
             "seo_description": top.get("Metafield: description_tag [string]") or "",

@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { useSeo } from "../lib/seo";
 import { graph, breadcrumbLd, organizationLd } from "../lib/schema";
+import { isAllCollection } from "../lib/collections";
 
 const SECTIONS = {
   products: { title: "HTML sitemap — продукти", key: "products", to: (h) => `/products/${h}` },
@@ -30,7 +31,13 @@ export default function HtmlSitemapPage() {
   const section = SECTIONS[kind];
 
   useEffect(() => {
-    api.get("/link-index").then(({ data }) => setIndex(data));
+    api.get("/link-index").then(({ data }) => {
+      const filtered = {
+        ...data,
+        collections: (data.collections || []).filter((c) => !isAllCollection(c)),
+      };
+      setIndex(filtered);
+    });
   }, [locale]);
 
   const title = section ? section.title : "HTML sitemap";

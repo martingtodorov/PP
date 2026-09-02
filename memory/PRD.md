@@ -648,3 +648,32 @@ Remaining fix in this round: the smoke/courier tasks no longer echo the raw resp
 value" killed the task even though nginx answered 200). They now print status + size, an ASCII-only
 country count, and the one remaining `head -c` in deploy_backend.yml is piped through `iconv -c`.
 58 deploy tests green.
+
+### 2026-06 — real catalog + catch-all collection hidden on the homepage
+Diagnosis: **production was still running the demo seed data** (16 products with 430–1200 char
+descriptions, 7 seed collections with handle `all-peptides`, no `catalog_imported` flag), which is why
+the homepage showed a "Всички пептиди" card that 404s (the code canonicalises to
+`2all-the-peptides-1`) and why the descriptions were short.
+- `frontend/src/lib/collections.js` (new): `ALL_COLLECTION` + `isAllCollection()` matching BOTH the
+  Shopify handle and the legacy seed handle. Used in HomePage, StaticPage, ProductPage,
+  AdminProductEditPage and HtmlSitemapPage — the catch-all card can no longer appear regardless of
+  which handle the database carries.
+- `backend/matrixify_import.py`: `ALL_HANDLE` is now `2all-the-peptides-1` (must equal
+  `server.ALL_COLLECTION`, otherwise the catch-all collection page 404s); published collections with 0
+  products (SEO landing pages like `retatrutide-price`) are imported as `nav_hidden` instead of being
+  dropped.
+- `backend/server.py` `/link-index`: skips `nav_hidden` collections so hidden landing pages stay out
+  of the HTML sitemaps.
+- `deploy_backend.yml`: new gated task — `-e run_catalog_import=true` runs
+  `matrixify_import.py --only collections,products,pages,articles,redirects,discounts` on the server
+  (customers are deliberately NOT a default step: that importer step wipes the customers collection).
+  The importer sets `catalog_imported`, so `seed_catalog()` never overwrites the real data again.
+- Local import verified: 23 products with full Body HTML (bpc-157-5 → 8269 chars,
+  21-retatrutide-5 → 1886), 8 collections, 12 pages, 19 articles, 15 redirects, 22 discounts.
+- Tested: iteration_24 frontend run 100% (homepage carousel = the 6 topic collections only, hero CTA
+  and "Виж всички" open the 23-product catch-all page, long descriptions render, admin edit works).
+  62 deploy tests green.
+
+**Production TODO (owner):** after Save to GitHub + `git pull`, run
+`ansible-playbook playbooks/deploy_backend.yml -e run_catalog_import=true` once — without it prod
+keeps the 16 demo products.

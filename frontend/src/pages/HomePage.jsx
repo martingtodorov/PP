@@ -7,6 +7,7 @@ import ArticlesCarousel from "../components/ArticlesCarousel";
 import PPCalculator from "../components/PPCalculator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion";
 import { api, img } from "../lib/api";
+import { isAllCollection } from "../lib/collections";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { TRUST_CARDS, FAQ_ITEMS, pick } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
@@ -87,7 +88,7 @@ export default function HomePage() {
       api.get("/articles"),
       api.get("/settings"),
     ]).then(([c, p, a, s]) => {
-      setCollections(c.data.collections.filter((x) => (x.base_handle || x.handle) !== "2all-the-peptides-1" && !x.nav_hidden));
+      setCollections(c.data.collections.filter((x) => !isAllCollection(x) && !x.nav_hidden));
       setProducts(p.data.products);
       setArticles(a.data.articles);
       setSettings(s.data);

@@ -221,6 +221,18 @@
       when: run_media_import | default(false) | bool
       tags: [media]
 
+    - name: Import the real catalog from the Matrixify export (only with -e run_catalog_import=true)
+      command: >-
+        {{ app_dir }}/venv/bin/python matrixify_import.py
+        --only {{ catalog_import_steps | default('collections,products,pages,articles,redirects,discounts') }}
+      args: { chdir: "{{ app_dir }}/current/{{ backend_rel_path }}" }
+      become_user: "{{ backend_service_user }}"
+      register: catalog_import
+      changed_when: "'import finished' in (catalog_import.stderr | default('')) + (catalog_import.stdout | default(''))"
+      when: run_catalog_import | default(false) | bool
+      notify: restart backend
+      tags: [catalog]
+
     # ---------------- verify ----------------
     # Handlers run at the end of the play, so a failing check would abort the run BEFORE the
     # backend was restarted with the new code. Flush them first.
