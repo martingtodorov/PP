@@ -241,14 +241,8 @@
       tags: [mongo, verify]
 
     # ---------------- backups ----------------
-    - name: Nightly mongodump (14 days retention)
-      cron:
-        name: "{{ app_name }} mongodump"
-        minute: "20"
-        hour: "3"
-        job: >-
-          /usr/bin/mongodump --db {{ db_name }} --archive={{ backup_dir }}/{{ db_name }}-$(date +\%F).gz --gzip
-          && find {{ backup_dir }} -name '{{ db_name }}-*.gz' -mtime +14 -delete
+    - name: Nightly backup (database + media + env)
+      import_tasks: ../../tasks/backup.yml
       tags: [backup]
 
   post_tasks:

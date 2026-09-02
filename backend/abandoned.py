@@ -14,7 +14,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 
+import currency
 import email_service
+import email_templates
 
 log = logging.getLogger("purepeptide.abandoned")
 
@@ -105,7 +107,8 @@ async def mark_recovered(email: str) -> None:
 async def send_reminder(cart: Dict[str, Any], settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     settings = settings if settings is not None else await _site_settings()
     code = (settings.get("abandoned_discount_code") or "").strip()
-    res = await email_service.send_abandoned_cart(cart, settings, code)
+    fx = await currency.rate_for_locale(_db, cart.get("locale"))
+    res = await email_service.send_abandoned_cart(cart, settings, code, fx)
     await _db.abandoned_carts.update_one(
         {"id": cart["id"]},
         {"$set": {"status": "reminded" if res.get("sent") else "open",
@@ -179,6 +182,7 @@ async def send_test_email(payload: Dict[str, Any] = Body(...), admin=Depends(_ad
     if not to:
         raise HTTPException(400, "Липсва имейл получател")
     settings = await _site_settings()
+    fx = await currency.rate_for_locale(_db, locale)
     if kind == "abandoned":
         cart = await _db.abandoned_carts.find_one({}, {"_id": 0}, sort=[("updated_at", -1)])
         if not cart:
@@ -189,11 +193,12 @@ async def send_test_email(payload: Dict[str, Any] = Body(...), admin=Depends(_ad
                     "items": order.get("items", []), "locale": locale}
         cart = {**cart, "email": to, "locale": locale}
         return await email_service.send_abandoned_cart(
-            cart, settings, (settings.get("abandoned_discount_code") or "").strip())
+            cart, settings, (settings.get("abandoned_discount_code") or "").strip(), fx)
     order = await _db.orders.find_one({}, {"_id": 0}, sort=[("created_at", -1)])
     if not order:
         raise HTTPException(400, "Няма поръчки за примерен имейл")
-    order = {**order, "customer_email": to, "locale": locale}
+    # the preview speaks the chosen storefront's currency, whatever the sample order was placed in
+    order = email_templates.localize_order({**order, "customer_email": to, "locale": locale}, fx)
     bank = {"name": os.environ.get("BANK_NAME", ""), "iban": os.environ.get("BANK_IBAN", ""),
             "bic": os.environ.get("BANK_BIC", ""), "holder": os.environ.get("BANK_HOLDER", ""),
             "reference": order.get("order_number", "")}

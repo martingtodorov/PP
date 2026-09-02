@@ -260,10 +260,18 @@ def _abs(url: str, base: str) -> str:
     return f"{base}{url if url.startswith('/') else '/' + url}"
 
 
-SYMBOLS = {"EUR": "€", "RON": "lei", "PLN": "zł", "CZK": "Kč", "HUF": "Ft", "BGN": "лв."}
+SYMBOLS = {"EUR": "€", "RON": "RON", "PLN": "zł", "CZK": "Kč", "HUF": "Ft", "BGN": "лв."}
+
+EUR_TRANSFER_NOTE = {
+    "bg": "Сума за превод в евро", "en": "Amount to transfer in EUR", "fr": "Montant à virer en EUR",
+    "de": "Überweisungsbetrag in EUR", "cz": "Částka k převodu v EUR", "hu": "Átutalandó összeg EUR-ban",
+    "pl": "Kwota przelewu w EUR", "sk": "Suma na prevod v EUR", "si": "Znesek za nakazilo v EUR",
+    "gr": "Ποσό μεταφοράς σε EUR", "ro": "Suma de transferat în EUR",
+}
 
 
 def _money(v: Any, cur: str = "EUR") -> str:
+    """Same layout as the storefront (Intl, 0 decimals for local currencies): 1 299 Kč, 638 RON."""
     code = (cur or "EUR").upper()
     symbol = SYMBOLS.get(code, code)
     try:
@@ -272,7 +280,32 @@ def _money(v: Any, cur: str = "EUR") -> str:
         amount = 0.0
     if code == "EUR":
         return f"€{amount:.2f}"
-    return f"{amount:,.0f} {symbol}".replace(",", " ")
+    return f"{amount:,.0f}\u00a0{symbol}".replace(",", "\u00a0")
+
+
+def localize_order(order: Dict[str, Any], fx: Dict[str, Any]) -> Dict[str, Any]:
+    """Re-derive the local-currency mirror of an order for another storefront (email previews)."""
+    from currency import nice_price, order_amounts
+
+    code = str(fx.get("currency") or "EUR").upper()
+    if code == str(order.get("currency") or "EUR").upper():
+        return order
+    items = [dict(i) for i in order.get("items") or []]
+    if code == "EUR":
+        for it in items:
+            it.pop("price_orig", None)
+        out = {**order, "items": items, "currency": "EUR", "currency_rate": 1.0}
+        for k in ("subtotal_orig", "discount_orig", "shipping_orig", "total_orig"):
+            out.pop(k, None)
+        return out
+    rate = float(fx.get("rate") or 1.0)
+    totals = {k: float(order.get(k) or 0) for k in ("subtotal_eur", "discount_eur", "shipping_eur", "total_eur")}
+    local = order_amounts(items, totals, order.get("discount") or {}, code, rate)
+    for it, price in zip(items, local.pop("item_prices", [])):
+        it["price_orig"] = price
+    for it in items:
+        it.setdefault("price_orig", nice_price(it.get("price_eur"), code, rate))
+    return {**order, "items": items, **local}
 
 
 def _money_of(order: Dict[str, Any]):
@@ -394,7 +427,8 @@ def render_order(order: Dict[str, Any], bank: Optional[Dict[str, Any]], locale: 
             f'<strong>{bank.get("reference") or order.get("order_number", "")}</strong></td></tr>'
             # the IBAN is a euro account — a local-currency order still transfers the EUR amount
             + (f'<tr><td colspan="2" style="padding-top:6px;color:#64748b;">'
-               f'{_money(order.get("total_eur"), "EUR")}</td></tr>'
+               f'{EUR_TRANSFER_NOTE.get(loc, EUR_TRANSFER_NOTE["en"])}: '
+               f'<strong>{_money(order.get("total_eur"), "EUR")}</strong></td></tr>'
                if str(order.get("currency") or "EUR").upper() != "EUR" else "")
             + f'</table></td></tr>'
         )
@@ -436,11 +470,21 @@ def render_order(order: Dict[str, Any], bank: Optional[Dict[str, Any]], locale: 
 
 
 def render_abandoned(cart: Dict[str, Any], locale: str, contact_email: str,
-                     discount_code: str = "") -> tuple:
+                     discount_code: str = "", fx: Optional[Dict[str, Any]] = None) -> tuple:
     loc = (locale or cart.get("locale") or "bg").lower()
     base = base_url(loc)
-    items = cart.get("items") or []
-    subtotal = sum(float(i.get("price_eur") or 0) * int(i.get("quantity") or 1) for i in items)
+    items = [dict(i) for i in cart.get("items") or []]
+    code = str((fx or {}).get("currency") or "EUR").upper()
+    if code != "EUR":
+        from currency import nice_price
+
+        rate = float((fx or {}).get("rate") or 1.0)
+        for it in items:
+            it["price_orig"] = nice_price(it.get("price_eur"), code, rate)
+        subtotal = sum(float(i["price_orig"]) * int(i.get("quantity") or 1) for i in items)
+    else:
+        subtotal = sum(float(i.get("price_eur") or 0) * int(i.get("quantity") or 1) for i in items)
+    money = _money_of({"currency": code})
     promo = ""
     if discount_code:
         promo = (f'<p style="margin:14px 0 0;font-size:13px;color:#475569;">'
@@ -456,9 +500,9 @@ def render_abandoned(cart: Dict[str, Any], locale: str, contact_email: str,
     {promo}
   </td></tr>
   <tr><td style="padding:22px 28px 26px;">
-    {_lines(items, loc, base)}
+    {_lines(items, loc, base, money)}
     <table role="presentation" width="100%" style="margin-top:12px;">
-      {_sum_row(tr(loc, 'subtotal'), _money(subtotal), strong=True)}
+      {_sum_row(tr(loc, 'subtotal'), money(subtotal, subtotal), strong=True)}
     </table>
   </td></tr>"""
     subject = tr(loc, "ab_subject")
@@ -514,6 +558,8 @@ def render_admin_order(order: Dict[str, Any]) -> tuple:
     pay = "Банков превод" if order.get("payment_method") == "bank_transfer" else "Наложен платеж"
     money = _money_of(order)
     total = money(order.get("total_eur"), order.get("total_orig"))
+    if str(order.get("currency") or "EUR").upper() != "EUR":
+        total = f'{total} <span style="color:#94a3b8;font-size:13px;">({_money(order.get("total_eur"), "EUR")})</span>'
     rows = [
         ("Клиент", order.get("customer_name") or ""),
         ("Имейл", f'<a href="mailto:{order.get("customer_email", "")}" style="color:{BRAND};">'
@@ -538,7 +584,7 @@ def render_admin_order(order: Dict[str, Any]) -> tuple:
   <tr><td style="padding:16px 28px 20px;">
     {_lines(order.get('items') or [], 'bg', base, money)}
   </td></tr>"""
-    subject = f"Нова поръчка {order.get('order_number', '')} · {total}"
+    subject = f"Нова поръчка {order.get('order_number', '')} · {money(order.get('total_eur'), order.get('total_orig'))}"
     html = _admin_shell("НОВА ПОРЪЧКА", f"Поръчка {order.get('order_number', '')}", content,
                         f"{base}/admin/orders/{order.get('id')}", "Отвори в админ панела")
     return subject, html

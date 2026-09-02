@@ -64,10 +64,11 @@ async def send_order_confirmation(order: Dict[str, Any], bank: Dict[str, Any], s
     return await send_email(order["customer_email"], subject, html, settings)
 
 
-async def send_abandoned_cart(cart: Dict[str, Any], settings: Dict[str, Any], discount_code: str = ""):
+async def send_abandoned_cart(cart: Dict[str, Any], settings: Dict[str, Any], discount_code: str = "",
+                              fx: Optional[Dict[str, Any]] = None):
     locale = cart.get("locale") or "bg"
     contact = (settings.get("contact_email") or os.environ.get("CONTACT_EMAIL") or "info@purepeptide.bg").strip()
-    subject, html = email_templates.render_abandoned(cart, locale, contact, discount_code)
+    subject, html = email_templates.render_abandoned(cart, locale, contact, discount_code, fx)
     return await send_email(cart["email"], subject, html, settings)
 
 

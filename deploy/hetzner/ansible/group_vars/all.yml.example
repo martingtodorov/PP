@@ -127,3 +127,7 @@ releases_kept: 5
 node_major: 20
 mongo_major: "8.0"   # auto-probed against repo.mongodb.org; only used if probing is skipped
 backup_dir: /var/backups/purepeptide
+backup_keep_days: 14
+# optional off-site copy (rsync target), e.g. "u123456@u123456.your-storagebox.de:purepeptide"
+# leave empty to keep the backups on pp-back only
+backup_offsite: ""

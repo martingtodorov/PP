@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# {{ app_name }} restore — puts the database AND the media disk back from one nightly backup.
+# Usage: pp-restore <YYYY-MM-DD> [--yes]      (no argument: lists the available days)
+# On a NEW server: copy <db>-<day>.gz + media-<day>.tar.gz into {{ backup_dir }} first.
+set -euo pipefail
+
+BACKUP_DIR="{{ backup_dir }}"
+MEDIA_DIR="{{ media_dir }}"
+DB="{{ db_name }}"
+SERVICE="{{ app_name }}-backend"
+OWNER="{{ backend_service_user }}"
+STAMP="${1:-}"
+
+if [ -z "$STAMP" ]; then
+  echo "Available backups in $BACKUP_DIR:"
+  ls -1 "$BACKUP_DIR" | sed -n "s/^$DB-\(.*\)\.gz$/  \1/p"
+  exit 1
+fi
+
+DB_ARCHIVE="$BACKUP_DIR/$DB-$STAMP.gz"
+MEDIA_ARCHIVE="$BACKUP_DIR/media-$STAMP.tar.gz"
+[ -f "$DB_ARCHIVE" ] || { echo "missing $DB_ARCHIVE"; exit 1; }
+[ -f "$MEDIA_ARCHIVE" ] || { echo "missing $MEDIA_ARCHIVE"; exit 1; }
+
+if [ "${2:-}" != "--yes" ]; then
+  echo "This REPLACES database '$DB' and everything in $MEDIA_DIR with the $STAMP backup."
+  read -r -p "Type 'restore' to continue: " answer
+  [ "$answer" = "restore" ] || { echo "aborted"; exit 1; }
+fi
+
+systemctl stop "$SERVICE" || true
+mongorestore --drop --gzip --archive="$DB_ARCHIVE" --nsInclude="$DB.*" --quiet
+mkdir -p "$MEDIA_DIR"
+find "$MEDIA_DIR" -mindepth 1 -delete
+tar -C "$MEDIA_DIR" -xzf "$MEDIA_ARCHIVE"
+chown -R "$OWNER:$OWNER" "$MEDIA_DIR"
+systemctl start "$SERVICE"
+echo "restored $STAMP: database '$DB' + $(find "$MEDIA_DIR" -type f | wc -l) media files"

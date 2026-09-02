@@ -31,6 +31,8 @@
     env_dir: "{{ env_dir | default('/etc/purepeptide', true) }}"
     media_dir: "{{ media_dir | default('/var/lib/purepeptide/media', true) }}"
     backup_dir: "{{ backup_dir | default('/var/backups/purepeptide', true) }}"
+    backup_keep_days: "{{ backup_keep_days | default(14, true) }}"
+    backup_offsite: "{{ backup_offsite | default('', true) }}"
     ref: "{{ ref | default('main', true) }}"
     ssh_port: "{{ ssh_port | default(22, true) }}"
     private_cidr: "{{ private_cidr | default('10.0.0.0/16', true) }}"

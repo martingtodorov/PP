@@ -917,3 +917,21 @@ purepeptide.ro.
 - **За продукция:** Save to GitHub → `deploy_backend.yml` → Админ → Импорт → „Провери снимките“ (ако
   каже „НЕ е записваема“ → проблемът е права на `/var/lib/purepeptide/media`) → „Поправи липсващите
   снимки“ → Cloudflare Purge Everything.
+
+### 2026-06 — локална валута в имейлите + нощен архив на снимките
+- Имейлите за поръчка вече показваха валутата на поръчката (`*_orig`), но **прегледът от админа**
+  („Тестов имейл“ с език ro/pl/cz/hu) взимаше последната поръчка и я показваше в нейната валута (EUR).
+  Нов `email_templates.localize_order(order, fx)` преизчислява огледалните суми за избрания магазин.
+- Имейлът за забравена количка беше винаги в EUR → сега `render_abandoned(..., fx)` конвертира с
+  психологическото закръгляне (`nice_price`) като в количката; `abandoned.py` подава курса.
+- Форматът е като в количката (Intl, 0 знака): `638 RON`, `1 299 Kč`, `12 990 Ft`, `249 zł`
+  (RON вече не е „lei“). Под банковите данни: „Suma de transferat în EUR: €118.00“ на 11 езика.
+  Админ имейлът за нова поръчка: локална сума + (€ еквивалент).
+- Тестове: `tests/test_email_local_currency.py`; реална RO поръчка през `/api/checkout` → 638 RON.
+- **Нощен архив (03:20, pp-back):** `templates/pp-backup.sh.j2` → `/usr/local/sbin/pp-backup`:
+  mongodump + `media-<ден>.tar.gz` (цялата `/var/lib/purepeptide/media`) + `backend.env`, проверка на
+  архивите, retention `backup_keep_days` (14), `latest-*` линкове, по избор `backup_offsite` (rsync,
+  напр. Hetzner Storage Box). `pp-restore <ден>` връща базата И снимките (спира/пуска сервиса, иска
+  потвърждение). `tasks/backup.yml` се импортира и от bootstrap, и от `deploy_backend.yml` (таг
+  `backup`, `-e run_backup_now=true` за архив веднага); старият cron само с mongodump е заменен.
+  Проверено с истински mongodump/tar срещу preview базата (636K + 14M). README: секция „Backups“.
