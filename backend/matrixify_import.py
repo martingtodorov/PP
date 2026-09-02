@@ -234,17 +234,22 @@ def seo_pair(row: Dict[str, Any], title: str, body: str, limit: int = 160) -> Di
     }
 
 
-def clean_body(html: str, title: str = "", drop_leading_h1: bool = True) -> str:
-    """Remove the Shopify body's own H1 (the page already renders a title) and demote the rest to H2."""
+def clean_body(html: str, title: str = "", drop_leading_h1: bool = True, keep_h1: bool = False) -> str:
+    """Remove the Shopify body's own H1 (the page already renders a title) and demote the rest to H2.
+
+    keep_h1=True leaves the heading levels exactly as Shopify had them — the live product pages show
+    the body's "Какво е X?" as the H1 and the product name as an H2.
+    """
     if not html:
         return ""
     out = html.strip()
-    if drop_leading_h1:
-        m = re.match(r"\s*<h1[^>]*>.*?</h1>", out, flags=re.I | re.S)
-        if m:
-            out = out[m.end():].lstrip()
-    out = re.sub(r"<h1(\s[^>]*)?>", "<h2>", out, flags=re.I)
-    out = re.sub(r"</h1>", "</h2>", out, flags=re.I)
+    if not keep_h1:
+        if drop_leading_h1:
+            m = re.match(r"\s*<h1[^>]*>.*?</h1>", out, flags=re.I | re.S)
+            if m:
+                out = out[m.end():].lstrip()
+        out = re.sub(r"<h1(\s[^>]*)?>", "<h2>", out, flags=re.I)
+        out = re.sub(r"</h1>", "</h2>", out, flags=re.I)
     # Shopify bodies can carry app scripts (hCaptcha, tracking) — they never belong in our HTML
     out = re.sub(r"<script\b.*?</script>", "", out, flags=re.I | re.S)
     out = re.sub(r"<script\b[^>]*/?>", "", out, flags=re.I)
@@ -273,13 +278,15 @@ def import_collections() -> Dict[str, str]:
             "id": str(uuid.uuid4()),
             "handle": our_handle,
             "link_key": link_key_for("collection", our_handle) or "",
-            "title": top.get("Title") or our_handle,
+            "title": (COLLECTION_META[ALL_HANDLE][0] if our_handle == ALL_HANDLE
+                      else top.get("Title") or our_handle),
             "menu_title": menu_title,
             "menu_order": sort_order,
             "sort_order": sort_order,
             # published landing collections without products (SEO pages) stay reachable but out of the nav
             "nav_hidden": count == 0,
-            "description": clean_body(rewrite_body_images(body), top.get("Title") or ""),
+            # heading levels exactly as on purepeptide.bg: the body's "Какво е X?" is the page H1
+            "description": clean_body(rewrite_body_images(body), top.get("Title") or "", keep_h1=True),
             **seo_pair(top, top.get("Title") or our_handle, body),
             "image": store_image(top.get("Image Src")),
             "shopify_id": str(top.get("ID") or ""),

@@ -396,6 +396,12 @@ async def on_startup():
         log.error("Storage init failed: %s", ex)
     import abandoned as _abandoned
     asyncio.create_task(_abandoned.sweeper_loop())
+    from restore_headings import restore_product_headings
+    try:
+        await restore_product_headings(db, storage)
+    except Exception as ex:
+        log.error("Heading restore failed: %s", ex)
+    await resume_translate_jobs()
 
 
 @app.on_event("shutdown")
@@ -2493,7 +2499,44 @@ async def _translate_page_slug(slug: str, targets: List[str], overwrite: bool) -
     return done
 
 
+SETTINGS_TR_FIELDS = ("tagline", "footer_text", "announcements")
+
+
+async def _translate_settings(targets: List[str], overwrite: bool) -> List[str]:
+    """Site-wide copy from the settings (announcement bar, tagline, footer) → *_i18n[locale]."""
+    doc = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    value = (doc or {}).get("value") or {}
+    source = {f: value[f] for f in ("tagline", "footer_text") if value.get(f)}
+    ann = [a for a in (value.get("announcements") or []) if a]
+    for i, a in enumerate(ann):
+        source[f"announcement_{i}"] = a
+    if not source:
+        return []
+    todo = [l for l in targets if overwrite or not (value.get("tagline_i18n") or {}).get(l)
+            or not (value.get("announcements_i18n") or {}).get(l)]
+    if not todo:
+        return []
+    result = await ai_translate_chunked(source, todo, context="PurePeptide storefront: announcement bar, tagline, footer")
+    updates: Dict[str, Any] = {}
+    for loc, fields in result.items():
+        for f in ("tagline", "footer_text"):
+            if fields.get(f):
+                updates[f"value.{f}_i18n.{loc}"] = fields[f]
+        anns = [fields.get(f"announcement_{i}") for i in range(len(ann))]
+        if all(anns):
+            updates[f"value.announcements_i18n.{loc}"] = anns
+    if updates:
+        await db.settings.update_one({"key": "site"}, {"$set": updates})
+    return list(result.keys())
+
+
+async def _job_stopped(job_id: str) -> bool:
+    job = await db.translate_jobs.find_one({"id": job_id}, {"_id": 0, "status": 1})
+    return not job or job.get("status") == "stopped"
+
+
 async def _run_bulk_translate(job_id: str, resource: str, targets: List[str], overwrite: bool):
+    """Works through every translatable thing; progress is persisted per item so a restart resumes."""
     do_all = resource in ("all", "everything")
     steps: List[tuple] = []
     if do_all or resource == "product":
@@ -2504,6 +2547,11 @@ async def _run_bulk_translate(job_id: str, resource: str, targets: List[str], ov
         steps.append(("article", db.articles))
     include_pages = resource in ("everything", "page")
     include_ui = resource in ("everything", "ui")
+    include_settings = resource in ("everything", "settings")
+
+    job = await db.translate_jobs.find_one({"id": job_id}, {"_id": 0}) or {}
+    completed = set(job.get("completed") or [])
+    failed: List[str] = list(job.get("failed") or [])
 
     total = 0
     for _, coll in steps:
@@ -2512,16 +2560,36 @@ async def _run_bulk_translate(job_id: str, resource: str, targets: List[str], ov
         total += len(PAGE_SLUGS)
     if include_ui:
         total += len(targets)
+    if include_settings:
+        total += 1
+    done = len(completed)
     await db.translate_jobs.update_one(
         {"id": job_id},
-        {"$set": {"status": "running", "total": total, "done": 0, "failed": [], "updated_at": now_utc()}},
+        {"$set": {"status": "running", "total": total, "done": done, "failed": failed, "updated_at": now_utc()}},
     )
 
-    done = 0
-    failed: List[str] = []
+    async def tick(key: str, label: str, ok: bool):
+        nonlocal done
+        done += 1
+        if ok:
+            completed.add(key)
+        elif key not in failed:
+            failed.append(key)
+        await db.translate_jobs.update_one(
+            {"id": job_id},
+            {"$set": {"done": done, "failed": failed, "current": label, "updated_at": now_utc()},
+             "$addToSet": {"completed": key}},
+        )
+
     for kind, coll in steps:
         docs = await coll.find({}, {"_id": 0}).to_list(1000)
         for doc in docs:
+            key = f"{kind}:{doc.get('handle')}"
+            if key in completed:
+                continue
+            if await _job_stopped(job_id):
+                return
+            ok = True
             try:
                 if kind == "article":
                     await _translate_article(doc, targets, overwrite)
@@ -2529,42 +2597,60 @@ async def _run_bulk_translate(job_id: str, resource: str, targets: List[str], ov
                     await _translate_one(coll, doc, targets, overwrite)
             except Exception as ex:
                 log.error("Bulk translate failed for %s %s: %s", kind, doc.get("handle"), ex)
-                failed.append(f"{kind}:{doc.get('handle')}")
-            done += 1
-            await db.translate_jobs.update_one(
-                {"id": job_id},
-                {"$set": {"done": done, "failed": failed, "current": f"{kind}: {doc.get('handle')}",
-                          "updated_at": now_utc()}},
-            )
+                ok = False
+            await tick(key, f"{kind}: {doc.get('handle')}", ok)
     if include_pages:
         for slug in PAGE_SLUGS:
+            key = f"page:{slug}"
+            if key in completed:
+                continue
+            if await _job_stopped(job_id):
+                return
+            ok = True
             try:
                 await _translate_page_slug(slug, targets, overwrite)
             except Exception as ex:
                 log.error("Bulk translate failed for page %s: %s", slug, ex)
-                failed.append(f"page:{slug}")
-            done += 1
-            await db.translate_jobs.update_one(
-                {"id": job_id},
-                {"$set": {"done": done, "failed": failed, "current": f"page: {slug}", "updated_at": now_utc()}},
-            )
+                ok = False
+            await tick(key, f"page: {slug}", ok)
+    if include_settings and "settings:site" not in completed:
+        if await _job_stopped(job_id):
+            return
+        ok = True
+        try:
+            await _translate_settings(targets, overwrite)
+        except Exception as ex:
+            log.error("Bulk translate failed for settings: %s", ex)
+            ok = False
+        await tick("settings:site", "настройки: лента, слоган, футър", ok)
     if include_ui:
         import ui_strings as ui_strings_mod
         for loc in targets:
+            key = f"checkout:{loc}"
+            if key in completed:
+                continue
+            if await _job_stopped(job_id):
+                return
+            ok = True
             try:
                 await ui_strings_mod.translate_locale(loc)
             except Exception as ex:
                 log.error("Bulk translate failed for checkout copy %s: %s", loc, ex)
-                failed.append(f"checkout:{loc}")
-            done += 1
-            await db.translate_jobs.update_one(
-                {"id": job_id},
-                {"$set": {"done": done, "failed": failed, "current": f"чекаут: {loc}",
-                          "updated_at": now_utc()}},
-            )
+                ok = False
+            await tick(key, f"чекаут и текстове на сайта: {loc}", ok)
     await db.translate_jobs.update_one(
         {"id": job_id}, {"$set": {"status": "finished", "current": "", "updated_at": now_utc()}}
     )
+
+
+async def resume_translate_jobs():
+    """A deploy or restart must not lose a queued translation — pick it up where it stopped."""
+    job = await db.translate_jobs.find_one({"status": {"$in": ["queued", "running"]}}, {"_id": 0},
+                                           sort=[("created_at", -1)])
+    if job:
+        log.info("Resuming translation job %s (%s/%s)", job["id"], job.get("done"), job.get("total"))
+        asyncio.create_task(_run_bulk_translate(job["id"], job.get("resource", "everything"),
+                                                job.get("locales") or [], bool(job.get("overwrite"))))
 
 
 @api.post("/admin/translate/bulk")
@@ -2580,6 +2666,7 @@ async def admin_bulk_translate(payload: BulkTranslateIn, user=Depends(require_ad
     job_id = str(uuid.uuid4())
     await db.translate_jobs.insert_one({
         "id": job_id, "status": "queued", "resource": payload.resource, "locales": targets,
+        "overwrite": payload.overwrite, "completed": [],
         "total": 0, "done": 0, "failed": [], "current": "", "created_at": now_utc(), "updated_at": now_utc(),
         "actor": user["email"],
     })
@@ -2587,9 +2674,23 @@ async def admin_bulk_translate(payload: BulkTranslateIn, user=Depends(require_ad
     return {"job_id": job_id, "status": "queued", "locales": targets}
 
 
+@api.post("/admin/translate/bulk/stop")
+async def admin_bulk_translate_stop(user=Depends(require_admin)):
+    res = await db.translate_jobs.update_many(
+        {"status": {"$in": ["queued", "running"]}},
+        {"$set": {"status": "stopped", "current": "", "updated_at": now_utc()}})
+    return {"stopped": res.modified_count}
+
+
+@api.get("/admin/translate/bulk/history")
+async def admin_bulk_translate_history(user=Depends(require_admin)):
+    jobs = await db.translate_jobs.find({}, {"_id": 0, "completed": 0}).sort("created_at", -1).to_list(10)
+    return {"jobs": jobs}
+
+
 @api.get("/admin/translate/bulk")
 async def admin_bulk_translate_status(user=Depends(require_admin)):
-    job = await db.translate_jobs.find_one({}, {"_id": 0}, sort=[("created_at", -1)])
+    job = await db.translate_jobs.find_one({}, {"_id": 0, "completed": 0}, sort=[("created_at", -1)])
     return {"job": job}
 
 

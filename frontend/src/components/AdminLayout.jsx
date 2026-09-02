@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, Package, ShoppingBag, Users, Upload, Settings, LogOut, Globe, Link2Off, FileText, Menu, X, LineChart, Boxes, ListOrdered, MessageSquare, Plug, Languages, Newspaper } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Users, Upload, Settings, LogOut, Globe, Link2Off, FileText, Menu, X, LineChart, Boxes, ListOrdered, MessageSquare, Plug, Languages, Newspaper, Sparkles } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const NAV = [
@@ -14,6 +14,7 @@ const NAV = [
   { to: "/admin/customers", label: "Клиенти", icon: Users },
   { to: "/admin/messages", label: "Запитвания", icon: MessageSquare },
   { to: "/admin/import", label: "Импорт", icon: Upload },
+  { to: "/admin/translations", label: "Преводи", icon: Sparkles },
   { to: "/admin/locales", label: "Езици и URL", icon: Globe },
   { to: "/admin/pages", label: "Страници по език", icon: FileText },
   { to: "/admin/articles", label: "Блог статии", icon: Newspaper },
