@@ -289,13 +289,19 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   }, [open]);
 
   /** The device position is the only accurate source of the visitor's city. */
+  const [locateErr, setLocateErr] = useState("");
   const locate = useCallback(({ prompt = true } = {}) => {
     setLocating(true);
+    setLocateErr("");
     pfDeviceGeo({ prompt })
       .then((d) => setGeo((g) => ({ ...(g || {}), ...d, country: d.country || g?.country })))
-      .catch(() => {})
+      .catch((e) => {
+        if (!prompt) return; // silent warm-up: never nag, never prompt
+        const code = e?.code; // GeolocationPositionError: 1 denied, 2 unavailable, 3 timeout
+        setLocateErr(t(code === 1 ? "locateDenied" : "locateFailed"));
+      })
       .finally(() => setLocating(false));
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!open) return;
@@ -303,7 +309,8 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
     pfBank().then(setBank).catch(() => {});
     pfCountries().then((d) => setCountries(d.countries || [])).catch(() => {});
     pfGeo().then((d) => setGeo((g) => (g?.source === "device" ? g : d))).catch(() => {});
-    locate();
+    // the permission dialog is asked for only when the visitor taps "find the nearest to me"
+    locate({ prompt: false });
     track("checkout_opened");
   }, [open]);
 
@@ -596,11 +603,14 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                 </div>
 
                 {(needsPickup || needsAddress) && geo?.source !== "device" && (
-                  <button type="button" className="nc2-locate" onClick={() => locate({ prompt: true })}
-                    disabled={locating} data-testid="pc-locate-btn">
-                    {locating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                    {locating ? t("locatingText") : t("locateBtn")}
-                  </button>
+                  <>
+                    <button type="button" className="nc2-locate" onClick={() => locate({ prompt: true })}
+                      disabled={locating} data-testid="pc-locate-btn">
+                      {locating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                      {locating ? t("locatingText") : t("locateBtn")}
+                    </button>
+                    {locateErr && <p className="nc2-err" data-testid="pc-locate-error">{locateErr}</p>}
+                  </>
                 )}
 
                 {needsPickup && (
