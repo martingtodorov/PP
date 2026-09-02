@@ -37,7 +37,17 @@ def _now() -> str:
 
 # ---------------------------------------------------------------- settings
 DEFAULTS = {"enabled": False, "auto_create": True, "app_id": "", "app_secret": "", "sender_id": 0,
-            "sender_office_id": 1, "default_weight": 0.1, "cod_processing": "CASH", "package": "PACK"}
+            "sender_office_id": 1, "default_weight": 0.1, "cod_processing": "CASH", "package": "PACK",
+            # owner's decision: every parcel may be opened before it is paid for, return on us
+            "open_before_pay": True, "obpd_option": "OPEN", "obpd_return_payer": "SENDER"}
+
+
+def obpd_of(cfg: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """NextLevel `services.obpd` — OPEN = the receiver may open the parcel before paying."""
+    if not cfg.get("open_before_pay", True):
+        return None
+    return {"option": (cfg.get("obpd_option") or "OPEN").upper(),
+            "return_shipment_payer": (cfg.get("obpd_return_payer") or "SENDER").upper()}
 
 
 async def get_config() -> Dict[str, Any]:
@@ -143,8 +153,14 @@ def build_payload(order: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         "ref2": str(order.get("id") or "")[:60],
     }
     cod = cod_of(order, cfg)
+    services: Dict[str, Any] = {}
     if cod:
-        payload["services"] = {"cod": cod}
+        services["cod"] = cod
+    obpd = obpd_of(cfg)
+    if obpd and cod:  # opening before payment only makes sense when the receiver still has to pay
+        services["obpd"] = obpd
+    if services:
+        payload["services"] = services
     return payload
 
 

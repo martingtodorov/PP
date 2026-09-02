@@ -128,6 +128,11 @@ def to_wc_order(order: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     if sh.get("awb"):
         meta.append({"id": 10, "key": "_awb", "value": sh["awb"]})
     is_cod = order.get("payment_method") == "cod"
+    if is_cod and cfg.get("open_before_pay", True):
+        # NextLevel services.obpd — the receiver may open/inspect the parcel before paying
+        meta += [{"id": 11, "key": "_obpd_option", "value": (cfg.get("obpd_option") or "OPEN").upper()},
+                 {"id": 12, "key": "_obpd_return_shipment_payer", "value": (cfg.get("obpd_return_payer") or "SENDER").upper()},
+                 {"id": 13, "key": "_open_before_pay", "value": "yes"}]
     status = wc_status(order, cfg)
     wc_id = order.get("wc_id") or wc_int(order.get("id") or "")
     return {

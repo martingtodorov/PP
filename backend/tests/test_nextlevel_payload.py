@@ -25,8 +25,10 @@ def test_office_from_nextcart_id_and_cod_cash_not_included():
     p = nl.build_payload(o, CFG)
     assert p["receiver"]["office_id"] == 4434 and "country" not in p["receiver"]
     assert p["services"]["cod"] == {"amount": 62.89, "currency": "EUR", "processing_type": "CASH", "included_shipping_price": False}
+    # every COD parcel may be opened before payment (owner's default)
+    assert p["services"]["obpd"] == {"option": "OPEN", "return_shipment_payer": "SENDER"}
     assert p["sender"] == {"id": 594, "office_id": 1} and "courier" not in p
-    assert p["content"]["weight"] == 0.4 and p["ref"] == "01046442"
+    assert p["content"]["weight"] == 0.1 and p["ref"] == "01046442"
 
 
 def test_address_requires_post_code():

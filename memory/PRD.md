@@ -1080,3 +1080,26 @@ deploy_backend + deploy_frontend + deploy_nginx. Отворено: Resend дом
 **Отворени задачи (одобрени от собственика, още НЕ започнати):**
 - Опция „Отвори пратката преди плащане“ в чекаута (NextLevel `services.obpd` = {option: OPEN, return_shipment_payer: SENDER}) — потвърдено от документацията.
 - Тестови COD поръчки за всичките 10 не-BG държави (офис/автомат за RO/GR/HU/PL/SK/SI/HR, адрес за CZ/DE/IT, местна валута), с изтриване след проверка.
+
+### 2026-06 — „Отвори пратката преди плащане“ по подразбиране + тестове по 10 държави
+- Собственикът: НЕ като опция в чекаута — **всяка пратка** тръгва с услугата маркирана.
+  `nextlevel.obpd_of()` + нови настройки `open_before_pay: True`, `obpd_option: OPEN`,
+  `obpd_return_payer: SENDER` (в `nextlevel.DEFAULTS` и `fulfillment.DEFAULTS`, изключваеми през
+  `PUT /api/admin/integrations/nextlevel-fulfillment {open_before_pay:false}`).
+  Добавя се само при COD (при банков превод няма какво да се плаща при получаване).
+  - Наши товарителници: `services.obpd` в `nextlevel.build_payload`.
+  - Фулфилмент API: `services.obpd` в `fulfillment.build_order`.
+  - WooCommerce фасада: `meta_data` `_obpd_option`, `_obpd_return_shipment_payer`, `_open_before_pay`.
+  - **Проверено на живо**: реална товарителница Econt офис София с obpd → NextLevel върна
+    `service: obpd — "Options before payment details", amount 0.00` (без такса), пратката е отказана.
+- **Тестови COD поръчки за всичките 10 не-BG държави** (`backend/tools/country_orders_test.py`,
+  `--only XX,YY`, `--cleanup`): RO FANbox автомат 358 RON · GR Speedex офис 65.99 € ·
+  HU GLS офис 24 880 HUF · PL GLS офис 298 PLN · SK GLS офис 67.99 € · SI GLS офис 67.99 € ·
+  HR GLS офис 67.99 € · CZ GLS адрес 1709 CZK · DE GLS адрес 67.99 € · IT GLS адрес 67.99 €.
+  **10/10 приети от NextLevel** (webhook order.created 200, nl_id 4582734–4582750, wc статус processing).
+  WooCommerce фасадата връща правилната валута, държава, офис (`office_id`) и obpd мета за всяка.
+  Забележка: HU офис вече РАБОТИ (GLS ParcelShop), CZ и IT остават само „до адрес“ (така ги дава NextCart).
+- Всички 10 тестови поръчки са отказани (cancel 200) и изтрити, складът е върнат, тестовият клиент
+  `qa-country@example.com` е изчистен. В панела на NextLevel може да останат записи за изтриване.
+- Тестове: `tests/test_nextlevel_payload.py` (7), `tests/test_fulfillment.py` (18, вкл. нов obpd тест),
+  `tests/test_iteration37_llms.py` (5) — 30 зелени. (Поправена и остаряла проверка за тегло 0.4 → 0.1.)
