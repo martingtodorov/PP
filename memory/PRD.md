@@ -985,3 +985,22 @@ purepeptide.ro.
   HMAC), а изходящият push се опитва само ако е попълнен реален адрес (иначе ясно съобщение).
 - ЧАКА: от RevOrder — какво иска „custom platform“ (адреси, които нашият магазин трябва да предоставя,
   формат на поръчките), за да го изградим точно; в admin → Интеграции са готови ключове + webhook URL.
+
+### 2026-06 — NextLevel Delivery: товарителници директно от магазина
+- „RevOrder“ ключовете всъщност са за **api.nextlevel.delivery** (`app-id`/`app-secret`, публична
+  документация nextlevel-delivery.readme.io). Пълна карта как приема пратките по държави/куриери:
+  `memory/nextlevel_mapping.md` (~120 calculate заявки + 19 реални създадени и отказани пратки).
+- Нов `backend/nextlevel.py`: настройки в `settings` (`integrations.nextlevel`: ключове, sender 594,
+  тегло 0.4, авто-създаване), `build_payload` (офис = NextCart id „econt:4434“ → `office_id` 4434; адрес
+  изисква пощенски код; COD само при `cod`, CASH, `included_shipping_price:false`, валута на държавата
+  — при несъответствие отказва), `create/cancel/label/track/sync`, авто-създаване след checkout
+  (`nextlevel.auto_create`), sync на статусите на 30 мин. Линк за проследяване към куриера
+  (NextLevel няма публичен).
+- Админ: Интеграции → карта „NextLevel Delivery“ (ключове, подател, тегло, Включено, Авто, Тествай);
+  Поръчка → карта „NextLevel товарителница“ (номер, куриер, цена, НП, линк, Етикет PDF, Обнови,
+  Откажи, Създай; грешката се показва, ако авто-създаването е отказано).
+- Проверено на живо: checkout → авто товарителница Econt офис (5.16 €, НП 59 €) → PDF етикет → sync
+  → отказ. Тестове: `tests/test_nextlevel_payload.py` (7). Ansible: опционални `nextlevel_app_id/secret`.
+- Ограничения от акаунта: HU само адрес + унгарски телефон (GLS ParcelShop „PSD“ не е активиран);
+  RO само FAN; PL/CZ само „авто“ (GLS); HR/IT скъпи (34 €/25 €); COD в AT/NL/BE/FR/ES — неясно (такса 0).
+- Тестовите поръчки в preview са изтрити; всичките тестови пратки са отказани (`{success:true}`).

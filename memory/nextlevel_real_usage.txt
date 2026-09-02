@@ -1,0 +1,56 @@
+shipments fetched: 20 range: 2026-08-31 14:15:13 → 2026-09-01 14:33:51
+by subcontractor: [('Econt', 11), ('BoxNow', 4), ('Speedy', 2), ('FAN', 2), ('PigeonExpress', 1)]
+by country: [('{"id": 1, "code": "BG", "parent_id": null, "currency": "EUR", "name": "Bulgaria", "phone_code": "359"}', 18), ('{"id": 2, "code": "RO", "parent_id": null, "currency": "RON", "name": "Romania", "phone_code": "40"}', 2)]
+by status: [('In parcelshop', 7), ('Delivered', 5), ('In locker', 3), ('In Transit', 2), ('In Office', 1), ('In Courier', 1), ('Return created', 1)]
+weights: [(0.4, 20)]
+currency: [('EUR', 18), ('RON', 2)]
+ref sample: ['01046442', '01046242', '01045935', '01020794', '01045612', '01045388']
+rows 20 keys: ['id', 'status', 'status_id', 'parcels', 'courier_parcels', 'receiver', 'sender', 'ref', 'weight', 'declared_weight', 'currency', 'billing_currency', 'base_price', 'price', 'price_without_vat', 'vat', 'total_price', 'parcels_count', 'pickup_date', 'delivery_date', 'pay_date', 'created_at', 'country', 'last_movement', 'subcontractor', 'tracking_link', 'return_shipment_delivered_to_sender', 'return_shipment_delivered_to_nl', 'return_status', 'days_in_courier']
+parcels sample: ["1000030718981"]
+{'limit': 100} -> 20 2026-09-01 14:33:51
+{'limit': 100, 'offset': 100} -> 20 2026-09-01 14:33:51
+{'limit': 100, 'page': 2} -> 20 2026-08-31 12:45:10
+{'limit': 100, 'from': '2026-08-01'} -> {'error': {'code': 400, 'message': 'The to field is required when from is present.'}} 
+
+== ('BoxNow', 'BG') status In Office
+  receiver: {"country": "BG", "place": "София", "post_code": "1000"} | office: BOX NOW - Мокренски Проход 23 София - 24/7 | is_machine True
+  weight 0.4 currency EUR content '8219368161623' ref 01046442 ref2 8219368161623 package None parcels 1
+  services: [{"service": "cod", "service_name": "COD", "amount": "1.29", "value": {"amount": "91.99", "currency": "EUR", "included_shipping_price": false, "processing_type": "CASH"}}]
+  payment: null | courier: None | total None
+  keys: ['id', 'awb', 'courier_awb', 'status', 'status_id', 'cod_status', 'cod_status_text', 'courier_id', 'subcontractor', 'invoice', 'protocol', 'ccr_number', 'protocol_import_id', 'weight', 'content', 'currency', 'billing_currency', 'base_price', 'price_without_vat', 'vat', 'total_price', 'movements', 'taxes', 'client', 'parcels_count', 'pickup_date', 'delivery_date', 'pay_date', 'payout_currency', 'payment_side', 'ref', 'ref2', 'note', 'source', 'original_shipment_id', 'return_shipment_id', 'forward_shipment_id', 'swap_shipment_id', 'return_shipment_delivered_to_sender', 'return_shipment_delivered_to_nl', 'return_status', 'created_at', 'can_create_return', 'has_support_thread', 'dispositions', 'is_transit', 'child_shipments', 'days_in_courier', 'signature']
+
+== ('Speedy', 'BG') status In Courier
+  receiver: {"country": "BG", "place": "БУРГАС", "post_code": "8000"} | office: БУРГАС - МЕДЕН РУДНИК | is_machine False
+  weight 0.4 currency EUR content '8094069358935-3' ref 01046242 ref2 8094069358935-3 package None parcels 1
+  services: [{"service": "cod", "service_name": "COD", "amount": "0.00", "value": {"amount": "28.00", "currency": "EUR", "included_shipping_price": false, "processing_type": "CASH"}}]
+  payment: null | courier: None | total None
+
+== ('Econt', 'BG') status Delivered
+  receiver: {"country": "BG", "place": "СТАРА ЗАГОРА", "post_code": "6000"} | office: Стара Загора Мототехника | is_machine False
+  weight 0.4 currency EUR content '8218885423447' ref 01045935 ref2 8218885423447 package None parcels 1
+  services: [{"service": "cod", "service_name": "COD", "amount": "4.83", "value": {"amount": "321.89", "currency": "EUR", "included_shipping_price": false, "processing_type": "CASH"}}]
+  payment: null | courier: None | total None
+
+== ('FAN', 'RO') status In Transit
+  receiver: {"country": "RO", "place": "TARGOVISTE", "post_code": "130002", "street": "Str Tudor Vladimirescu, nr 3, Targoviste, Dâmboviț"} | office: None | is_machine None
+  weight 0.4 currency RON content '8217336643927' ref 01044580 ref2 8217336643927 package None parcels 1
+  services: [{"service": "cod", "service_name": "COD", "amount": "2.20", "value": {"amount": "786.65", "currency": "RON", "included_shipping_price": false, "processing_type": "CASH"}}]
+  payment: null | courier: None | total None
+
+== ('PigeonExpress', 'BG') status In parcelshop
+  receiver: {"country": "BG", "place": "София", "post_code": "1000", "street": "бул.Македония 28, София, 1000, Bulgaria"} | office: None | is_machine None
+  weight 0.4 currency EUR content '8216067801431' ref 01043744 ref2 8216067801431 package None parcels 1
+  services: [{"service": "cod", "service_name": "COD", "amount": "2.78", "value": {"amount": "163.59", "currency": "EUR", "included_shipping_price": false, "processing_type": "CASH"}}]
+  payment: null | courier: None | total None
+
+== ('GLS', 'ES') status In Transit
+  receiver: {"country": "ES", "place": "San Pedro", "post_code": "29670"} | office: PS MASCOTAGRAM | is_machine False
+  weight 0.6 currency EUR content 'Dnje-3' ref 01043442 ref2 Dnje-3 package None parcels 1
+  services: []
+  payment: null | courier: None | total None
+
+== ('GLS', 'FR') status In Transit
+  receiver: {"country": "FR", "place": "Massy", "post_code": "91300", "street": "2 Bis Rue Galvani,", "other": "PLEASE DELIVER INSIDE THE \"BRING ME\" BOX ONLY"} | office: None | is_machine None
+  weight 0.4 currency EUR content 'wefiuf' ref 01043439 ref2 wefiuf package None parcels 1
+  services: []
+  payment: null | courier: None | total None

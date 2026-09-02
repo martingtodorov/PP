@@ -131,3 +131,7 @@ backup_keep_days: 14
 # optional off-site copy (rsync target), e.g. "u123456@u123456.your-storagebox.de:purepeptide"
 # leave empty to keep the backups on pp-back only
 backup_offsite: ""
+
+# NextLevel Delivery (api.nextlevel.delivery) — може и от Админ → Интеграции; тук е само резервно
+nextlevel_app_id: ""
+nextlevel_app_secret: ""

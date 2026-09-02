@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Copy, Check, Truck, Clock, PackageCheck } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
+import { ShipmentCard } from "../components/admin/ShipmentCard";
 import { api, fmtEUR, fmtMoney, formatErr, img } from "../lib/api";
 import { Badge, PAY_BADGE, FUL_BADGE } from "./AdminOrdersPage";
 
@@ -136,6 +137,8 @@ export default function AdminOrderDetailPage() {
               </p>
             )}
           </section>
+
+          <ShipmentCard order={order} onChanged={load} />
 
           {/* payment */}
           <section className="bg-white border border-slate-200 rounded-xl p-5" data-testid="order-payment-card">

@@ -1,0 +1,63 @@
+== COD (included_shipping_price=false) per country / currency
+  BG EUR 62.89                                               OK total=5.94 base=3.56 services=0.94
+  BG CASH                                                    OK total=5.94 base=3.56 services=0.94
+  BG cod 0                                                   OK total=4.70 base=3.56 services=0.00
+  BG cod 5000                                                OK total=103.70 base=3.56 services=75.00
+  BG cod + dv                                                OK total=5.94 base=3.56 services=0.94
+  RO RON 319                                                 OK total=10.21 base=2.81 services=4.79
+  RO RON 319.49                                              OK total=10.22 base=2.81 services=4.79
+  RO EUR (wrong)                                             OK total=5.04 base=2.81 services=0.94
+  HU plain                                                   OK total=5.36 base=3.99 services=0.00
+  HU cod 25990 HUF                                           OK total=703.97 base=3.99 services=519.80
+  HU cod EUR (wrong currency)                                OK total=7.05 base=3.99 services=1.26
+  PL plain                                                   OK total=5.36 base=3.99 services=0.00
+  PL cod 249 PLN                                             OK total=12.06 base=3.99 services=4.98
+  PL cod EUR (wrong currency)                                OK total=7.05 base=3.99 services=1.26
+  CZ plain                                                   OK total=5.85 base=4.35 services=0.00
+  CZ cod 1299 CZK                                            OK total=40.76 base=4.35 services=25.98
+  CZ cod EUR (wrong currency)                                OK total=7.54 base=4.35 services=1.26
+  GR plain                                                   OK total=8.81 base=3.12 services=0.00
+  GR cod 62.89 EUR                                           OK total=10.82 base=3.12 services=1.57
+  DE plain                                                   OK total=5.65 base=4.40 services=0.00
+  DE cod 62.89 EUR                                           OK total=12.21 base=4.40 services=5.11
+  SK plain                                                   OK total=5.36 base=3.99 services=0.00
+  SK cod 62.89 EUR                                           OK total=7.05 base=3.99 services=1.26
+  HR plain                                                   OK total=34.45 base=3.99 services=0.00
+  HR cod 62.89 EUR                                           OK total=36.17 base=3.99 services=1.26
+  IT plain                                                   OK total=24.92 base=5.06 services=0.00
+  IT cod 62.89 EUR                                           OK total=29.82 base=5.06 services=3.58
+  SI plain                                                   OK total=5.46 base=3.99 services=0.00
+  SI cod 62.89 EUR                                           OK total=7.18 base=3.99 services=1.26
+  AT plain                                                   OK total=9.20 base=7.30 services=0.00
+  AT cod 62.89 EUR                                           OK total=9.20 base=7.30 services=0.00
+  FR plain                                                   OK total=10.40 base=8.25 services=0.00
+  FR cod 62.89 EUR                                           OK total=10.40 base=8.25 services=0.00
+  ES plain                                                   OK total=20.25 base=16.07 services=0.00
+  ES cod 62.89 EUR                                           OK total=20.25 base=16.07 services=0.00
+  NL plain                                                   OK total=9.20 base=7.30 services=0.00
+  NL cod 62.89 EUR                                           OK total=9.20 base=7.30 services=0.00
+  BE plain                                                   OK total=9.20 base=7.30 services=0.00
+  BE cod 62.89 EUR                                           OK total=9.20 base=7.30 services=0.00
+
+== lockers + COD
+  BoxNow locker #329000 + cod                                OK total=1.11 base=0.00 services=0.88
+  BoxNow locker + card_cod                                   OK total=0.00 base=0.00 services=0.00
+  BoxNow locker weight 3kg                                   OK total=0.32 base=0.25 services=0.00
+  Econt locker #4471 + cod                                   OK total=5.23 base=3.02 services=0.94
+  Econt locker + card_cod                                    OK total=3.99 base=3.02 services=0.00
+  Econt locker weight 3kg                                    OK total=4.57 base=3.46 services=0.00
+  Speedy locker #497 + cod                                   OK total=0.00 base=0.00 services=0.00
+  Speedy locker + card_cod                                   OK total=0.00 base=0.00 services=0.00
+  Speedy locker weight 3kg                                   OK total=0.00 base=0.00 services=0.00
+  Sameday locker #87404 + cod                                OK total=0.81 base=0.00 services=0.63
+  Sameday locker + card_cod                                  OK total=0.00 base=0.00 services=0.00
+  Sameday locker weight 3kg                                  OK total=0.33 base=0.26 services=0.00
+
+== GR/RO lockers
+  GR BoxNow locker #1412116 + cod                            OK total=6.15 base=0.00 services=1.07
+  RO Sameday locker #160710 + cod                            ERR 400 The account does not have setup to ship to an office for this country, please contact your account manager
+  RO FAN locker #21627 + cod                                 OK total=10.21 base=2.81 services=4.79
+  HU GLS locker #11631 + cod                                 OK total=703.97 base=3.99 services=519.80
+  GR ACS locker #6535 + cod                                  OK total=10.05 base=2.81 services=1.28
+  GR Speedex office #6281 + cod                              OK total=10.17 base=2.81 services=1.26
+  GR Geniki locker #1417696 + cod                            OK total=10.82 base=3.12 services=1.57

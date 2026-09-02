@@ -1,0 +1,84 @@
+== BG couriers via courier filter (incl. lockers)
+  BoxNow     offices=927 lockers=927 sample={"id": 329000, "office_id": "1840", "office_code": "1840", "name": "BOX NOW - New Avenue, ул. Проф. Храбър Попов 14, София - 24/7", "is_machine": true}
+    locker BoxNow #329000 BOX NOW - New Avenue,              OK total=0.00 base=0.00 services=0.00
+    locker BoxNow + COD 100 EUR                              ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  Econt      offices=630 lockers=41 sample={"id": 4431, "office_id": "7538", "office_code": "7538", "name": "Айдемир", "is_machine": false}
+    locker Econt #4471 Бургас 24/7 Еконтомат-                OK total=3.99 base=3.02 services=0.00
+    locker Econt + COD 100 EUR                               ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  Speedy     offices=1000 lockers=544 sample={"id": 2, "office_id": "1", "office_code": "1", "name": "ПЛОВДИВ – СКЛАД ЮГ", "is_machine": false}
+    locker Speedy #497 СОФИЯ - МЕТРО 1 (АВТОМ                OK total=0.00 base=0.00 services=0.00
+    locker Speedy + COD 100 EUR                              ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  Sameday    offices=1000 lockers=1000 sample={"id": 87404, "office_id": "20006", "office_code": "20006", "name": "easybox София Черковна", "is_machine": true}
+    locker Sameday #87404 easybox София Черковна             OK total=0.00 base=0.00 services=0.00
+    locker Sameday + COD 100 EUR                             ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  NextLevel  offices=2 lockers=0 sample={"id": 1, "office_id": "1", "office_code": "1", "name": "NextLevel HUB", "is_machine": false}
+
+== Speedy BG zero-price mystery
+  Speedy address weight=0.5                                  OK total=0.00 base=0.00 services=0.00
+  Speedy address weight=2                                    OK total=0.00 base=0.00 services=0.00
+  Speedy address weight=5                                    OK total=0.00 base=0.00 services=0.00
+  Speedy via receiver.courier? (not in schema)               OK total=4.70 base=3.56 services=0.00
+  Speedy office #2 plain                                     OK total=0.00 base=0.00 services=0.00
+  Speedy office + sender.courier=Speedy                      OK total=0.00 base=0.00 services=0.00
+  Speedy office + sender.courier=Econt (mismatch)            ERR 400 The account does not have setup to ship to an office with this courier for this country, please contact your a
+
+== weights (Econt BG address)
+  weight=0.01                                                OK total=4.70 base=3.56 services=0.00
+  weight=0.1                                                 OK total=4.70 base=3.56 services=0.00
+  weight=0.3                                                 OK total=4.70 base=3.56 services=0.00
+  weight=1                                                   OK total=4.70 base=3.56 services=0.00
+  weight=3                                                   OK total=7.42 base=5.62 services=0.00
+  weight=10                                                  OK total=11.40 base=8.64 services=0.00
+  weight=20                                                  OK total=15.10 base=11.44 services=0.00
+  weight=31                                                  OK total=19.17 base=14.52 services=0.00
+  weight=32                                                  OK total=19.54 base=14.80 services=0.00
+  weight=50                                                  OK total=26.19 base=19.84 services=0.00
+
+== address validation (BG)
+  Latin city 'Sofia'                                         OK total=4.70 base=3.56 services=0.00
+  no post_code                                               ERR 400 The receiver.post code field is required when receiver.office id is not present.
+  wrong post_code 9999                                       OK total=4.70 base=3.56 services=0.00
+  no street (only place+post_code)                           OK total=4.70 base=3.56 services=0.00
+  free-text 'address' field instead of street                OK total=4.70 base=3.56 services=0.00
+  village 'с. Бистрица' no post_code                         ERR 400 The receiver.post code field is required when receiver.office id is not present.
+  village 'Бистрица' + post_code 1444                        OK total=4.70 base=3.56 services=0.00
+  unknown country XX                                         ERR 400 The selected receiver.country is invalid.
+  lowercase country 'bg'                                     OK total=4.70 base=3.56 services=0.00
+  no weight                                                  ERR 400 The weight field is required.
+  weight as string '0.5'                                     OK total=4.70 base=3.56 services=0.00
+  sender without office_id                                   OK total=4.70 base=3.56 services=0.00
+  wrong sender id 1                                          ERR 400 Invalid sender ID
+
+== COD currency rules
+  BG cod EUR                                                 ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  BG cod BGN (old currency)                                  ERR 400 The selected services.cod.currency is invalid.
+  BG cod CASH                                                ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  BG cod included_shipping_price                             ERR 400 You don't have permission to cod.included_shipping_price service
+  BG cod no processing_type                                  ERR 400 The services.cod.processing type field is required when services.cod is present.
+  RO cod RON                                                 ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  RO cod EUR (wrong currency)                                ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  RO cod decimals 319.49                                     ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  HU cod HUF 25990                                           ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  PL cod PLN 249                                             ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  CZ cod CZK 1299                                            ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  GR cod EUR                                                 ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  DE cod EUR                                                 ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  cod amount 0                                               ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  cod amount 5000                                            ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+  card_cod 62.89                                             OK total=4.70 base=3.56 services=0.00
+
+== other services (BG address)
+  dv 100 EUR                                                 OK total=4.70 base=3.56 services=0.00
+  fragile                                                    OK total=4.70 base=3.56 services=0.00
+  sd saturday                                                OK total=4.70 base=3.56 services=0.00
+  obpd OPEN/RECIPIENT                                        OK total=4.70 base=3.56 services=0.00
+  signature                                                  OK total=4.70 base=3.56 services=0.00
+  cod + dv together                                          ERR 400 The services.cod.included shipping price field is required when services.cod is present.
+
+== RO/GR detail: office by office_code (external) instead of id
+  RO FAN office_id=21627                                     OK total=3.78 base=2.81 services=0.00
+  RO FAN office_code=F1000005 + country                      ERR 400 The receiver.place field is required when receiver.office id is not present.
+  RO FAN office_code + courier + country                     OK total=3.78 base=2.81 services=0.00
+  GR ACS office_id=6501 ACS AGRINIO - AGRINI                 OK total=8.41 base=2.81 services=0.00
+  GR BoxNow lockers: 1000
+  GR BoxNow locker #1412116                                  OK total=4.80 base=0.00 services=0.00
