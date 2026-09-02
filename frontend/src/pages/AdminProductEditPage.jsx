@@ -91,13 +91,48 @@ export default function AdminProductEditPage() {
     setP((cur) => ({ ...cur, images: [...(cur.images || []), url], image: cur.image || url }));
   };
 
+  /** Upload one file and pin it to a single variant (it also joins the product gallery). */
+  const uploadVariantImage = (idx) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setUploading(true);
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const { data } = await api.post("/admin/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        const url = absUrl(data.url);
+        setP((cur) => {
+          const variants = [...cur.variants];
+          variants[idx] = { ...variants[idx], image: url };
+          const images = (cur.images || []).includes(url) ? cur.images : [...(cur.images || []), url];
+          return { ...cur, variants, images, image: cur.image || url };
+        });
+        toast.success("Снимката е закачена към варианта");
+      } catch (e) {
+        toast.error(formatErr(e));
+      } finally {
+        setUploading(false);
+      }
+    };
+    input.click();
+  };
+
   const save = async () => {
     if (!p.handle || !p.title) { toast.error("Handle и заглавие са задължителни"); return; }
     setSaving(true);
     const payload = {
       ...p,
       image: p.image || p.images?.[0] || "",
-      variants: p.variants.map((v) => ({ ...v, price_eur: Number(v.price_eur) || 0, stock: Number(v.stock) || 0 })),
+      variants: p.variants.map((v) => ({
+        ...v,
+        price_eur: Number(v.price_eur) || 0,
+        stock: Number(v.stock) || 0,
+        compare_at_eur: Number(v.compare_at_eur) || 0,
+      })),
     };
     delete payload.id;
     delete payload.created_at;
@@ -263,7 +298,8 @@ export default function AdminProductEditPage() {
             </div>
             <div className="space-y-3">
               {p.variants.map((v, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-center" data-testid={`variant-row-${i}`}>
+                <div key={i} className="space-y-2 border-b border-slate-100 pb-3 last:border-0" data-testid={`variant-row-${i}`}>
+                <div className="grid grid-cols-12 gap-2 items-center">
                   <GripVertical className="h-4 w-4 text-slate-300 col-span-1" />
                   <input placeholder="Име (5mg)" value={v.name}
                     onChange={(e) => { const vs = [...p.variants]; vs[i] = { ...v, name: e.target.value }; set({ variants: vs }); }}
@@ -281,6 +317,34 @@ export default function AdminProductEditPage() {
                     className="col-span-1 text-slate-400 hover:text-red-600" data-testid={`remove-variant-${i}`}>
                     <Trash2 className="h-4 w-4" />
                   </button>
+                </div>
+                <div className="grid grid-cols-12 gap-2 items-center pl-7">
+                  <input placeholder="„Беше“ цена (EUR)" type="number" step="0.01" value={v.compare_at_eur ?? ""}
+                    onChange={(e) => { const vs = [...p.variants]; vs[i] = { ...v, compare_at_eur: e.target.value }; set({ variants: vs }); }}
+                    className="col-span-3 border border-slate-300 rounded-md px-2 py-1.5 text-sm" data-testid={`variant-compare-${i}`} />
+                  <div className="col-span-8 flex items-center gap-2">
+                    {v.image ? (
+                      <img src={img(v.image, 120)} alt="" className="h-10 w-10 object-contain border border-slate-200 rounded bg-white"
+                        data-testid={`variant-image-thumb-${i}`} />
+                    ) : (
+                      <span className="text-xs text-slate-400">Снимка на варианта:</span>
+                    )}
+                    <select value={v.image || ""} data-testid={`variant-image-select-${i}`}
+                      onChange={(e) => { const vs = [...p.variants]; vs[i] = { ...v, image: e.target.value }; set({ variants: vs }); }}
+                      className="border border-slate-300 rounded-md px-2 py-1.5 text-xs max-w-[240px]">
+                      <option value="">— обща за продукта —</option>
+                      {(p.images || []).map((src, x) => (
+                        <option key={src} value={src}>Снимка {x + 1} · {src.split("/").pop().slice(0, 28)}</option>
+                      ))}
+                      {v.image && !(p.images || []).includes(v.image) && (
+                        <option value={v.image}>{v.image.split("/").pop().slice(0, 34)}</option>
+                      )}
+                    </select>
+                    <button onClick={() => uploadVariantImage(i)} disabled={uploading}
+                      className="text-xs font-semibold text-coral-700 hover:text-coral-800 disabled:opacity-50"
+                      data-testid={`variant-image-upload-${i}`}>Качи нова</button>
+                  </div>
+                </div>
                 </div>
               ))}
             </div>

@@ -4,6 +4,7 @@
 
 export const CHECKOUT_STRINGS = {
   bg: {
+    articleMissing: "Статията не е намерена",
     cartTitle: "Количка",
     toCatalog: "Към каталога",
     summary: "Обобщение",
@@ -100,6 +101,7 @@ export const CHECKOUT_STRINGS = {
   },
 
   en: {
+    articleMissing: "Article not found",
     cartTitle: "Cart",
     toCatalog: "Back to catalogue",
     summary: "Summary",
@@ -196,6 +198,7 @@ export const CHECKOUT_STRINGS = {
   },
 
   ro: {
+    articleMissing: "Articolul nu a fost găsit",
     cartTitle: "Coș",
     toCatalog: "Înapoi la catalog",
     summary: "Sumar",
@@ -292,6 +295,7 @@ export const CHECKOUT_STRINGS = {
   },
 
   pl: {
+    articleMissing: "Nie znaleziono artykułu",
     cartTitle: "Koszyk",
     toCatalog: "Wróć do katalogu",
     summary: "Podsumowanie",
@@ -388,6 +392,7 @@ export const CHECKOUT_STRINGS = {
   },
 
   cz: {
+    articleMissing: "Článek nebyl nalezen",
     cartTitle: "Košík",
     toCatalog: "Zpět do katalogu",
     summary: "Přehled",
@@ -484,6 +489,7 @@ export const CHECKOUT_STRINGS = {
   },
 
   hu: {
+    articleMissing: "A cikk nem található",
     cartTitle: "Kosár",
     toCatalog: "Vissza a katalógushoz",
     summary: "Összegzés",
@@ -580,6 +586,7 @@ export const CHECKOUT_STRINGS = {
   },
 
   de: {
+    articleMissing: "Artikel nicht gefunden",
     cartTitle: "Warenkorb",
     toCatalog: "Zurück zum Katalog",
     summary: "Übersicht",
@@ -676,6 +683,7 @@ export const CHECKOUT_STRINGS = {
   },
 
   fr: {
+    articleMissing: "Article introuvable",
     cartTitle: "Panier",
     toCatalog: "Retour au catalogue",
     summary: "Récapitulatif",
@@ -772,6 +780,7 @@ export const CHECKOUT_STRINGS = {
   },
 
   sk: {
+    articleMissing: "Článok sa nenašiel",
     cartTitle: "Košík",
     toCatalog: "Späť do katalógu",
     summary: "Prehľad",
@@ -868,6 +877,7 @@ export const CHECKOUT_STRINGS = {
   },
 
   si: {
+    articleMissing: "Članek ni bil najden",
     cartTitle: "Košarica",
     toCatalog: "Nazaj v katalog",
     summary: "Povzetek",
@@ -964,6 +974,7 @@ export const CHECKOUT_STRINGS = {
   },
 
   gr: {
+    articleMissing: "Το άρθρο δεν βρέθηκε",
     cartTitle: "Καλάθι",
     toCatalog: "Επιστροφή στον κατάλογο",
     summary: "Σύνοψη",

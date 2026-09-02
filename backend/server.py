@@ -529,7 +529,8 @@ async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     cols = await db.collections_cat.find(
         {"handle": {"$in": p.get("collections", [])}}, {"_id": 0}
     ).to_list(20)
-    articles = await db.articles.find({"product_handle": p["handle"]}, {"_id": 0}).to_list(5)
+    articles = await db.articles.find(
+        {"product_handle": p["handle"], "published": {"$ne": False}}, {"_id": 0}).to_list(5)
     if not articles:
         # internal linking fallback: match the peptide name (e.g. "BPC-157") in article titles
         tokens = re.findall(r"[A-Za-z][A-Za-z0-9]{2,}(?:-[0-9]{2,4})?", p.get("title", ""))
@@ -554,7 +555,8 @@ async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
 @api.get("/articles")
 async def list_articles(locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
-    docs = await db.articles.find({}, {"_id": 0}).to_list(50)
+    # drafts (Published = False in Shopify) stay out of the storefront
+    docs = await db.articles.find({"published": {"$ne": False}}, {"_id": 0}).to_list(50)
     return {"articles": slim(localize_list(docs, loc), "body")}
 
 
@@ -1207,6 +1209,38 @@ async def admin_delete_product(product_id: str, user=Depends(require_admin)):
     return {"ok": True}
 
 
+class ArticlePatch(BaseModel):
+    title: Optional[str] = None
+    excerpt: Optional[str] = None
+    image: Optional[str] = None
+    body: Optional[str] = None
+    author: Optional[str] = None
+    product_handle: Optional[str] = None
+    published: Optional[bool] = None
+    seo_title: Optional[str] = None
+    seo_description: Optional[str] = None
+
+
+@api.get("/admin/articles")
+async def admin_articles(user=Depends(require_admin)):
+    docs = await db.articles.find({}, {"_id": 0, "translations": 0}).sort("published_at", -1).to_list(200)
+    return {"articles": docs}
+
+
+@api.patch("/admin/articles/{handle}")
+async def admin_update_article(handle: str, payload: ArticlePatch, user=Depends(require_admin)):
+    """Only the fields actually sent are written — the Bulgarian source stays untouched otherwise."""
+    changes = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not changes:
+        raise HTTPException(400, "Няма промени")
+    changes["updated_at"] = now_utc()
+    res = await db.articles.update_one({"handle": handle}, {"$set": changes})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Статията не е намерена")
+    doc = await db.articles.find_one({"handle": handle}, {"_id": 0, "translations": 0})
+    return {"article": doc}
+
+
 @api.post("/admin/collections")
 async def admin_create_collection(payload: CollectionIn, user=Depends(require_admin)):
     if await db.collections_cat.find_one({"handle": payload.handle}):
@@ -1607,6 +1641,138 @@ async def serve_file(path: str, request: Request, w: int = 0):
         media_type=content_type,
         headers={"Cache-Control": "public, max-age=31536000, immutable", "Vary": "Accept"},
     )
+
+
+# ---------- Media repair ----------
+# Shopify CDN links carry a ?v=<version> query and the stored path is a hash of the whole URL, so a
+# re-import after Shopify bumped that version produced brand-new paths while the bytes of the old
+# ones were never re-uploaded. The result: a product pointing at a path that 404s even though the
+# very same picture is on disk under a different hash. This walks every document, checks whether the
+# referenced object can actually be read and re-points it to a readable copy of the same file (or
+# downloads it again from the original source).
+_FILE_REF = re.compile(r"/api/files/(import/[A-Za-z0-9._-]+)")
+
+
+def _readable(path: str) -> bool:
+    try:
+        storage.get_object(path)
+        return True
+    except Exception:
+        return False
+
+
+def _base_name(path: str) -> str:
+    tail = path.split("/")[-1]
+    return tail.split("-", 1)[1] if "-" in tail else tail
+
+
+def _refetch_image(src: str) -> Optional[Dict[str, Any]]:
+    """Download the original source again and store it under a query-independent path."""
+    import requests
+
+    try:
+        resp = requests.get(src, timeout=60)
+        resp.raise_for_status()
+    except Exception as ex:
+        log.warning("Media repair could not fetch %s: %s", src[:90], ex)
+        return None
+    base = re.sub(r"[^A-Za-z0-9._-]", "-", src.split("?")[0].rsplit("/", 1)[-1] or "image")
+    ext = base.rsplit(".", 1)[-1].lower() if "." in base else "png"
+    content_type = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+                    "webp": "image/webp", "gif": "image/gif"}.get(
+                        ext, resp.headers.get("Content-Type", "image/png").split(";")[0])
+    path = f"import/{hashlib.sha1(src.split('?')[0].encode()).hexdigest()[:12]}-{base}"
+    stored = storage.put_object(path, resp.content, content_type).get("path", path)
+    return {"path": stored, "base": base, "content_type": content_type, "size": len(resp.content)}
+
+
+@api.post("/admin/media/repair")
+async def repair_media(dry_run: bool = False, user=Depends(require_admin)):
+    """Re-point (or re-download) every image reference whose object cannot be read."""
+    by_base: Dict[str, List[str]] = {}
+    async for rec in db.files.find({"is_deleted": False}, {"_id": 0, "storage_path": 1}):
+        path = rec.get("storage_path") or ""
+        if path.startswith("import/"):
+            by_base.setdefault(_base_name(path), []).append(path)
+
+    checked: Dict[str, bool] = {}
+
+    async def ok(path: str) -> bool:
+        if path not in checked:
+            checked[path] = await run_in_threadpool(_readable, path)
+        return checked[path]
+
+    async def resolve(path: str) -> Optional[str]:
+        """A readable path for the same picture, or None when the bytes are gone for good."""
+        for candidate in by_base.get(_base_name(path), []):
+            if candidate != path and await ok(candidate):
+                return candidate
+        entry = await db.image_map.find_one({"path": path}, {"_id": 0, "src": 1})
+        src = (entry or {}).get("src")
+        if src:
+            got = await run_in_threadpool(_refetch_image, src)
+            if got and await ok(got["path"]):
+                await db.files.update_one(
+                    {"storage_path": got["path"]},
+                    {"$set": {"storage_path": got["path"], "original_filename": got["base"],
+                              "content_type": got["content_type"], "size": got["size"],
+                              "is_deleted": False, "uploaded_by": "media-repair"},
+                     "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now_utc()}},
+                    upsert=True,
+                )
+                await db.image_map.update_one(
+                    {"src": src},
+                    {"$set": {"src": src, "path": got["path"], "url": f"/api/files/{got['path']}"},
+                     "$setOnInsert": {"created_at": now_utc()}},
+                    upsert=True,
+                )
+                by_base.setdefault(_base_name(got["path"]), []).append(got["path"])
+                return got["path"]
+        return None
+
+    fixed: List[Dict[str, str]] = []
+    unresolved: List[str] = []
+
+    async def fix_value(value: str) -> str:
+        """Replace every unreadable reference inside a string (plain path or HTML)."""
+        out = value
+        for ref in set(_FILE_REF.findall(value)):
+            if await ok(ref):
+                continue
+            replacement = await resolve(ref)
+            if replacement:
+                out = out.replace(ref, replacement)
+                fixed.append({"from": ref, "to": replacement})
+            else:
+                unresolved.append(ref)
+        if value.startswith("import/") and not await ok(value):
+            replacement = await resolve(value)
+            if replacement:
+                fixed.append({"from": value, "to": replacement})
+                return replacement
+            unresolved.append(value)
+        return out
+
+    async def walk(node):
+        if isinstance(node, str):
+            return await fix_value(node) if "/api/files/" in node or node.startswith("import/") else node
+        if isinstance(node, list):
+            return [await walk(x) for x in node]
+        if isinstance(node, dict):
+            return {k: await walk(v) for k, v in node.items()}
+        return node
+
+    scanned = 0
+    for name in ("products", "collections", "articles", "pages", "site_settings"):
+        async for doc in db[name].find({}):
+            scanned += 1
+            payload = {k: v for k, v in doc.items() if k != "_id"}
+            repaired = await walk(payload)
+            if repaired != payload and not dry_run:
+                await db[name].update_one({"_id": doc["_id"]}, {"$set": repaired})
+
+    return {"scanned": scanned, "fixed": len(fixed), "unresolved": sorted(set(unresolved)),
+            "changes": fixed[:50], "dry_run": dry_run}
 
 
 # ---------- Static pages (editable per locale) ----------
@@ -2413,7 +2579,7 @@ async def link_index(locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
     cols = await db.collections_cat.find({"nav_hidden": {"$ne": True}}, {"_id": 0}).sort("sort_order", 1).to_list(200)
     prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0}).to_list(500)
-    arts = await db.articles.find({}, {"_id": 0}).to_list(200)
+    arts = await db.articles.find({"published": {"$ne": False}}, {"_id": 0}).to_list(200)
     pages = await db.pages.find({"locale": {"$in": [loc, "bg"]}}, {"_id": 0}).to_list(200)
     by_slug: Dict[str, Dict[str, Any]] = {}
     for p in pages:
@@ -2442,7 +2608,7 @@ async def sitemap():
     active = [l for l in LOCALES if (routes.get(l) or {}).get("enabled", True)]
     cols = await db.collections_cat.find({}, {"_id": 0}).to_list(200)
     prods = await db.products.find({}, {"_id": 0}).to_list(500)
-    arts = await db.articles.find({}, {"_id": 0}).to_list(200)
+    arts = await db.articles.find({"published": {"$ne": False}}, {"_id": 0}).to_list(200)
     static_pages = ["", f"/collections/{ALL_COLLECTION}"] + [f"/pages/{s}" for s in PAGE_SLUGS] + [
         "/pages/articles", "/pages/html-sitemap", "/pages/html-sitemap-products",
         "/pages/html-sitemap-collections", "/pages/html-sitemap-blogs",

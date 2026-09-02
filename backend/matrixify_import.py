@@ -137,7 +137,10 @@ def store_image(url: Optional[str]) -> Optional[str]:
     url = str(url)
     if SKIP_IMAGES:
         return url
-    cached = db.image_map.find_one({"src": url})
+    # Shopify appends a ?v=<version> query that changes on every edit; keying the stored object on
+    # the bare URL keeps re-imports pointing at the same file instead of minting orphan paths.
+    norm = url.split("?")[0]
+    cached = db.image_map.find_one({"$or": [{"key": norm}, {"src": url}]})
     if cached and _stored_ok(cached.get("path")):
         return cached["url"]
     try:
@@ -151,7 +154,7 @@ def store_image(url: Optional[str]) -> Optional[str]:
     base = re.sub(r"[^A-Za-z0-9._-]", "-", base)
     ext = base.rsplit(".", 1)[-1].lower() if "." in base else "png"
     content_type = MIME.get(ext, resp.headers.get("Content-Type", "image/png").split(";")[0])
-    path = f"import/{hashlib.sha1(url.encode()).hexdigest()[:12]}-{base}"
+    path = f"import/{hashlib.sha1(norm.encode()).hexdigest()[:12]}-{base}"
     try:
         result = storage.put_object(path, data, content_type)
     except Exception as ex:
@@ -167,8 +170,8 @@ def store_image(url: Optional[str]) -> Optional[str]:
     )
     our_url = f"/api/files/{stored}"
     db.image_map.update_one(
-        {"src": url},
-        {"$set": {"src": url, "path": stored, "url": our_url},
+        {"key": norm},
+        {"$set": {"key": norm, "src": url, "path": stored, "url": our_url},
          "$setOnInsert": {"created_at": now_utc()}},
         upsert=True,
     )
