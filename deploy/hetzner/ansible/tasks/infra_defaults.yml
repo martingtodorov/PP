@@ -64,6 +64,24 @@
     site_domains: "{{ site_domains | default(['purepeptide.bg'], true) }}"
   tags: [always]
 
+# The canonical host is NOT tied to the order of site_domains: while purepeptide.bg still points at
+# the old Shopify store, canonical_domain must be a domain whose DNS already reaches pp-front.
+# Sitemaps/hreflang are unaffected — they come from the per-locale domains in the admin settings.
+- name: Canonical domain
+  set_fact:
+    canonical_domain: "{{ canonical_domain | default(site_domains[0], true) }}"
+  tags: [always]
+
+- name: The canonical domain must be served by nginx
+  assert:
+    that: canonical_domain in site_domains
+    fail_msg: >-
+      canonical_domain='{{ canonical_domain }}' is not in site_domains
+      ({{ site_domains | join(', ') }}), so nginx would not answer for it. Add it to site_domains
+      in group_vars/all.yml.
+    quiet: true
+  tags: [always]
+
 # client.nextcartmanager.com is dead (404/302) and makes every courier call return 502, which kills
 # the checkout. The working host is api.nextcartmanager.com — correct it even when an old
 # group_vars/all.yml still carries the broken value.

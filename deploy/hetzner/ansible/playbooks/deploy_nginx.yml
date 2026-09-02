@@ -57,29 +57,64 @@
       systemd: { name: nginx, enabled: true, state: started }
       tags: [service]
 
-    # Verifies nginx -> backend routing, NOT the courier upstream: /api/nextcart/* depends on a
-    # third-party API that rejects this server's IP, and it must never block an nginx deploy.
-    - name: Public API smoke test
-      uri: { url: "https://{{ site_domains[0] }}/api/settings", status_code: 200 }
+    # DNS-independent on purpose: some of site_domains still point at the old Shopify store
+    # (purepeptide.bg answers 404 from Cloudflare), so a public request proves nothing about this
+    # server. Ask the local nginx with the Host header instead.
+    - name: Public API smoke test (local nginx -> backend, no DNS involved)
+      shell: |
+        set -o pipefail
+        code=$(curl -ksS -o /tmp/pp-smoke.json -w '%{http_code}' --max-time 20 \
+               -H 'Host: {{ canonical_domain }}' https://127.0.0.1/api/settings)
+        echo "GET /api/settings (Host: {{ canonical_domain }}) -> $code"
+        head -c 200 /tmp/pp-smoke.json; echo
+        test "$code" = "200"
+      args: { executable: /bin/bash }
       register: api_check
       retries: 5
       delay: 5
-      until: api_check.status | default(0) == 200
+      until: api_check is succeeded
+      changed_when: false
       tags: [verify]
 
-    - name: Courier endpoint (informational only)
-      uri: { url: "https://{{ site_domains[0] }}/api/nextcart/countries", status_code: 200 }
-      register: courier_check
+    - name: Which of the domains actually reach this server? (informational)
+      shell: |
+        for d in {{ site_domains | join(' ') }}; do
+          code=$(curl -sS -o /tmp/pp-dom.json -w '%{http_code}' --max-time 15 "https://$d/api/settings" || echo 000)
+          srv=$(curl -sSI --max-time 15 "https://$d/api/settings" 2>/dev/null | grep -i '^server:' | tr -d '\r')
+          echo "$d -> $code   ${srv:-no server header}"
+        done
+      args: { executable: /bin/bash }
+      register: domain_map
+      changed_when: false
       failed_when: false
       tags: [verify]
 
-    - name: Warn when the checkout has no couriers
+    - name: Domain routing summary
       debug:
-        msg: >-
-          /api/nextcart/countries -> {{ courier_check.status | default('no response') }}.
-          The backend serves backend/data/nextcart/ snapshots when NEXTCART_SNAPSHOT_ONLY=true —
-          check that the release contains that directory and re-run deploy_backend.yml.
-      when: (courier_check.json.countries | default([]) | length) == 0
+        msg: |
+          {{ domain_map.stdout | default('') }}
+          A domain that answers 404 with 'server: cloudflare' still points at the old Shopify store —
+          switch its DNS to pp-front ({{ frontend_public_ip | default('the frontend server') }}).
+      tags: [verify]
+
+    - name: Courier endpoint (informational only)
+      shell: |
+        curl -ksS -o /tmp/pp-couriers.json -w 'countries -> %{http_code}\n' --max-time 20 \
+          -H 'Host: {{ canonical_domain }}' https://127.0.0.1/api/nextcart/countries || true
+        head -c 200 /tmp/pp-couriers.json; echo
+      args: { executable: /bin/bash }
+      register: courier_check
+      changed_when: false
+      failed_when: false
+      tags: [verify]
+
+    - name: Courier check result
+      debug:
+        msg: |
+          {{ courier_check.stdout | default('') }}
+          Empty or non-200 means the checkout has no couriers: the backend serves
+          backend/data/nextcart/ snapshots when NEXTCART_SNAPSHOT_ONLY=true — check that the release
+          contains that directory and re-run deploy_backend.yml.
       tags: [verify]
 
   handlers:

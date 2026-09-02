@@ -87,7 +87,7 @@
       environment:
         # MUST stay empty: CRA bakes it in, empty == same origin so ONE build serves every domain
         REACT_APP_BACKEND_URL: ""
-        REACT_APP_SITE_URL: "https://{{ site_domains[0] }}"
+        REACT_APP_SITE_URL: "https://{{ canonical_domain }}"
         NODE_OPTIONS: "--max-old-space-size=3072"
         CI: "false"
         GENERATE_SOURCEMAP: "false"
