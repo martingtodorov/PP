@@ -30,7 +30,8 @@ class TestCountries:
         assert data["default"] == "BG"
         countries = data["countries"]
         codes = {c["iso2"] for c in countries}
-        expected = {"BG", "RO", "GR", "HU", "PL", "SK", "CZ", "SI", "HR", "IT", "DE", "ES"}
+        expected = {"BG", "RO", "GR", "HU", "PL", "SK", "CZ", "SI", "HR", "IT", "DE", "ES",
+                    "FR", "BE", "NL", "CY"}
         assert codes == expected, f"unexpected countries: {codes}"
         assert len(countries) == len(expected)
         bg = next(c for c in countries if c["iso2"] == "BG")
@@ -47,10 +48,11 @@ EXPECTED_COURIERS = {
     "GR": {"speedex"},
     "HU": {"gls"}, "PL": {"gls"}, "SK": {"gls"}, "CZ": {"gls"},
     "SI": {"gls"}, "HR": {"gls"}, "IT": {"gls"}, "DE": {"gls"}, "ES": {"gls"},
+    "FR": {"gls"}, "BE": {"gls"}, "NL": {"gls"}, "CY": {"gls"},
 }
 
-# Spain was opened as a prepaid-only market with GLS to the address at 8.99 EUR
-PREPAID_ONLY = {"ES"}
+# Prepaid-only markets: GLS at 8.99 EUR, bank transfer only (no cash on delivery)
+PREPAID_ONLY = {"ES", "FR", "BE", "NL", "CY", "DE"}
 
 
 class TestConfigPerCountry:
@@ -75,7 +77,7 @@ class TestConfigPerCountry:
         if country in PREPAID_ONLY:
             assert [m["key"] for m in pms] == ["bank_transfer"]
             assert cfg.get("cod_available") is False
-            assert [(m["key"], m["price_amount"]) for m in methods] == [("gls_address", 8.99)]
+            assert all(m["price_amount"] == 8.99 and m["provider_key"] == "gls" for m in methods)
         else:
             assert pms[0]["key"] == "cod"
             assert pms[0].get("is_default") is True

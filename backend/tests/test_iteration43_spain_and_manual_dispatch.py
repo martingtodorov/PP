@@ -71,8 +71,8 @@ def test_nextcart_config_ES_prepaid_only():
     assert d.get("cod_available") is False
 
 
-# --- 3. Regression: BG/RO/GR/DE still have COD available and COD first ---
-@pytest.mark.parametrize("country", ["BG", "RO", "GR", "DE"])
+# --- 3. Regression: the COD markets still have COD first (DE went prepaid-only) ---
+@pytest.mark.parametrize("country", ["BG", "RO", "GR", "PL"])
 def test_regression_cod_first_available(country):
     r = requests.get(f"{API}/nextcart/config", params={"country": country}, timeout=15)
     assert r.status_code == 200
