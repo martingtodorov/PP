@@ -1144,3 +1144,24 @@ deploy_backend + deploy_frontend + deploy_nginx. Отворено: Resend дом
 Тестове: `tests/test_rotation.py` (5), `tests/test_order_cancel.py` (3),
 `tests/test_iteration38_rotation_and_checkout.py` (13), отчети iteration_38 и iteration_39 —
 backend 100%, frontend 100%.
+
+### 2026-06 — Език по домейн (purepeptide.gr показваше български)
+**Причина**: фронтендът избираше езика само по префикса в пътя (`localeFromPath`). purepeptide.gr и
+purepeptide.ro обслужват своя език от корена (prefix ""), затова `/` → DEFAULT_LOCALE = bg.
+**Поправка**:
+- `locales.js` → нов `localeFromHost(host)`: домейн с празен префикс си „притежава“ езика
+  (purepeptide.gr → gr, .ro → ro, .bg → bg, purepeptide-labs.bg → bg; purepeptide.eu → null, там решава
+  префиксът). Чете живата конфигурация от `/api/locales`, така че смяна на домейн в админа работи веднага.
+- `LocaleContext`: `locale = префикс в пътя (ако има) иначе езикът на домейна`; `prefix` е "" когато
+  езикът е този на домейна, затова вътрешните линкове са без `/gr`. `basePath` следва същото правило.
+- Пренасочвания: `/gr/...` на purepeptide.gr → `/...` (без дублирани адреси); чужд префикс на
+  продукционен домейн (`/de/...` на .gr) → hard redirect към домейна, който притежава езика.
+  purepeptide.eu apex → `/en` (както преди).
+- `seo.js`: домейн, който притежава език, вече се брои като продукционен → canonical/hreflang са
+  `https://purepeptide.gr/...`, а не `/gr/...`.
+**Проверено**: временно `locale_routes.gr.origin` беше насочен към preview домейна — цялият сайт се
+зареди на гръцки от корена, `/gr/` се сви до `/`, canonical и hreflang бяха правилни, `html lang=el-GR`;
+след това конфигурацията е върната.
+**ВАЖНО откритие**: DNS на purepeptide.bg, purepeptide.ro и purepeptide.eu още сочат към Shopify
+(23.227.38.65) — само purepeptide.gr минава през Cloudflare към новия сървър. Докато не се пренасочат,
+езиковият превключвател от .gr води към стария Shopify магазин.

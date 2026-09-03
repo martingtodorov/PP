@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { LOCALES, LOCALE_META, DEFAULT_LOCALE, isProdHost } from "../i18n/locales";
+import { LOCALES, LOCALE_META, DEFAULT_LOCALE, isProdHost, localeFromHost } from "../i18n/locales";
 import { siteMedia } from "./media";
 
 const setMeta = (attr, key, content) => {
@@ -49,11 +49,13 @@ export function useSeo({ title, description, locale = DEFAULT_LOCALE, path = "/"
     setMeta("name", "twitter:image", ogImage);
     setMeta("name", "twitter:card", "summary_large_image");
 
-    const onProd = isProdHost(window.location.host);
+    /* a domain that owns a language (purepeptide.gr/.ro/.bg) gets the configured origins too */
+    const rootLocale = localeFromHost(window.location.host);
+    const onProd = isProdHost(window.location.host) || !!rootLocale;
     const abs = (loc, p) => {
       const meta = LOCALE_META[loc];
       if (onProd) return `${meta.origin}${meta.prefix}${p === "/" ? "" : p}`;
-      const prefix = loc === DEFAULT_LOCALE ? "" : `/${loc}`;
+      const prefix = loc === (rootLocale || DEFAULT_LOCALE) ? "" : `/${loc}`;
       return `${window.location.origin}${prefix}${p === "/" ? "/" : p}`;
     };
 

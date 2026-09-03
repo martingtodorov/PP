@@ -11,6 +11,21 @@ export const DEFAULT_LOCALE = "bg";
 export const PROD_HOST_RE = /(^|\.)purepeptide(-labs)?\.(bg|eu|ro|gr)$/i;
 export const isProdHost = (host = "") => PROD_HOST_RE.test((host || "").split(":")[0]);
 
+const bareHost = (value = "") =>
+  value.replace(/^https?:\/\//, "").split("/")[0].split(":")[0].toLowerCase().replace(/^www\./, "");
+
+/** The language a domain serves on its own (purepeptide.gr -> gr, purepeptide.ro -> ro,
+ *  purepeptide.bg -> bg). Shared domains like purepeptide.eu return null: there the URL
+ *  prefix (/en, /de, …) decides. */
+export const localeFromHost = (host = "") => {
+  const h = bareHost(host);
+  if (!h) return null;
+  const owner = LOCALES.find((l) => !LOCALE_META[l].prefix && bareHost(LOCALE_META[l].origin) === h);
+  if (owner) return owner;
+  if (h === "purepeptide-labs.bg") return DEFAULT_LOCALE;
+  return null;
+};
+
 export const LOCALE_META = {
   bg: { label: "Български", hreflang: "bg-BG", origin: "https://purepeptide.bg", prefix: "" },
   en: { label: "English", hreflang: "en", origin: "https://purepeptide.eu", prefix: "/en" },
