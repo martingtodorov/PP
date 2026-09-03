@@ -113,12 +113,18 @@ def build_order(order: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     office_id = office_id_of(delivery)
     if delivery.get("destination_type") in ("office", "locker") and office_id is None:
         raise ValueError("Офисът/автоматът от чекаута няма NextLevel идентификатор")
+    # NextLevel requires receiver.country on EVERY shipment, office/locker deliveries included
+    receiver["country"] = country or (cfg.get("wc_country") or "").upper()
+    if not receiver["country"]:
+        raise ValueError("Поръчката няма държава на получателя (receiver.country)")
     if office_id is not None:
         receiver["office_id"] = office_id
+        if ship.get("city"):
+            receiver["place"] = ship["city"].strip()
     else:
-        if not country or not ship.get("city") or not ship.get("postal_code"):
+        if not ship.get("city") or not ship.get("postal_code"):
             raise ValueError("За доставка до адрес NextLevel изисква държава, град и пощенски код")
-        receiver.update({"country": country, "place": ship["city"].strip(), "post_code": str(ship["postal_code"]).strip(),
+        receiver.update({"place": ship["city"].strip(), "post_code": str(ship["postal_code"]).strip(),
                          "street": (ship.get("line1") or "").strip()[:200] or "-"})
         if ship.get("line2"):
             receiver["other"] = str(ship["line2"])[:200]
