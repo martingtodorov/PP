@@ -52,7 +52,7 @@ EXPECTED_COURIERS = {
 }
 
 # Prepaid-only markets: GLS at 8.99 EUR, bank transfer only (no cash on delivery)
-PREPAID_ONLY = {"ES", "FR", "BE", "NL", "CY", "DE"}
+PREPAID_ONLY = {"ES", "FR", "BE", "NL", "CY"}
 
 
 class TestConfigPerCountry:

@@ -89,4 +89,4 @@ async def geo_reverse(lat: float = Query(...), lon: float = Query(...)):
     place = await _reverse(lat, lon)
     if not place.get("city"):
         raise HTTPException(503, "Локацията не можа да бъде разпозната")
-    return {**place, "source": "device"}
+    return {**place, "lat": lat, "lng": lon, "source": "device"}

@@ -5,11 +5,14 @@ pre-checkout. Their storefront API is keyed only by the shop domain, so we proxy
 (fixed shop/country/locale, short-lived caching, graceful degradation) instead of calling it
 from the browser.
 """
+import functools
 import json
 import logging
+import math
 import os
 import pathlib
 import time
+import unicodedata
 from typing import Any, Dict, Optional
 
 import httpx
@@ -34,8 +37,8 @@ COUNTRY_COURIERS: Dict[str, list] = {
     "FR": ["gls"], "BE": ["gls"], "NL": ["gls"], "CY": ["gls"],
 }
 
-# Prepaid-only markets (owner's decision — no cash on delivery there).
-COUNTRY_PAYMENTS: Dict[str, list] = {c: ["bank_transfer"] for c in ("ES", "FR", "BE", "NL", "CY", "DE")}
+# Prepaid-only markets (owner's decision — no cash on delivery there). Germany keeps COD.
+COUNTRY_PAYMENTS: Dict[str, list] = {c: ["bank_transfer"] for c in ("ES", "FR", "BE", "NL", "CY")}
 
 # The merchant's own delivery offer — wins over whatever the NextCart profile says (price and presence).
 METHOD_OVERRIDES: Dict[str, Dict[str, Dict[str, Any]]] = {
@@ -206,6 +209,44 @@ async def _probe_pickups(country: str, provider_key: str, destination_type: str)
     return _store(key, 21600, ok)
 
 
+def _norm_city(s: str) -> str:
+    s = unicodedata.normalize("NFKD", (s or "").strip().lower())
+    return "".join(c for c in s if not unicodedata.combining(c))
+
+
+@functools.lru_cache(maxsize=1)
+def _centroids() -> Dict[str, Any]:
+    """Postal-code / city coordinates for the pickup points (built by scripts/build_postal_centroids.py)."""
+    data = _snapshot("postal_centroids.json")
+    return data or {}
+
+
+def _office_point(country: str, office: Dict[str, Any]) -> Optional[tuple]:
+    table = _centroids().get(country.upper())
+    if not table:
+        return None
+    code = str(office.get("postal_code") or "").strip()
+    point = table.get("post", {}).get(code) or table.get("city", {}).get(_norm_city(office.get("city")))
+    return tuple(point) if point else None
+
+
+def sort_by_distance(offices: list, country: str, lat: float, lng: float) -> list:
+    """Closest pickup point first — distance from the postal code (or city) centroid, in km."""
+    out = []
+    for o in offices:
+        point = _office_point(country, o)
+        km = None
+        if point:
+            dlat = math.radians(point[0] - lat)
+            dlng = math.radians(point[1] - lng)
+            a = (math.sin(dlat / 2) ** 2
+                 + math.cos(math.radians(lat)) * math.cos(math.radians(point[0])) * math.sin(dlng / 2) ** 2)
+            km = round(2 * 6371 * math.asin(min(1.0, math.sqrt(a))), 1)
+        out.append({**o, "distance_km": km})
+    out.sort(key=lambda o: (o["distance_km"] is None, o["distance_km"] or 0))
+    return out
+
+
 def _to_eur_method(m: Dict[str, Any]) -> Dict[str, Any]:
     """Storefront totals are in EUR — normalise HUF/PLN/CZK/RON courier prices."""
     cur = (m.get("currency") or "EUR").upper()
@@ -339,26 +380,32 @@ async def nextcart_pickups(
     provider_key: str = Query(..., min_length=2, max_length=40),
     destination_type: str = Query("office", pattern="^(office|locker)$"),
     country: str = Query("", max_length=2),
+    lat: Optional[float] = Query(None, ge=-90, le=90),
+    lng: Optional[float] = Query(None, ge=-180, le=180),
 ):
-    """Full pickup list (offices / lockers) for the checkout dropdown."""
+    """Full pickup list (offices / lockers) for the checkout dropdown.
+
+    With the visitor's coordinates the list comes back sorted by distance, closest first."""
     iso = (country or COUNTRY).upper()
     key = f"pickups:{iso}:{provider_key}:{destination_type}"
     cached = _cached(key)
-    if cached is not None:
+    if cached is None:
+        data = await _get_or_snapshot(
+            "/api/shopify-app/storefront/delivery-offices",
+            {"shop": SHOP, "provider_key": provider_key, "destination_type": destination_type,
+             "country": iso, "limit": 3000},
+            f"offices_{iso}_{provider_key}_{destination_type}.json",
+        )
+        offices = [
+            {"id": o.get("id") or o.get("code"), "code": o.get("code", ""), "name": o.get("name", ""),
+             "city": o.get("city", ""), "address": o.get("address") or o.get("address1") or "",
+             "postal_code": o.get("postal_code", "")}
+            for o in (data.get("offices") or [])
+        ]
+        cached = _store(key, 21600, {"pickups": offices, "count": len(offices)})
+    if lat is None or lng is None:
         return cached
-    data = await _get_or_snapshot(
-        "/api/shopify-app/storefront/delivery-offices",
-        {"shop": SHOP, "provider_key": provider_key, "destination_type": destination_type,
-         "country": iso, "limit": 3000},
-        f"offices_{iso}_{provider_key}_{destination_type}.json",
-    )
-    offices = [
-        {"id": o.get("id") or o.get("code"), "code": o.get("code", ""), "name": o.get("name", ""),
-         "city": o.get("city", ""), "address": o.get("address") or o.get("address1") or "",
-         "postal_code": o.get("postal_code", "")}
-        for o in (data.get("offices") or [])
-    ]
-    return _store(key, 21600, {"pickups": offices, "count": len(offices)})
+    return {**cached, "pickups": sort_by_distance(cached["pickups"], iso, lat, lng), "sorted_by": "distance"}
 
 
 @router.get("/offices")

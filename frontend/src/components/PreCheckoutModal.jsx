@@ -100,17 +100,20 @@ const PickupSelect = ({ options, value, onChange, placeholder, loading, geoCity 
   const hits = useMemo(() => {
     const here = norm(geoCity);
     const tokens = tokensOf(q);
+    const ranked = options.some((o) => typeof o.distance_km === "number");   // server sorted by distance
     if (!tokens.length) {
+      if (ranked) return options.slice(0, 80);
       // no query yet — offices in the visitor's own city (from IP) come first
       return [...options]
         .sort((a, b) => (norm(b.city) === here ? 1 : 0) - (norm(a.city) === here ? 1 : 0))
         .slice(0, 80);
     }
-    return options
-      .filter((o) => {
-        const hay = norm(`${o.city} ${o.name} ${o.address} ${o.postal_code}`);
-        return tokens.every((tok) => hay.includes(tok));
-      })
+    const filtered = options.filter((o) => {
+      const hay = norm(`${o.city} ${o.name} ${o.address} ${o.postal_code}`);
+      return tokens.every((tok) => hay.includes(tok));
+    });
+    if (ranked) return filtered.slice(0, 80);      // keep the distance order inside the search results
+    return filtered
       .map((o) => ({
         o,
         s: matchScore(
@@ -141,7 +144,12 @@ const PickupSelect = ({ options, value, onChange, placeholder, loading, geoCity 
           {hits.map((o) => (
             <button type="button" key={o.id} className="nc2-opt"
               onClick={() => { onChange(o); setOpen(false); setQ(""); track("checkout_pickup_selected", { id: o.id }); }}>
-              <span className="nc2-opt-1">{dedupeCity(o.city, o.name)}</span>
+              <span className="nc2-opt-1">
+                {dedupeCity(o.city, o.name)}
+                {typeof o.distance_km === "number" && (
+                  <span className="nc2-opt-km" data-testid={`pc-pickup-km-${o.id}`}>{tr("kmAway", { km: o.distance_km })}</span>
+                )}
+              </span>
               <span className="nc2-opt-2">{o.postal_code} · {o.address}</span>
             </button>
           ))}
@@ -408,11 +416,12 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
     return list;
   }, [cfg, countries, contact.dial, contact.country]);
 
-  // full pickup list for the chosen method
+  // full pickup list for the chosen method — sorted by distance once we know where the visitor is
+  const point = geo?.source === "device" && geo?.lat && geo?.lng ? { lat: geo.lat, lng: geo.lng } : null;
   useEffect(() => {
     if (!needsPickup || !method) { setPickups([]); return; }
     setLoadingPickups(true);
-    pfPickups(method.provider_key, method.destination_type, contact.country)
+    pfPickups(method.provider_key, method.destination_type, contact.country, point)
       .then((data) => {
         const list = data.pickups || [];
         setPickups(list);
@@ -427,7 +436,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
       })
       .catch(() => setPickups([]))
       .finally(() => setLoadingPickups(false));
-  }, [method, needsPickup, contact.country]);
+  }, [method, needsPickup, contact.country, point?.lat, point?.lng]);
 
   // IP city pre-fills the address form (only on an exact city match, once)
   const prefilled = useRef(false);
