@@ -442,6 +442,15 @@ def test_mongodb_is_checked_before_the_app_is_deployed():
     assert "bootstrap_backend_base.yml --tags mongo" in pre
 
 
+def test_preflight_egress_mismatch_is_a_warning_not_a_deploy_blocker():
+    """A backend with working internet must deploy even when it does not egress via pp-front."""
+    pre = (PLAYBOOKS / "preflight.yml").read_text()
+    assert "failed_when: egress_ip.stdout | trim != frontend_public_ip" not in pre
+    assert "failed_when: egress_ip.rc != 0 or (egress_ip.stdout | trim) == ''" in pre
+    assert "WARNING: pp-back reaches the internet as" in pre
+
+
+
 def test_mongo_repository_is_probed_not_guessed():
     """MongoDB 7.0 has no 'noble' packages and new Ubuntu releases have none at all — probe first."""
     boot = (BOOTSTRAP / "bootstrap_backend_base.yml").read_text()
