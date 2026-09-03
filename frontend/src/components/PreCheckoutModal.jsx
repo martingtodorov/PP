@@ -7,7 +7,7 @@ import { loadSaved, saveCheckout, pfBank, pfCountries, pfGeo, pfDeviceGeo, pfCon
 import { siteMedia } from "../lib/media";
 import { useCart } from "../context/CartContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
-import { LOCALE_META } from "../i18n/locales";
+import { LOCALE_META, countryForLocale } from "../i18n/locales";
 
 const BG_PROVIDER = {
   econt: "Еконт", boxnow: "BoxNow", pigeon: "Pigeon Express", speedy: "Спиди",
@@ -265,8 +265,9 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   const [provider, setProvider] = useState("");
   const [methodKey, setMethodKey] = useState("");
   const saved = useRef(loadSaved());
+  const localeCountry = countryForLocale(locale);
   const [contact, setContact] = useState(saved.current?.contact
-    || { name: "", email: "", phone: "", dial: "359", country: "BG" });
+    || { name: "", email: "", phone: "", dial: "359", country: localeCountry || "BG" });
   const [pickups, setPickups] = useState([]);
   const [loadingPickups, setLoadingPickups] = useState(false);
   const [pickup, setPickup] = useState(saved.current?.pickup || null);
@@ -323,13 +324,15 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
     track("checkout_opened");
   }, [open]);
 
-  // visitor's country from IP — only if we actually ship there and nothing was remembered
+  // visitor's country from IP — only when the storefront has no country of its own (owner's rule:
+  // the domain wins, e.g. a Greek visitor on purepeptide.ro still gets Romania) and nothing was remembered
   useEffect(() => {
+    if (localeCountry) return;
     if (!countries.length || !geo?.country || saved.current?.contact?.country) return;
     if (countries.some((c) => c.iso2 === geo.country)) {
       setContact((c) => (c.country === geo.country ? c : { ...c, country: geo.country }));
     }
-  }, [countries, geo]);
+  }, [countries, geo, localeCountry]);
 
   // couriers and prices depend on the destination country
   useEffect(() => {

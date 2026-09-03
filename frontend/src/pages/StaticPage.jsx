@@ -89,12 +89,20 @@ export default function StaticPage() {
   const table = BODY[locale] || BODY.en;
   const fallback = table[slug] || BODY.en[slug] || null;
   const page = remote?.title || remote?.html ? remote : fallback;
-  const isFaq = slug === "faq";
-  const isArticles = slug === "articles";
-  const isContact = slug === "contact-1" || slug === "contacts";
-  const faqItems = remote?.faq_items?.length ? remote.faq_items : pick(FAQ_ITEMS, locale);
+  /* a rotated page lives at /pages/faq-xyz — the API returns the page family slug ("faq"),
+     so the FAQ accordion, the contact form and the calculator keep working after a rotation */
+  const baseSlug = remote?.slug || slug;
+  const isFaq = baseSlug === "faq";
+  const isArticles = baseSlug === "articles";
+  const isContact = baseSlug === "contact-1" || baseSlug === "contacts";
+  /* the API falls back to en/bg when a locale has no page copy — such a row is NOT a translation,
+     so the localised frontend bundle wins for the FAQ items and the page title */
+  const untranslated = !!remote && remote.source_locale !== locale;
+  const faqItems = remote?.faq_items?.length && !untranslated ? remote.faq_items : pick(FAQ_ITEMS, locale);
   const loading = remote === null && !fallback && !isArticles;
-  const title = isArticles ? t("articles") : remote?.title || (isFaq ? t("faq") : page?.title) || (loading ? "" : PAGE_TITLES[slug] || slug);
+  const title = isArticles ? t("articles")
+    : (isFaq && (untranslated || !remote?.title) ? t("faq") : remote?.title)
+      || page?.title || (loading ? "" : PAGE_TITLES[baseSlug] || baseSlug);
 
   useSeo({
     title: remote?.seo_title || `${title} | PurePeptide`,
@@ -111,7 +119,7 @@ export default function StaticPage() {
         isPartOf: { "@id": `${window.location.origin}/#website` },
       },
       breadcrumbLd([
-        { name: "Начало", path: "/" },
+        { name: t("home"), path: "/" },
         { name: title, path: `/pages/${slug}` },
       ]),
       organizationLd(),
@@ -140,7 +148,7 @@ export default function StaticPage() {
         <Breadcrumbs items={[{ label: title }]} />
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-4">{title}</h1>
 
-        {isFaq && (remote?.faq_items?.length > 0 || !remote?.html) && (
+        {isFaq && (untranslated || remote?.faq_items?.length > 0 || !remote?.html) && (
           <Accordion type="single" collapsible className="space-y-3 mt-8" data-testid="static-faq">
             {faqItems.map((f, i) => (
               <AccordionItem key={i} value={`q${i}`} className="bg-white border border-slate-200 rounded-2xl px-5">
@@ -169,7 +177,7 @@ export default function StaticPage() {
           </ul>
         )}
 
-        {page?.html && !isArticles && !isContact && (
+        {page?.html && !isArticles && !isContact && !(isFaq && untranslated) && (
           <div className="pp-rte mt-6" dangerouslySetInnerHTML={{ __html: page.html }} data-testid="static-body" />
         )}
 
@@ -180,7 +188,7 @@ export default function StaticPage() {
           </>
         )}
 
-        {slug === "какво-са-пептиди" && (
+        {baseSlug === "какво-са-пептиди" && (
           <div className="mt-10">
             <PPCalculator />
           </div>

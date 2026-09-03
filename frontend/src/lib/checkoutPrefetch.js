@@ -1,6 +1,7 @@
 /* Warms up everything the accelerated checkout needs while the cart drawer is open,
    so the modal renders instantly instead of firing 4-5 requests on mount. */
-import { api } from "./api";
+import { api, currentLocale } from "./api";
+import { countryForLocale } from "../i18n/locales";
 
 export const STORE_KEY = "pp_checkout_v1";
 const NINETY_DAYS = 90 * 24 * 60 * 60 * 1000;
@@ -93,7 +94,7 @@ export const prefetchCheckout = async () => {
   pfBank();
   pfCountries();
   const saved = loadSaved();
-  let country = saved?.contact?.country || "";
+  let country = saved?.contact?.country || countryForLocale(currentLocale());
   if (!country) {
     try {
       const [geo, list] = await Promise.all([pfGeo(), pfCountries()]);
