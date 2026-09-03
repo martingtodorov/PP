@@ -1779,3 +1779,10 @@ main#main-content { min-height: 70vh; }
 @media (min-width: 768px) {
   .pp-cookie__card { max-width: 620px; }
 }
+
+/* iOS Safari zooms into any field whose text is smaller than 16px — on touch screens every
+   input in the app (checkout included) therefore renders at 16px so tapping never zooms. */
+@media (max-width: 860px), (hover: none) and (pointer: coarse) {
+  input, select, textarea,
+  .nc2-inp, .nc2-combo-inp, .nc2-apply { font-size: 16px !important; }
+}

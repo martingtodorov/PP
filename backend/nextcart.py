@@ -215,6 +215,12 @@ def _norm_city(s: str) -> str:
 
 
 @functools.lru_cache(maxsize=1)
+def _office_coords() -> Dict[str, Any]:
+    """Exact courier coordinates per office id (scripts/build_office_coords.py)."""
+    return _snapshot("office_coords.json") or {}
+
+
+@functools.lru_cache(maxsize=1)
 def _centroids() -> Dict[str, Any]:
     """Postal-code / city coordinates for the pickup points (built by scripts/build_postal_centroids.py)."""
     data = _snapshot("postal_centroids.json")
@@ -222,27 +228,32 @@ def _centroids() -> Dict[str, Any]:
 
 
 def _office_point(country: str, office: Dict[str, Any]) -> Optional[tuple]:
+    """(lat, lng, exact) — the courier's own coordinates when we have them, else a centroid."""
+    exact = _office_coords().get(f"{country.upper()}:{office.get('id')}")
+    if exact:
+        return (exact[0], exact[1], True)
     table = _centroids().get(country.upper())
     if not table:
         return None
     code = str(office.get("postal_code") or "").strip()
     point = table.get("post", {}).get(code) or table.get("city", {}).get(_norm_city(office.get("city")))
-    return tuple(point) if point else None
+    return (point[0], point[1], False) if point else None
 
 
 def sort_by_distance(offices: list, country: str, lat: float, lng: float) -> list:
-    """Closest pickup point first — distance from the postal code (or city) centroid, in km."""
+    """Closest pickup point first — from the courier's own coordinates, else a postal centroid."""
     out = []
     for o in offices:
         point = _office_point(country, o)
-        km = None
+        km, exact = None, False
         if point:
+            exact = point[2]
             dlat = math.radians(point[0] - lat)
             dlng = math.radians(point[1] - lng)
             a = (math.sin(dlat / 2) ** 2
                  + math.cos(math.radians(lat)) * math.cos(math.radians(point[0])) * math.sin(dlng / 2) ** 2)
             km = round(2 * 6371 * math.asin(min(1.0, math.sqrt(a))), 1)
-        out.append({**o, "distance_km": km})
+        out.append({**o, "distance_km": km, "distance_exact": exact})
     out.sort(key=lambda o: (o["distance_km"] is None, o["distance_km"] or 0))
     return out
 

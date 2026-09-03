@@ -9,16 +9,11 @@ BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get(
 API = f"{BASE}/api"
 
 
-# --- /api/bank-details ---
+# --- the public bank endpoint is gone: the company name must not be readable without an order ---
 class TestBankDetails:
-    def test_bank_details(self):
+    def test_public_bank_endpoint_is_removed(self):
         r = requests.get(f"{API}/bank-details", timeout=10)
-        assert r.status_code == 200
-        d = r.json()
-        assert d["name"] == "DSK Bank"
-        assert d["iban"] == "BG61STSA93000032400775"
-        assert d["bic"] == "STSABGSF"
-        assert d["holder"] == "Purepeptide LTD"
+        assert r.status_code == 404
 
 
 # --- /api/nextcart/countries ---

@@ -12,13 +12,14 @@ import time
 from typing import Any, Dict, Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Query, Request
 
 log = logging.getLogger("purepeptide.geo")
 
 router = APIRouter(prefix="/geo", tags=["geo"])
 DEFAULT_COUNTRY = os.environ["NEXTCART_COUNTRY"]
 NOMINATIM = "https://nominatim.openstreetmap.org/reverse"
+PHOTON = "https://photon.komoot.io/reverse"
 UA = "purepeptide-store/1.0 (+https://purepeptide.bg)"
 _cache: Dict[str, tuple] = {}
 _places: Dict[str, tuple] = {}
@@ -34,6 +35,30 @@ def _client_ip(request: Request) -> Optional[str]:
     return ip
 
 
+async def _nominatim(lat: float, lon: float) -> Dict[str, Any]:
+    r = await _client.get(NOMINATIM, headers={"User-Agent": UA, "Accept-Language": "bg,en"},
+                          params={"lat": lat, "lon": lon, "format": "json", "zoom": 13,
+                                  "accept-language": "bg"})
+    addr = (r.json() or {}).get("address") or {}
+    city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("municipality")
+    if not city:
+        return {}
+    return {"city": city, "postal_code": addr.get("postcode") or "",
+            "country": (addr.get("country_code") or "").upper()}
+
+
+async def _photon(lat: float, lon: float) -> Dict[str, Any]:
+    """Second opinion when Nominatim is down or rate limits us — same OSM data, other host."""
+    r = await _client.get(PHOTON, headers={"User-Agent": UA},
+                          params={"lat": lat, "lon": lon, "lang": "default", "limit": 1})
+    props = ((r.json() or {}).get("features") or [{}])[0].get("properties") or {}
+    city = props.get("city") or props.get("county") or props.get("locality")
+    if not city:
+        return {}
+    return {"city": city, "postal_code": props.get("postcode") or "",
+            "country": (props.get("countrycode") or "").upper()}
+
+
 async def _reverse(lat: float, lon: float) -> Dict[str, Any]:
     """Coordinates -> local place name, cached per ~1km square."""
     key = f"{round(float(lat), 2)},{round(float(lon), 2)}"
@@ -41,17 +66,13 @@ async def _reverse(lat: float, lon: float) -> Dict[str, Any]:
     if hit and hit[0] > time.time():
         return hit[1]
     out: Dict[str, Any] = {}
-    try:
-        r = await _client.get(NOMINATIM, headers={"User-Agent": UA, "Accept-Language": "bg,en"},
-                              params={"lat": lat, "lon": lon, "format": "json", "zoom": 13,
-                                      "accept-language": "bg"})
-        addr = (r.json() or {}).get("address") or {}
-        city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("municipality")
-        if city:
-            out = {"city": city, "postal_code": addr.get("postcode") or "",
-                   "country": (addr.get("country_code") or "").upper()}
-    except Exception as ex:
-        log.info("Reverse geocode failed for %s: %s", key, ex)
+    for provider in (_nominatim, _photon):
+        try:
+            out = await provider(lat, lon)
+        except Exception as ex:
+            log.info("Reverse geocode via %s failed for %s: %s", provider.__name__, key, ex)
+        if out:
+            break
     if out:
         _places[key] = (time.time() + 86400, out)
     return out
@@ -85,8 +106,9 @@ async def geo_country(request: Request):
 
 @router.get("/reverse")
 async def geo_reverse(lat: float = Query(...), lon: float = Query(...)):
-    """The visitor's own device position — far more accurate than the IP registration."""
+    """The visitor's own device position — far more accurate than the IP registration.
+
+    The city name is best effort (the reverse geocoder can be rate limited); the coordinates are
+    always returned, because they are what ranks the courier offices by distance."""
     place = await _reverse(lat, lon)
-    if not place.get("city"):
-        raise HTTPException(503, "Локацията не можа да бъде разпозната")
-    return {**place, "lat": lat, "lng": lon, "source": "device"}
+    return {"city": "", "postal_code": "", **place, "lat": lat, "lng": lon, "source": "device"}

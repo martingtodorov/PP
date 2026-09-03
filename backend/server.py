@@ -822,17 +822,6 @@ async def get_settings():
     return value
 
 
-@api.get("/bank-details")
-async def bank_details():
-    """Public bank transfer details shown in the checkout when that method is selected."""
-    return {
-        "name": os.environ.get("BANK_NAME", "DSK Bank"),
-        "iban": os.environ.get("BANK_IBAN", "BG61STSA93000032400775"),
-        "bic": os.environ.get("BANK_BIC", "STSABGSF"),
-        "holder": os.environ.get("BANK_HOLDER", "Purepeptide LTD"),
-    }
-
-
 # ---------- Checkout / Orders ----------
 ORDER_CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"
 ORDER_CODE_DIGITS = "0123456789"

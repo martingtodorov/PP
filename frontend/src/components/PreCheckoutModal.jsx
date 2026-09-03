@@ -147,7 +147,9 @@ const PickupSelect = ({ options, value, onChange, placeholder, loading, geoCity 
               <span className="nc2-opt-1">
                 {dedupeCity(o.city, o.name)}
                 {typeof o.distance_km === "number" && (
-                  <span className="nc2-opt-km" data-testid={`pc-pickup-km-${o.id}`}>{tr("kmAway", { km: o.distance_km })}</span>
+                  <span className="nc2-opt-km" data-testid={`pc-pickup-km-${o.id}`}>
+                    {tr(o.distance_exact ? "kmAway" : "kmAwayApprox", { km: o.distance_km })}
+                  </span>
                 )}
               </span>
               <span className="nc2-opt-2">{o.postal_code} · {o.address}</span>
