@@ -152,7 +152,10 @@ const PickupSelect = ({ options, value, onChange, placeholder, loading, geoCity 
                   </span>
                 )}
               </span>
-              <span className="nc2-opt-2">{o.postal_code} · {o.address}</span>
+              {/* BOX NOW sends "-1000" for lockers without a real postal code */}
+              <span className="nc2-opt-2">
+                {/^\d{3,6}$/.test(String(o.postal_code || "")) ? `${o.postal_code} · ` : ""}{o.address}
+              </span>
             </button>
           ))}
           {options.length > hits.length && <p className="nc2-muted px-3 py-2">{moreText}</p>}
