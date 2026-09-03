@@ -34,11 +34,27 @@ def test_locker_bank_transfer_payload():
     assert p["order_id"] == "SUB29" and p["currency"] == "EUR"
     assert p["products"] == [{"sku": "PP-SERMORELIN-5MG", "name": "Серморелин (Sermorelin) 5mg", "quantity": 2,
                               "unit_price": 59.0, "weight": 0.1}]
-    assert p["receiver"] == {"name": "TEST QA", "phone": "+359878279269", "email": "qa@example.com", "office_id": 4471}
+    # NextLevel rejects a shipment without receiver.country, office deliveries included
+    assert p["receiver"] == {"name": "TEST QA", "phone": "+359878279269", "email": "qa@example.com",
+                             "office_id": 4471, "country": "BG", "place": "Бургас"}
     assert p["price"] == 118.0 and p["shipping_price"] == 3.39 and p["is_shipping_free"] is False
     assert p["is_paid"] is True and p["payment_method"] == "bank_transfer" and "services" not in p
     assert "courier" not in p  # the office decides the courier
     assert p["contents"] == "PP-SERMORELIN-5MG x2"
+
+
+def test_office_order_without_country_falls_back_to_the_shop_country():
+    """NextLevel answered 400 'The receiver.country field is required' for office orders (WLH05)."""
+    o = order(shipping={"full_name": "TEST QA", "phone": "+359878279269", "city": "Бургас"})
+    p = fulfillment.build_order(o, {**CFG, "wc_country": "bg"})
+    assert p["receiver"]["country"] == "BG"
+    assert p["receiver"]["office_id"] == 4471
+
+
+def test_office_order_without_any_country_fails_with_a_clear_reason():
+    o = order(shipping={"full_name": "TEST QA", "phone": "+359878279269"})
+    with pytest.raises(ValueError, match="receiver.country"):
+        fulfillment.build_order(o, {**CFG, "wc_country": ""})
 
 
 def test_address_cod_ron_payload():

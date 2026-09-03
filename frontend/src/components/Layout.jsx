@@ -11,6 +11,8 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { LOCALES, LOCALE_META } from "../i18n/locales";
+import { LocaleSwitcher } from "./LocaleSwitcher";
+import { rememberLocale } from "../i18n/geoLocale";
 import { api, fmtPrice, fmtBGN, showsBGN, formatErr, img } from "../lib/api";
 import { toast } from "sonner";
 import PreCheckoutModal from "./PreCheckoutModal";
@@ -512,19 +514,22 @@ const Header = ({ collections, settings }) => {
             />
           </Link>
 
-          <button
-            onClick={() => setOpen(true)}
-            className="relative p-2 -mr-2 rounded-md text-slate-800 hover:bg-slate-50"
-            data-testid="cart-button"
-            aria-label={t("cart")}
-          >
-            <ShoppingBag className="h-5 w-5" strokeWidth={1.8} />
-            {count > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 bg-coral-600 text-white text-[11px] h-5 min-w-[20px] rounded-full flex items-center justify-center px-1 font-bold" data-testid="cart-count">
-                {count}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-0.5">
+            <LocaleSwitcher testId="locale-switcher-mobile" />
+            <button
+              onClick={() => setOpen(true)}
+              className="relative p-2 -mr-2 rounded-md text-slate-800 hover:bg-slate-50"
+              data-testid="cart-button"
+              aria-label={t("cart")}
+            >
+              <ShoppingBag className="h-5 w-5" strokeWidth={1.8} />
+              {count > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-coral-600 text-white text-[11px] h-5 min-w-[20px] rounded-full flex items-center justify-center px-1 font-bold" data-testid="cart-count">
+                  {count}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* ---------- desktop: one row, logo left of the nav, search next to cart ---------- */}
@@ -579,6 +584,7 @@ const Header = ({ collections, settings }) => {
               aria-label={t("search")} data-testid="search-trigger-desktop">
               <Search className="h-5 w-5" strokeWidth={1.8} />
             </button>
+            <LocaleSwitcher testId="locale-switcher-desktop" />
             <button onClick={() => setOpen(true)} className="relative p-2 rounded-md text-slate-800 hover:bg-slate-50"
               aria-label={t("cart")} data-testid="cart-button-desktop">
               <ShoppingBag className="h-5 w-5" strokeWidth={1.8} />
@@ -682,7 +688,7 @@ const Footer = ({ collections, articles, settings }) => {
           <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-slate-300" data-testid="footer-locales">
             {LOCALES.filter((l) => l !== locale).map((l) => (
               <li key={l}>
-                <a href={localeUrl(l, basePath)} className="hover:text-white" hrefLang={LOCALE_META[l].hreflang} data-testid={`footer-locale-${l}`}>
+                <a href={localeUrl(l, basePath)} onClick={() => rememberLocale(l)} className="hover:text-white" hrefLang={LOCALE_META[l].hreflang} data-testid={`footer-locale-${l}`}>
                   {LOCALE_META[l].label}
                 </a>
               </li>

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { LOCALES, DEFAULT_LOCALE, LOCALE_META, translate, applyLocaleRoutes, applyUiOverrides, isProdHost, localeFromHost } from "./locales";
 import { api, setFx } from "../lib/api";
 import { setLinks } from "../lib/links";
+import { rememberedLocale, localeForCountry, targetForLocale } from "./geoLocale";
 
 const LocaleContext = createContext({ locale: DEFAULT_LOCALE });
 
@@ -44,23 +45,39 @@ export function LocaleProvider({ children }) {
       .catch(() => {});
   }, [locale]);
 
-  /* one language per domain: purepeptide.eu serves English under /en, purepeptide.gr / .ro serve
-     their language from the root, and a foreign prefix jumps to the domain that owns it */
+  /* one language per domain: purepeptide.eu is a shared apex — the visitor's IP country decides
+     which version he lands on (a language with its own domain sends him there), and his own choice
+     from the language switcher always wins. purepeptide.gr / .ro serve their language from the root,
+     and a foreign prefix jumps to the domain that owns it */
   useEffect(() => {
     const seg = pathname.split("/")[1];
     if (host.includes("purepeptide.eu") && !LOCALES.includes(seg)) {
-      nav(`/en${pathname === "/" ? "" : pathname}`, { replace: true });
-      return;
+      let cancelled = false;
+      const go = (target) => {
+        if (cancelled) return;
+        if (target.external) window.location.replace(target.external);
+        else nav(target.internal, { replace: true });
+      };
+      const saved = rememberedLocale();
+      if (saved) {
+        go(targetForLocale(saved, pathname));
+      } else {
+        api.get("/geo/country")
+          .then(({ data }) => go(targetForLocale(localeForCountry(data.country), pathname)))
+          .catch(() => go(targetForLocale("en", pathname)));
+      }
+      return () => { cancelled = true; };
     }
-    if (!hostLocale) return;
+    if (!hostLocale) return undefined;
     const rest = LOCALES.includes(seg) ? (pathname.slice(seg.length + 1) || "/") : null;
-    if (rest === null) return;
+    if (rest === null) return undefined;
     if (seg === hostLocale) {
       nav(rest, { replace: true });                       // /gr/... on purepeptide.gr -> /...
     } else if (isProdHost(host)) {
       const meta = LOCALE_META[seg];
       window.location.replace(`${meta.origin}${meta.prefix}${rest === "/" ? "" : rest}`);
     }
+    return undefined;
   }, [pathname, hostLocale, host, nav]);
 
   const value = useMemo(() => {
