@@ -45,7 +45,7 @@ export default function CollectionPage() {
         mainEntity: itemListLd(data.products || [], (p) => `/products/${p.handle}`),
       },
       breadcrumbLd([
-        { name: "Начало", path: "/" },
+        { name: t("crumbHome"), path: "/" },
         { name: c.title, path: `/collections/${handle}` },
       ]),
       organizationLd(),

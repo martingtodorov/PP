@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { LOCALES, LOCALE_META, DEFAULT_LOCALE, isProdHost, localeFromHost } from "../i18n/locales";
+import { LOCALES, LOCALE_META, DEFAULT_LOCALE, isProdHost, localeFromHost, translate } from "../i18n/locales";
 import { siteMedia } from "./media";
 
 const setMeta = (attr, key, content) => {
@@ -33,6 +33,8 @@ export function useSeo({ title, description, locale = DEFAULT_LOCALE, path = "/"
     const full = title ? `${title}` : "PurePeptide";
     document.title = full;
     document.documentElement.lang = LOCALE_META[locale]?.hreflang || locale;
+    const skip = document.getElementById("pp-skip");   // ships in index.html before React
+    if (skip) skip.textContent = translate(locale, "skipToContent");
     setMeta("name", "description", description);
     setMeta("name", "robots", robots);
     setMeta("property", "og:title", full);

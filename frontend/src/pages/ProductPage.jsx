@@ -94,8 +94,8 @@ export default function ProductPage() {
     jsonLd: p && graph(
       productLd({ product: p, variant: v, path: `/products/${handle}` }),
       breadcrumbLd([
-        { name: "Начало", path: "/" },
-        { name: "Всички пептиди", path: link("catalog") },
+        { name: t("crumbHome"), path: "/" },
+        { name: t("crumbCatalog"), path: link("catalog") },
         { name: p.title, path: `/products/${handle}` },
       ]),
       organizationLd(),

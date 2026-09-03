@@ -110,7 +110,7 @@ export default function HomePage() {
   useSeo({
     title: locale === "bg"
       ? "PurePeptide – Nº1 пептиди с доказано качество в България"
-      : "PurePeptide – research peptides with verified >99% purity",
+      : `PurePeptide – ${t("tagline")}`,
     description: t("heroSub"),
     locale,
     path: "/",

@@ -2,6 +2,8 @@
 
 import { siteMedia } from "./media";
 import { currencyCode, nicePrice } from "./money";
+import { currentLocale } from "./api";
+import { translate } from "../i18n/locales";
 
 const ORIGIN = () => (typeof window !== "undefined" ? window.location.origin : "https://purepeptide.bg");
 const asset = (key, fallback) => {
@@ -20,9 +22,7 @@ export const organizationLd = (settings = {}) => ({
   logo: { "@type": "ImageObject", url: asset("icon", "/favicon-512.png"), width: 512, height: 512 },
   image: asset("og", "/og-image.jpg"),
   email: settings.contact_email || "contact@purepeptide.bg",
-  description:
-    settings.tagline ||
-    "Лиофилизирани изследователски пептиди с чистота над 99%, потвърдена от независима лаборатория.",
+  description: settings.tagline || translate(currentLocale(), "brandDesc"),
 });
 
 export const websiteLd = (locale = "bg") => ({

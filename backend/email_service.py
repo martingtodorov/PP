@@ -73,15 +73,10 @@ async def send_abandoned_cart(cart: Dict[str, Any], settings: Dict[str, Any], di
 
 
 async def send_payment_received(order: Dict[str, Any], settings: Dict[str, Any]):
-    body = (
-        f"<p>Здравейте, {order['customer_name']},</p>"
-        f"<p>Потвърдихме плащането за поръчка <strong>{order['order_number']}</strong>. "
-        f"Подготвяме пратката за изпращане.</p>"
-    )
-    return await send_email(
-        order["customer_email"], f"Плащането за {order['order_number']} е потвърдено — PurePeptide",
-        _wrap("Плащането е потвърдено", body, "PurePeptide"), settings,
-    )
+    locale = order.get("locale") or "bg"
+    contact = (settings or {}).get("contact_email") or os.environ.get("CONTACT_EMAIL", "")
+    subject, html = email_templates.render_payment_received(order, locale, contact)
+    return await send_email(order["customer_email"], subject, html, settings)
 
 
 async def send_shipment_created(order: Dict[str, Any], settings: Dict[str, Any]):
@@ -100,27 +95,17 @@ async def send_delivered(order: Dict[str, Any], settings: Dict[str, Any]):
 
 
 async def send_shipped(order: Dict[str, Any], tracking: Dict[str, Any], settings: Dict[str, Any]):
-    body = (
-        f"<p>Здравейте, {order['customer_name']},</p>"
-        f"<p>Поръчка <strong>{order['order_number']}</strong> е изпратена с "
-        f"{tracking['carrier'].title()}.</p>"
-        f"<p>Товарителница: <strong>{tracking['tracking_number']}</strong><br>"
-        f"<a href='{tracking['tracking_url']}' style='color:{BRAND}'>Проследи пратката</a></p>"
-    )
-    return await send_email(
-        order["customer_email"], f"Поръчка {order['order_number']} е изпратена — PurePeptide",
-        _wrap("Пратката е на път", body, "PurePeptide"), settings,
-    )
+    """Manually entered tracking — same localised template as the NextLevel waybill mail."""
+    locale = order.get("locale") or "bg"
+    contact = (settings or {}).get("contact_email") or os.environ.get("CONTACT_EMAIL", "")
+    shaped = {**order, "shipment": {"courier": (tracking.get("carrier") or "").title(),
+                                    "awb": tracking.get("tracking_number", ""),
+                                    "tracking_url": tracking.get("tracking_url", "")}}
+    subject, html = email_templates.render_shipment(shaped, locale, contact)
+    return await send_email(order["customer_email"], subject, html, settings)
 
 async def send_order_cancelled(order: Dict[str, Any], settings: Dict[str, Any], reason: str = ""):
-    body = (
-        f"<p>Здравейте, {order.get('customer_name', '')},</p>"
-        f"<p>Поръчка <strong>{order['order_number']}</strong> е отказана и няма да бъде изпратена. "
-        f"Нямате какво да плащате.</p>"
-        + (f"<p>Причина: {reason}</p>" if reason else "")
-        + "<p>Ако това е станало по грешка или искате да поръчате отново, просто ни пишете.</p>"
-    )
-    return await send_email(
-        order["customer_email"], f"Поръчка {order['order_number']} е отказана — PurePeptide",
-        _wrap("Поръчката е отказана", body, "PurePeptide"), settings,
-    )
+    locale = order.get("locale") or "bg"
+    contact = (settings or {}).get("contact_email") or os.environ.get("CONTACT_EMAIL", "")
+    subject, html = email_templates.render_cancelled(order, locale, contact, reason)
+    return await send_email(order["customer_email"], subject, html, settings)
