@@ -82,10 +82,11 @@ export const pfConfig = (country) =>
   once(`cfg:${country}`, () =>
     api.get("/nextcart/config", { params: { country } }).then((r) => r.data));
 
-export const pfPickups = (providerKey, destinationType, country) =>
-  once(`pk:${providerKey}:${destinationType}:${country}`, () =>
+export const pfPickups = (providerKey, destinationType, country, point) =>
+  once(`pk:${providerKey}:${destinationType}:${country}:${point ? `${point.lat.toFixed(2)},${point.lng.toFixed(2)}` : ""}`, () =>
     api.get("/nextcart/pickups", {
-      params: { provider_key: providerKey, destination_type: destinationType, country },
+      params: { provider_key: providerKey, destination_type: destinationType, country,
+                ...(point ? { lat: point.lat, lng: point.lng } : {}) },
     }).then((r) => r.data));
 
 /** Fire-and-forget warm-up: countries, bank, geo, courier config and the default pickup list. */
