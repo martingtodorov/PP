@@ -31,10 +31,11 @@ COUNTRY_COURIERS: Dict[str, list] = {
     "GR": ["speedex"],
     "HU": ["gls"], "PL": ["gls"], "SK": ["gls"], "CZ": ["gls"],
     "SI": ["gls"], "HR": ["gls"], "IT": ["gls"], "DE": ["gls"], "ES": ["gls"],
+    "FR": ["gls"], "BE": ["gls"], "NL": ["gls"], "CY": ["gls"],
 }
 
-# Payment methods per destination — Spain ships prepaid only (owner's decision).
-COUNTRY_PAYMENTS: Dict[str, list] = {"ES": ["bank_transfer"]}
+# Prepaid-only markets (owner's decision — no cash on delivery there).
+COUNTRY_PAYMENTS: Dict[str, list] = {c: ["bank_transfer"] for c in ("ES", "FR", "BE", "NL", "CY", "DE")}
 
 # The merchant's own delivery offer — wins over whatever the NextCart profile says (price and presence).
 METHOD_OVERRIDES: Dict[str, Dict[str, Dict[str, Any]]] = {
@@ -43,6 +44,18 @@ METHOD_OVERRIDES: Dict[str, Dict[str, Dict[str, Any]]] = {
         "econt_address": {"provider_key": "econt", "destination_type": "address", "price_eur": 4.99},
     },
     "ES": {
+        "gls_address": {"provider_key": "gls", "destination_type": "address", "price_eur": 8.99},
+    },
+    "FR": {
+        "gls_address": {"provider_key": "gls", "destination_type": "address", "price_eur": 8.99},
+    },
+    "BE": {
+        "gls_address": {"provider_key": "gls", "destination_type": "address", "price_eur": 8.99},
+    },
+    "NL": {
+        "gls_address": {"provider_key": "gls", "destination_type": "address", "price_eur": 8.99},
+    },
+    "CY": {
         "gls_address": {"provider_key": "gls", "destination_type": "address", "price_eur": 8.99},
     },
 }
@@ -271,12 +284,14 @@ async def _shape_delivery(data: Dict[str, Any], country: str) -> Dict[str, Any]:
 COUNTRY_NAME_BG = {
     "BG": "България", "RO": "Румъния", "GR": "Гърция", "HU": "Унгария", "PL": "Полша",
     "SK": "Словакия", "CZ": "Чехия", "SI": "Словения", "HR": "Хърватия", "IT": "Италия",
-    "DE": "Германия", "ES": "Испания",
+    "DE": "Германия", "ES": "Испания", "FR": "Франция", "BE": "Белгия", "NL": "Нидерландия",
+    "CY": "Кипър",
 }
 
 COUNTRY_DIAL = {
     "BG": "359", "RO": "40", "GR": "30", "HU": "36", "PL": "48", "SK": "421", "CZ": "420",
-    "SI": "386", "HR": "385", "IT": "39", "DE": "49", "ES": "34",
+    "SI": "386", "HR": "385", "IT": "39", "DE": "49", "ES": "34", "FR": "33", "BE": "32",
+    "NL": "31", "CY": "357",
 }
 
 
