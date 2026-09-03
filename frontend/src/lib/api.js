@@ -1,13 +1,16 @@
 import axios from "axios";
-import { LOCALES, DEFAULT_LOCALE } from "../i18n/locales";
+import { LOCALES, DEFAULT_LOCALE, localeFromHost, translate } from "../i18n/locales";
 
 export const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
 
+/* Every request carries the language of the page. purepeptide.gr / .ro serve their language from
+   the root, so the domain decides there; on purepeptide.eu the /xx prefix does. */
 export const currentLocale = () => {
   if (typeof window === "undefined") return DEFAULT_LOCALE;
   const seg = window.location.pathname.split("/")[1];
-  return LOCALES.includes(seg) ? seg : DEFAULT_LOCALE;
+  if (LOCALES.includes(seg)) return seg;
+  return localeFromHost(window.location.host) || DEFAULT_LOCALE;
 };
 
 export const api = axios.create({
@@ -50,22 +53,23 @@ export { fmtPrice, fmtAmount, amountOf, cartAmounts, convertPlain, setFx, curren
 /* BGN is only shown on the Bulgarian storefront (dual-pricing requirement) */
 export const showsBGN = () => currentLocale() === "bg";
 
-const FIELD_BG = {
-  full_name: "име и фамилия", phone: "телефон", email: "имейл", line1: "адрес",
-  city: "град", postal_code: "пощенски код", country: "държава",
-  customer_email: "имейл", customer_name: "име и фамилия", customer_phone: "телефон",
+const FIELD_KEY = {
+  full_name: "fldName", phone: "fldPhone", email: "fldEmail", line1: "fldAddress",
+  city: "fldCity", postal_code: "fldPostal", country: "fldCountry",
+  customer_email: "fldEmail", customer_name: "fldName", customer_phone: "fldPhone",
 };
+const tr = (key, vars) => translate(currentLocale(), key, vars);
 
 export const formatErr = (e) => {
   const d = e?.response?.data?.detail;
-  if (!d) return e?.message || "Възникна грешка";
+  if (!d) return e?.message || tr("errGeneric");
   if (typeof d === "string") return d;
   if (Array.isArray(d)) {
     const fields = [...new Set(d.map((x) => {
       const loc = Array.isArray(x?.loc) ? x.loc[x.loc.length - 1] : "";
-      return FIELD_BG[loc] || loc;
+      return FIELD_KEY[loc] ? tr(FIELD_KEY[loc]) : loc;
     }).filter(Boolean))];
-    if (fields.length) return `Моля, попълнете: ${fields.join(", ")}`;
+    if (fields.length) return tr("errPleaseFill", { fields: fields.join(", ") });
     return d.map((x) => x?.msg || JSON.stringify(x)).join(" • ");
   }
   return String(d);

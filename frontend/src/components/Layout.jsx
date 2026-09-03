@@ -676,7 +676,7 @@ const Footer = ({ collections, articles, settings }) => {
             <li><Link to={lp(link("refund"))} className="hover:text-white">{t("policyRefund")}</Link></li>
             <li><Link to={lp(link("terms"))} className="hover:text-white">{t("policyTerms")}</Link></li>
             <li><Link to={lp(link("shipping"))} className="hover:text-white">{t("policyShipping")}</Link></li>
-            <li><Link to={lp("/pages/html-sitemap")} className="hover:text-white" data-testid="footer-html-sitemap">Карта на сайта</Link></li>
+            <li><Link to={lp("/pages/html-sitemap")} className="hover:text-white" data-testid="footer-html-sitemap">{t("siteMapLink")}</Link></li>
           </ul>
           <p className="text-xs uppercase tracking-[0.2em] text-coral-500 mb-3 mt-6 font-bold">{t("otherCountries")}</p>
           <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-slate-300" data-testid="footer-locales">

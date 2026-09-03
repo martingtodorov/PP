@@ -45,6 +45,9 @@ T: Dict[str, Dict[str, str]] = {
         "sh_subject": "Поръчка {n} е на път 🚚", "sh_title": "Пратката ви е на път", "sh_body": "Товарителницата за поръчка {n} е издадена. Можете да следите пратката при куриера или в страницата на поръчката.", "sh_courier": "Куриер",
         "dv_subject": "Поръчка {n} е доставена ✅", "dv_title": "Пратката ви е доставена", "dv_body": "Поръчка {n} е доставена. Благодарим ви, че избрахте PurePeptide! Ако имате въпроси, отговорете на този имейл.",
         "sh_awb": "Номер на товарителница", "sh_track": "Проследи пратката", "sh_view": "Виж поръчката", "sh_cod": "Сума за плащане при получаване",
+        "cx_subject": "Поръчка {n} е отказана · PurePeptide", "cx_title": "Поръчката е отказана",
+        "cx_body": "Поръчка {n} е отказана и няма да бъде изпратена. Няма какво да плащате. Ако това е по грешка или искате да поръчате отново, просто отговорете на този имейл.", "cx_reason": "Причина",
+        "pr_subject": "Плащането по поръчка {n} е получено · PurePeptide", "pr_title": "Плащането е потвърдено", "pr_body": "Получихме плащането по поръчка {n}. Подготвяме я за изпращане и ще ви уведомим, щом тръгне.",
     },
     "en": {
         "order": "Order", "subject_order": "Order {n} · PurePeptide",
@@ -67,6 +70,9 @@ T: Dict[str, Dict[str, str]] = {
         "sh_subject": "Order {n} is on its way 🚚", "sh_title": "Your parcel is on its way", "sh_body": "The waybill for order {n} has been issued. Track the parcel with the courier or on your order page.", "sh_courier": "Courier",
         "dv_subject": "Order {n} has been delivered ✅", "dv_title": "Your parcel has been delivered", "dv_body": "Order {n} has been delivered. Thank you for choosing PurePeptide! If you have any questions, just reply to this email.",
         "sh_awb": "Waybill number", "sh_track": "Track the parcel", "sh_view": "View order", "sh_cod": "Amount due on delivery",
+        "cx_subject": "Order {n} has been cancelled · PurePeptide", "cx_title": "Order cancelled",
+        "cx_body": "Order {n} has been cancelled and will not be shipped. There is nothing to pay. If this was a mistake or you want to order again, just reply to this e-mail.", "cx_reason": "Reason",
+        "pr_subject": "Payment received for order {n} · PurePeptide", "pr_title": "Payment confirmed", "pr_body": "We have received the payment for order {n}. We are preparing it for shipping and will let you know once it is on its way.",
     },
     "fr": {
         "order": "Commande", "subject_order": "Commande {n} · PurePeptide",
@@ -90,6 +96,9 @@ T: Dict[str, Dict[str, str]] = {
         "sh_subject": "La commande {n} est en route 🚚", "sh_title": "Votre colis est en route", "sh_body": "Le bordereau de la commande {n} a été émis. Suivez le colis chez le transporteur ou sur la page de votre commande.", "sh_courier": "Transporteur",
         "dv_subject": "La commande {n} a été livrée ✅", "dv_title": "Votre colis a été livré", "dv_body": "La commande {n} a été livrée. Merci d'avoir choisi PurePeptide ! Pour toute question, répondez simplement à cet e-mail.",
         "sh_awb": "Numéro de suivi", "sh_track": "Suivre le colis", "sh_view": "Voir la commande", "sh_cod": "Montant à payer à la livraison",
+        "cx_subject": "La commande {n} a été annulée · PurePeptide", "cx_title": "Commande annulée",
+        "cx_body": "La commande {n} a été annulée et ne sera pas expédiée. Vous n'avez rien à payer. Si c'est une erreur ou si vous souhaitez commander à nouveau, répondez simplement à cet e-mail.", "cx_reason": "Motif",
+        "pr_subject": "Paiement reçu pour la commande {n} · PurePeptide", "pr_title": "Paiement confirmé", "pr_body": "Nous avons reçu le paiement de la commande {n}. Nous la préparons pour l'expédition et vous informerons dès son départ.",
     },
     "de": {
         "order": "Bestellung", "subject_order": "Bestellung {n} · PurePeptide",
@@ -113,6 +122,9 @@ T: Dict[str, Dict[str, str]] = {
         "sh_subject": "Bestellung {n} ist unterwegs 🚚", "sh_title": "Ihr Paket ist unterwegs", "sh_body": "Der Frachtbrief für Bestellung {n} wurde erstellt. Verfolgen Sie das Paket beim Kurier oder auf Ihrer Bestellseite.", "sh_courier": "Kurier",
         "dv_subject": "Bestellung {n} wurde zugestellt ✅", "dv_title": "Ihr Paket wurde zugestellt", "dv_body": "Bestellung {n} wurde zugestellt. Vielen Dank, dass Sie sich für PurePeptide entschieden haben! Bei Fragen antworten Sie einfach auf diese E-Mail.",
         "sh_awb": "Sendungsnummer", "sh_track": "Sendung verfolgen", "sh_view": "Bestellung ansehen", "sh_cod": "Bei Lieferung zu zahlender Betrag",
+        "cx_subject": "Bestellung {n} wurde storniert · PurePeptide", "cx_title": "Bestellung storniert",
+        "cx_body": "Bestellung {n} wurde storniert und wird nicht versandt. Es ist nichts zu bezahlen. Falls dies ein Versehen war oder Sie erneut bestellen möchten, antworten Sie einfach auf diese E-Mail.", "cx_reason": "Grund",
+        "pr_subject": "Zahlung für Bestellung {n} erhalten · PurePeptide", "pr_title": "Zahlung bestätigt", "pr_body": "Wir haben die Zahlung für Bestellung {n} erhalten. Wir bereiten den Versand vor und melden uns, sobald das Paket unterwegs ist.",
     },
     "cz": {
         "order": "Objednávka", "subject_order": "Objednávka {n} · PurePeptide",
@@ -135,6 +147,9 @@ T: Dict[str, Dict[str, str]] = {
         "sh_subject": "Objednávka {n} je na cestě 🚚", "sh_title": "Váš balík je na cestě", "sh_body": "Přepravní štítek pro objednávku {n} byl vystaven. Sledujte balík u kurýra nebo na stránce objednávky.", "sh_courier": "Kurýr",
         "dv_subject": "Objednávka {n} byla doručena ✅", "dv_title": "Váš balík byl doručen", "dv_body": "Objednávka {n} byla doručena. Děkujeme, že jste si vybrali PurePeptide! V případě dotazů stačí odpovědět na tento e-mail.",
         "sh_awb": "Číslo zásilky", "sh_track": "Sledovat zásilku", "sh_view": "Zobrazit objednávku", "sh_cod": "Částka k úhradě při doručení",
+        "cx_subject": "Objednávka {n} byla zrušena · PurePeptide", "cx_title": "Objednávka zrušena",
+        "cx_body": "Objednávka {n} byla zrušena a nebude odeslána. Nic neplatíte. Pokud šlo o omyl nebo chcete objednat znovu, stačí odpovědět na tento e-mail.", "cx_reason": "Důvod",
+        "pr_subject": "Platba za objednávku {n} přijata · PurePeptide", "pr_title": "Platba potvrzena", "pr_body": "Přijali jsme platbu za objednávku {n}. Připravujeme ji k odeslání a dáme vám vědět, až bude na cestě.",
     },
     "hu": {
         "order": "Megrendelés", "subject_order": "Megrendelés {n} · PurePeptide",
@@ -157,6 +172,9 @@ T: Dict[str, Dict[str, str]] = {
         "sh_subject": "A {n} rendelés úton van 🚚", "sh_title": "Csomagja úton van", "sh_body": "A {n} rendelés fuvarlevele elkészült. Kövesse a csomagot a futárnál vagy a rendelés oldalán.", "sh_courier": "Futár",
         "dv_subject": "A {n} rendelés kézbesítve ✅", "dv_title": "Csomagját kézbesítettük", "dv_body": "A {n} rendelést kézbesítettük. Köszönjük, hogy a PurePeptide-ot választotta! Kérdés esetén válaszoljon erre az e-mailre.",
         "sh_awb": "Fuvarlevél száma", "sh_track": "Csomag követése", "sh_view": "Rendelés megtekintése", "sh_cod": "Átvételkor fizetendő összeg",
+        "cx_subject": "A {n} megrendelést visszavontuk · PurePeptide", "cx_title": "Megrendelés visszavonva",
+        "cx_body": "A {n} megrendelést visszavontuk, nem kerül kiszállításra. Nincs fizetendő összeg. Ha tévedés történt, vagy újra szeretne rendelni, csak válaszoljon erre az e-mailre.", "cx_reason": "Ok",
+        "pr_subject": "A {n} megrendelés fizetése megérkezett · PurePeptide", "pr_title": "Fizetés megerősítve", "pr_body": "Megkaptuk a {n} megrendelés ellenértékét. Előkészítjük a csomagot, és jelezzük, amint elindult.",
     },
     "pl": {
         "order": "Zamówienie", "subject_order": "Zamówienie {n} · PurePeptide",
@@ -179,6 +197,9 @@ T: Dict[str, Dict[str, str]] = {
         "sh_subject": "Zamówienie {n} jest w drodze 🚚", "sh_title": "Twoja przesyłka jest w drodze", "sh_body": "List przewozowy dla zamówienia {n} został wystawiony. Śledź przesyłkę u kuriera lub na stronie zamówienia.", "sh_courier": "Kurier",
         "dv_subject": "Zamówienie {n} zostało dostarczone ✅", "dv_title": "Twoja przesyłka została dostarczona", "dv_body": "Zamówienie {n} zostało dostarczone. Dziękujemy za wybór PurePeptide! W razie pytań odpowiedz na tę wiadomość.",
         "sh_awb": "Numer listu przewozowego", "sh_track": "Śledź przesyłkę", "sh_view": "Zobacz zamówienie", "sh_cod": "Kwota do zapłaty przy odbiorze",
+        "cx_subject": "Zamówienie {n} zostało anulowane · PurePeptide", "cx_title": "Zamówienie anulowane",
+        "cx_body": "Zamówienie {n} zostało anulowane i nie zostanie wysłane. Nie masz nic do zapłaty. Jeśli to pomyłka lub chcesz zamówić ponownie, odpowiedz na tę wiadomość.", "cx_reason": "Powód",
+        "pr_subject": "Otrzymaliśmy płatność za zamówienie {n} · PurePeptide", "pr_title": "Płatność potwierdzona", "pr_body": "Otrzymaliśmy płatność za zamówienie {n}. Przygotowujemy je do wysyłki i poinformujemy Cię, gdy ruszy.",
     },
     "sk": {
         "order": "Objednávka", "subject_order": "Objednávka {n} · PurePeptide",
@@ -201,6 +222,9 @@ T: Dict[str, Dict[str, str]] = {
         "sh_subject": "Objednávka {n} je na ceste 🚚", "sh_title": "Váš balík je na ceste", "sh_body": "Prepravný štítok pre objednávku {n} bol vystavený. Sledujte balík u kuriéra alebo na stránke objednávky.", "sh_courier": "Kuriér",
         "dv_subject": "Objednávka {n} bola doručená ✅", "dv_title": "Váš balík bol doručený", "dv_body": "Objednávka {n} bola doručená. Ďakujeme, že ste si vybrali PurePeptide! V prípade otázok stačí odpovedať na tento e-mail.",
         "sh_awb": "Číslo zásielky", "sh_track": "Sledovať zásielku", "sh_view": "Zobraziť objednávku", "sh_cod": "Suma na úhradu pri doručení",
+        "cx_subject": "Objednávka {n} bola zrušená · PurePeptide", "cx_title": "Objednávka zrušená",
+        "cx_body": "Objednávka {n} bola zrušená a nebude odoslaná. Nič neplatíte. Ak išlo o omyl alebo chcete objednať znova, stačí odpovedať na tento e-mail.", "cx_reason": "Dôvod",
+        "pr_subject": "Platba za objednávku {n} prijatá · PurePeptide", "pr_title": "Platba potvrdená", "pr_body": "Prijali sme platbu za objednávku {n}. Pripravujeme ju na odoslanie a dáme vám vedieť, keď bude na ceste.",
     },
     "si": {
         "order": "Naročilo", "subject_order": "Naročilo {n} · PurePeptide",
@@ -223,6 +247,9 @@ T: Dict[str, Dict[str, str]] = {
         "sh_subject": "Naročilo {n} je na poti 🚚", "sh_title": "Vaš paket je na poti", "sh_body": "Tovorni list za naročilo {n} je izdan. Paket spremljajte pri kurirju ali na strani naročila.", "sh_courier": "Kurir",
         "dv_subject": "Naročilo {n} je dostavljeno ✅", "dv_title": "Vaš paket je dostavljen", "dv_body": "Naročilo {n} je dostavljeno. Hvala, ker ste izbrali PurePeptide! Če imate vprašanja, odgovorite na to e-pošto.",
         "sh_awb": "Številka pošiljke", "sh_track": "Spremljaj pošiljko", "sh_view": "Ogled naročila", "sh_cod": "Znesek za plačilo ob dostavi",
+        "cx_subject": "Naročilo {n} je preklicano · PurePeptide", "cx_title": "Naročilo preklicano",
+        "cx_body": "Naročilo {n} je preklicano in ne bo odposlano. Ničesar ni treba plačati. Če je šlo za pomoto ali želite naročiti znova, samo odgovorite na to sporočilo.", "cx_reason": "Razlog",
+        "pr_subject": "Plačilo za naročilo {n} je prejeto · PurePeptide", "pr_title": "Plačilo potrjeno", "pr_body": "Prejeli smo plačilo za naročilo {n}. Pripravljamo ga za odpremo in vas obvestimo, ko bo na poti.",
     },
     "gr": {
         "order": "Παραγγελία", "subject_order": "Παραγγελία {n} · PurePeptide",
@@ -245,6 +272,9 @@ T: Dict[str, Dict[str, str]] = {
         "sh_subject": "Η παραγγελία {n} είναι καθ' οδόν 🚚", "sh_title": "Το δέμα σας είναι καθ' οδόν", "sh_body": "Η φορτωτική για την παραγγελία {n} εκδόθηκε. Παρακολουθήστε το δέμα στον courier ή στη σελίδα της παραγγελίας.", "sh_courier": "Courier",
         "dv_subject": "Η παραγγελία {n} παραδόθηκε ✅", "dv_title": "Το δέμα σας παραδόθηκε", "dv_body": "Η παραγγελία {n} παραδόθηκε. Σας ευχαριστούμε που επιλέξατε την PurePeptide! Για ερωτήσεις, απαντήστε σε αυτό το e-mail.",
         "sh_awb": "Αριθμός φορτωτικής", "sh_track": "Παρακολούθηση δέματος", "sh_view": "Προβολή παραγγελίας", "sh_cod": "Ποσό πληρωμής κατά την παράδοση",
+        "cx_subject": "Η παραγγελία {n} ακυρώθηκε · PurePeptide", "cx_title": "Η παραγγελία ακυρώθηκε",
+        "cx_body": "Η παραγγελία {n} ακυρώθηκε και δεν θα αποσταλεί. Δεν οφείλετε τίποτα. Αν έγινε από λάθος ή θέλετε να παραγγείλετε ξανά, απαντήστε σε αυτό το e-mail.", "cx_reason": "Αιτία",
+        "pr_subject": "Λάβαμε την πληρωμή για την παραγγελία {n} · PurePeptide", "pr_title": "Η πληρωμή επιβεβαιώθηκε", "pr_body": "Λάβαμε την πληρωμή για την παραγγελία {n}. Την προετοιμάζουμε για αποστολή και θα σας ενημερώσουμε μόλις ξεκινήσει.",
     },
     "ro": {
         "order": "Comandă", "subject_order": "Comanda {n} · PurePeptide",
@@ -267,6 +297,9 @@ T: Dict[str, Dict[str, str]] = {
         "sh_subject": "Comanda {n} este pe drum 🚚", "sh_title": "Coletul dvs. este pe drum", "sh_body": "AWB-ul pentru comanda {n} a fost emis. Urmăriți coletul la curier sau în pagina comenzii.", "sh_courier": "Curier",
         "dv_subject": "Comanda {n} a fost livrată ✅", "dv_title": "Coletul dvs. a fost livrat", "dv_body": "Comanda {n} a fost livrată. Vă mulțumim că ați ales PurePeptide! Pentru întrebări, răspundeți la acest e-mail.",
         "sh_awb": "Număr AWB", "sh_track": "Urmărește coletul", "sh_view": "Vezi comanda", "sh_cod": "Sumă de plată la livrare",
+        "cx_subject": "Comanda {n} a fost anulată · PurePeptide", "cx_title": "Comandă anulată",
+        "cx_body": "Comanda {n} a fost anulată și nu va fi expediată. Nu aveți nimic de plată. Dacă a fost o greșeală sau doriți să comandați din nou, răspundeți la acest e-mail.", "cx_reason": "Motiv",
+        "pr_subject": "Plata pentru comanda {n} a fost primită · PurePeptide", "pr_title": "Plată confirmată", "pr_body": "Am primit plata pentru comanda {n}. O pregătim pentru expediere și vă anunțăm imediat ce pleacă.",
     },
 }
 
@@ -703,3 +736,37 @@ def render_delivered(order: Dict[str, Any], locale: str, contact_email: str) -> 
   </td></tr>
   <tr><td style="padding:10px 28px 28px;">{_button(f"{base}/checkout/success/{order.get('id', '')}", tr(loc, 'sh_view'))}</td></tr>"""
     return tr(loc, "dv_subject", n=n), _shell(loc, f"{tr(loc, 'order')} {n}", tr(loc, "dv_title"), content, contact_email)
+
+
+def render_cancelled(order: Dict[str, Any], locale: str, contact_email: str, reason: str = "") -> tuple:
+    """The order was cancelled by the customer or by the shop — nothing left to pay."""
+    loc = (locale or order.get("locale") or "bg").lower()
+    n = order.get("order_number", "")
+    rows = [(tr(loc, "cx_reason"), reason)] if reason else []
+    table = "".join(
+        f'<tr><td style="padding:6px 0;color:#64748b;">{k}</td>'
+        f'<td style="padding:6px 0;text-align:right;font-weight:700;">{v}</td></tr>' for k, v in rows)
+    content = f"""
+  <tr><td style="padding:26px 28px 6px;">
+    <p style="margin:0 0 8px;font-size:15px;color:#0f172a;">{tr(loc, 'hello', name=order.get('customer_name', ''))}</p>
+    <p style="margin:0;font-size:14px;line-height:1.6;color:#334155;">{tr(loc, 'cx_body', n=n)}</p>
+  </td></tr>""" + (f"""
+  <tr><td style="padding:14px 28px 22px;">
+    <table role="presentation" width="100%" style="font-size:14px;border-top:1px solid #e2e8f0;">{table}</table>
+  </td></tr>""" if table else """
+  <tr><td style="padding:0 28px 22px;"></td></tr>""")
+    return tr(loc, "cx_subject", n=n), _shell(loc, f"{tr(loc, 'order')} {n}", tr(loc, "cx_title"), content, contact_email)
+
+
+def render_payment_received(order: Dict[str, Any], locale: str, contact_email: str) -> tuple:
+    """Bank transfer landed — confirm it in the customer's own language."""
+    loc = (locale or order.get("locale") or "bg").lower()
+    base = base_url(loc)
+    n = order.get("order_number", "")
+    content = f"""
+  <tr><td style="padding:26px 28px 6px;">
+    <p style="margin:0 0 8px;font-size:15px;color:#0f172a;">{tr(loc, 'hello', name=order.get('customer_name', ''))}</p>
+    <p style="margin:0;font-size:14px;line-height:1.6;color:#334155;">{tr(loc, 'pr_body', n=n)}</p>
+  </td></tr>
+  <tr><td style="padding:16px 28px 28px;">{_button(f"{base}/checkout/success/{order.get('id', '')}", tr(loc, 'sh_view'))}</td></tr>"""
+    return tr(loc, "pr_subject", n=n), _shell(loc, f"{tr(loc, 'order')} {n}", tr(loc, "pr_title"), content, contact_email)

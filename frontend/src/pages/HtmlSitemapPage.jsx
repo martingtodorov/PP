@@ -9,24 +9,24 @@ import { graph, breadcrumbLd, organizationLd } from "../lib/schema";
 import { isAllCollection } from "../lib/collections";
 
 const SECTIONS = {
-  products: { title: "HTML sitemap — продукти", key: "products", to: (h) => `/products/${h}` },
-  collections: { title: "HTML sitemap — категории", key: "collections", to: (h) => `/collections/${h}` },
-  blogs: { title: "HTML sitemap — научни статии", key: "articles", to: (h) => `/articles/${h}` },
-  articles: { title: "HTML sitemap — научни статии", key: "articles", to: (h) => `/articles/${h}` },
-  pages: { title: "HTML sitemap — страници", key: "pages", to: (h) => `/pages/${h}` },
+  products: { label: "smProducts", key: "products", to: (h) => `/products/${h}` },
+  collections: { label: "smCollections", key: "collections", to: (h) => `/collections/${h}` },
+  blogs: { label: "smArticles", key: "articles", to: (h) => `/articles/${h}` },
+  articles: { label: "smArticles", key: "articles", to: (h) => `/articles/${h}` },
+  pages: { label: "smPages", key: "pages", to: (h) => `/pages/${h}` },
 };
 
 const HUB = [
-  ["/pages/html-sitemap-products", "Продукти"],
-  ["/pages/html-sitemap-collections", "Категории"],
-  ["/pages/html-sitemap-blogs", "Научни статии"],
-  ["/pages/html-sitemap-pages", "Страници"],
+  ["/pages/html-sitemap-products", "smProducts"],
+  ["/pages/html-sitemap-collections", "smCollections"],
+  ["/pages/html-sitemap-blogs", "smArticles"],
+  ["/pages/html-sitemap-pages", "smPages"],
 ];
 
 export default function HtmlSitemapPage() {
   const { pathname } = useLocation();
   const kind = (pathname.match(/html-sitemap-([a-z]+)/) || [])[1];
-  const { lp, locale } = useLocaleCtx();
+  const { lp, t, locale } = useLocaleCtx();
   const [index, setIndex] = useState(null);
   const section = SECTIONS[kind];
 
@@ -40,17 +40,17 @@ export default function HtmlSitemapPage() {
     });
   }, [locale]);
 
-  const title = section ? section.title : "HTML sitemap";
+  const title = section ? `HTML sitemap — ${t(section.label)}` : "HTML sitemap";
   const path = section ? `/pages/html-sitemap-${kind}` : "/pages/html-sitemap";
 
   useSeo({
     title: `${title} | PurePeptide`,
-    description: "Пълен списък с всички страници, продукти, категории и научни статии на PurePeptide.",
+    description: t("smDesc"),
     locale,
     path,
     jsonLd: graph(
       { "@type": "WebPage", name: title, url: `${window.location.origin}${path}` },
-      breadcrumbLd([{ name: "Начало", path: "/" }, { name: title, path }]),
+      breadcrumbLd([{ name: t("crumbHome"), path: "/" }, { name: title, path }]),
       organizationLd(),
     ),
   });
@@ -74,34 +74,34 @@ export default function HtmlSitemapPage() {
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-4">{title}</h1>
 
         <div className="flex flex-wrap gap-2 mt-6" data-testid="sitemap-hub-links">
-          {HUB.map(([to, label]) => (
+          {HUB.map(([to, labelKey]) => (
             <Link key={to} to={lp(to)}
               className="px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-700 hover:border-coral-500 hover:text-coral-700 transition-colors">
-              {label}
+              {t(labelKey)}
             </Link>
           ))}
         </div>
 
-        {!index && <p className="mt-8 text-sm text-slate-400">Зареждане…</p>}
+        {!index && <p className="mt-8 text-sm text-slate-400">{t("loadingText")}</p>}
 
         {index && section && list(index[section.key] || [], section.to, section.key === "pages" ? "slug" : "handle")}
 
         {index && !section && (
           <div className="mt-8 space-y-10">
             <section>
-              <h2 className="text-lg font-bold text-slate-900">Категории ({index.collections.length})</h2>
+              <h2 className="text-lg font-bold text-slate-900">{t("smCollections")} ({index.collections.length})</h2>
               {list(index.collections, (h) => `/collections/${h}`)}
             </section>
             <section>
-              <h2 className="text-lg font-bold text-slate-900">Продукти ({index.products.length})</h2>
+              <h2 className="text-lg font-bold text-slate-900">{t("smProducts")} ({index.products.length})</h2>
               {list(index.products, (h) => `/products/${h}`)}
             </section>
             <section>
-              <h2 className="text-lg font-bold text-slate-900">Научни статии ({index.articles.length})</h2>
+              <h2 className="text-lg font-bold text-slate-900">{t("smArticles")} ({index.articles.length})</h2>
               {list(index.articles, (h) => `/articles/${h}`)}
             </section>
             <section>
-              <h2 className="text-lg font-bold text-slate-900">Страници ({index.pages.length})</h2>
+              <h2 className="text-lg font-bold text-slate-900">{t("smPages")} ({index.pages.length})</h2>
               {list(index.pages, (s) => `/pages/${s}`, "slug")}
             </section>
           </div>

@@ -51,8 +51,23 @@
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
-        <a href="#main-content" class="pp-skip-link">Прескочи към съдържанието</a>
+        <a href="#main-content" class="pp-skip-link" id="pp-skip">Прескочи към съдържанието</a>
         <div id="root"></div>
+        <script>
+            /* the skip link ships before React, so it picks its language from the domain/path itself */
+            (function () {
+                var T = { bg: "Прескочи към съдържанието", en: "Skip to content", fr: "Aller au contenu",
+                    de: "Zum Inhalt springen", cz: "Přejít na obsah", hu: "Ugrás a tartalomra",
+                    pl: "Przejdź do treści", sk: "Prejsť na obsah", si: "Skoči na vsebino",
+                    gr: "Μετάβαση στο περιεχόμενο", ro: "Salt la conținut" };
+                var H = { "purepeptide.gr": "gr", "purepeptide.ro": "ro" };
+                var host = location.host.replace(/^www\./, "");
+                var seg = location.pathname.split("/")[1];
+                var loc = T[seg] ? seg : (H[host] || "bg");
+                var el = document.getElementById("pp-skip");
+                if (el && T[loc]) { el.textContent = T[loc]; document.documentElement.lang = loc === "gr" ? "el" : loc; }
+            })();
+        </script>
         <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.
