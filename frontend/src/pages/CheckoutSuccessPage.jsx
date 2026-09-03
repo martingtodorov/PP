@@ -23,7 +23,7 @@ export default function CheckoutSuccessPage() {
       try { setData(JSON.parse(cached)); } catch {}
     }
     api.get(`/orders/${orderId}`)
-      .then(({ data }) => setData((cur) => ({ order: data.order, bank_transfer: cur?.bank_transfer || null })))
+      .then(({ data }) => setData({ order: data.order, bank_transfer: data.bank_transfer || null }))
       .catch(() => {});
   }, [orderId]);
   useEffect(() => { load(); }, [load]);

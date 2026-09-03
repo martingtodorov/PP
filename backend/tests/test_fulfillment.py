@@ -40,7 +40,7 @@ def test_locker_bank_transfer_payload():
     assert p["price"] == 118.0 and p["shipping_price"] == 3.39 and p["is_shipping_free"] is False
     assert p["is_paid"] is True and p["payment_method"] == "bank_transfer" and "services" not in p
     assert "courier" not in p  # the office decides the courier
-    assert p["contents"] == "PP-SERMORELIN-5MG x2"
+    assert p["contents"] == "аминокиселини"    # the waybill never declares the SKUs
 
 
 def test_office_order_without_country_falls_back_to_the_shop_country():

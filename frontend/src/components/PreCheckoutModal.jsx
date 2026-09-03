@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { X, Minus, Plus, Trash2, Loader2, Check, Search } from "lucide-react";
 import { toast } from "sonner";
 import { api, fmtPrice, fmtAmount, amountOf, cartAmounts, fmtBGN, showsBGN, img, formatErr } from "../lib/api";
-import { loadSaved, saveCheckout, pfBank, pfCountries, pfGeo, pfDeviceGeo, pfConfig, pfPickups } from "../lib/checkoutPrefetch";
+import { loadSaved, saveCheckout, pfCountries, pfGeo, pfDeviceGeo, pfConfig, pfPickups } from "../lib/checkoutPrefetch";
 import { siteMedia } from "../lib/media";
 import { useCart } from "../context/CartContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
@@ -277,7 +277,6 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   const [geo, setGeo] = useState(null);
   const [locating, setLocating] = useState(false);
   const [countries, setCountries] = useState([]);
-  const [bank, setBank] = useState(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -316,7 +315,6 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   useEffect(() => {
     if (!open) return;
     setErr("");
-    pfBank().then(setBank).catch(() => {});
     pfCountries().then((d) => setCountries(d.countries || [])).catch(() => {});
     pfGeo().then((d) => setGeo((g) => (g?.source === "device" ? g : d))).catch(() => {});
     // the permission dialog is asked for only when the visitor taps "find the nearest to me"
@@ -369,13 +367,19 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
     return seen.map((d) => t(DEST_KEY[d])).join(" / ");
   };
 
-  // cash on delivery is the default everywhere we ship (unless the visitor changed it before)
+  // cash on delivery is the default where we ship it — prepaid-only markets (Spain) get bank transfer
   const prevCountry = useRef(contact.country);
   useEffect(() => {
     if (prevCountry.current === contact.country) return;
     prevCountry.current = contact.country;
-    setPayment("cod");
-  }, [contact.country]);
+    setPayment(cfg?.cod_available === false ? "bank_transfer" : "cod");
+  }, [contact.country, cfg]);
+
+  // and never leave a payment selected that the destination does not offer
+  useEffect(() => {
+    const allowed = cfg?.payment_methods || [];
+    if (allowed.length && !allowed.some((m) => m.key === payment)) setPayment(allowed[0].key);
+  }, [cfg, payment]);
 
   // country -> dial code (until the customer picks a different prefix himself)
   const dialTouched = useRef(Boolean(saved.current?.dialTouched));
@@ -677,12 +681,9 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                     </label>
                   ))}
                 </div>
-                {payment === "bank_transfer" && bank && (
-                  <div className="nc2-bank" data-testid="pc-bank-details">
-                    <p className="nc2-bank-row"><span>{t("bankLabel")}</span><strong>{bank.name}</strong></p>
-                    <p className="nc2-bank-row"><span>{t("holderLabel")}</span><strong>{bank.holder}</strong></p>
-                    <p className="nc2-bank-row"><span>IBAN</span><strong>{bank.iban}</strong></p>
-                    <p className="nc2-bank-row"><span>BIC</span><strong>{bank.bic}</strong></p>
+                {payment === "bank_transfer" && (
+                  <div className="nc2-bank" data-testid="pc-bank-note">
+                    <p className="nc2-muted">{t("bankLater")}</p>
                     <p className="nc2-muted">{t("bankRefNote")}</p>
                   </div>
                 )}

@@ -31,7 +31,9 @@ _db = None
 _client = httpx.AsyncClient(timeout=40)
 
 DEFAULTS = {"enabled": False, "auto_create": True, "app_id": "", "app_secret": "", "webhook_url": "",
-            "weight": 0.1, "bank_transfer_when": "paid", "send_courier": True,
+            "weight": 0.1, "send_courier": True,
+            # what the waybill declares as contents (owner's decision: never the SKU list)
+            "contents_text": "аминокиселини",
             "open_before_pay": True, "obpd_option": "OPEN", "obpd_return_payer": "SENDER",
             "wc_consumer_key": "", "wc_consumer_secret": "", "wc_country": "BG"}
 
@@ -143,7 +145,7 @@ def build_order(order: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         "receiver": receiver,
         "payment_method": "cod" if is_cod else "bank_transfer",
         "is_paid": (not is_cod) or order.get("payment_status") == "paid",
-        "contents": ", ".join(f"{p['sku']} x{p['quantity']}" for p in products)[:200],
+        "contents": (cfg.get("contents_text") or DEFAULTS["contents_text"])[:200],
     }
     note = " ".join(str(x) for x in [order.get("notes"), ship.get("note")] if x).strip()
     if note:
@@ -253,7 +255,7 @@ async def _create_via_woocommerce(order: Dict[str, Any], cfg: Dict[str, Any]) ->
     record = {"transport": "woocommerce", "number": wc["number"], "wc_id": wc["id"], "nl_id": (res["response"] or {}).get("id") if isinstance(res["response"], dict) else None,
               "status": (res["response"] or {}).get("status") if isinstance(res["response"], dict) else "pending", "wc_status": wc["status"],
               "awb": None, "courier": None, "created_at": _now(), "updated_at": _now(),
-              "payload": {"order_id": wc["number"], "contents": ", ".join(f"{i['sku']} x{i['quantity']}" for i in wc["line_items"])}}
+              "payload": {"order_id": wc["number"], "contents": (cfg.get("contents_text") or DEFAULTS["contents_text"])[:200]}}
     await _db.orders.update_one({"id": order["id"]}, {"$set": {"fulfillment": record, "wc_id": wc["id"]},
                                                       "$unset": {"fulfillment_error": "", "fulfillment_error_at": ""}})
     log.info("WooCommerce webhook order.created for %s → %s", order.get("order_number"), res["status_code"])
@@ -356,17 +358,20 @@ async def sync_loop():
 
 
 async def dispatch_new_order(order_id: str):
-    """Called after checkout: warehouse order when fulfillment is on, otherwise our own waybill."""
+    """Called after checkout: warehouse order when fulfillment is on, otherwise our own waybill.
+
+    Bank-transfer orders are NEVER submitted automatically (owner's decision) — the admin presses
+    „Подай към склада“ himself, so nothing reaches the warehouse before the money does."""
     try:
         cfg = await get_config()
+        order = await _db.orders.find_one({"id": order_id}, {"_id": 0, "payment_method": 1})
+        if (order or {}).get("payment_method") != "cod":
+            return
         if not cfg.get("enabled"):
             await nextlevel.auto_create(order_id)
             return
         if not cfg.get("auto_create"):
             return
-        order = await _db.orders.find_one({"id": order_id}, {"_id": 0, "payment_method": 1})
-        if (order or {}).get("payment_method") != "cod" and cfg.get("bank_transfer_when") == "paid":
-            return  # goes to the warehouse once the admin confirms the transfer
         await create_order(order_id)
     except HTTPException as ex:
         log.warning("Fulfillment auto-create for %s failed: %s", order_id, ex.detail)
@@ -375,18 +380,8 @@ async def dispatch_new_order(order_id: str):
 
 
 async def on_paid(order_id: str):
-    try:
-        cfg = await get_config()
-        if not cfg.get("enabled") or not cfg.get("auto_create"):
-            return
-        order = await _db.orders.find_one({"id": order_id}, {"_id": 0, "fulfillment": 1, "payment_method": 1})
-        if not order or order.get("payment_method") == "cod" or (order.get("fulfillment") or {}).get("number"):
-            return
-        await create_order(order_id)
-    except HTTPException as ex:
-        log.warning("Fulfillment on-paid for %s failed: %s", order_id, ex.detail)
-    except Exception:
-        log.exception("Fulfillment on-paid for %s crashed", order_id)
+    """Marking a bank transfer as paid does NOT submit it either — submission stays manual."""
+    return
 
 
 # ---------------------------------------------------------------- admin API
@@ -397,7 +392,7 @@ class ConfigIn(BaseModel):
     app_secret: Optional[str] = None
     webhook_url: Optional[str] = None
     weight: Optional[float] = None
-    bank_transfer_when: Optional[str] = None
+    contents_text: Optional[str] = None
     send_courier: Optional[bool] = None
     open_before_pay: Optional[bool] = None
     wc_consumer_key: Optional[str] = None
@@ -429,8 +424,8 @@ def init(db_, admin_guard) -> APIRouter:
                 patch.pop(secret_key)
         if "wc_country" in patch:
             patch["wc_country"] = patch["wc_country"].strip().upper()[:2]
-        if patch.get("bank_transfer_when") not in (None, "paid", "immediately"):
-            raise HTTPException(422, "bank_transfer_when трябва да е paid или immediately")
+        if "contents_text" in patch:
+            patch["contents_text"] = patch["contents_text"].strip()[:200] or DEFAULTS["contents_text"]
         for k in ("app_id", "app_secret", "webhook_url", "wc_consumer_key", "wc_consumer_secret"):
             if k in patch:
                 patch[k] = patch[k].strip()

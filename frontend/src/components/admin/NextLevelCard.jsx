@@ -62,6 +62,7 @@ export const NextLevelCard = () => {
         <Field label="app-secret"><input value={v("app_secret")} onChange={set("app_secret")} className={input} data-testid="nextlevel-app-secret" /></Field>
         <Field label="Подател (sender id)"><input type="number" value={v("sender_id")} onChange={set("sender_id")} className={input} data-testid="nextlevel-sender" /></Field>
         <Field label="Тегло по подразбиране (kg)"><input type="number" step="0.1" value={v("default_weight")} onChange={set("default_weight")} className={input} data-testid="nextlevel-weight" /></Field>
+        <Field label="Съдържание на товарителницата"><input value={v("contents_text")} onChange={set("contents_text")} className={input} placeholder="аминокиселини" data-testid="nextlevel-contents-text" /></Field>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <button onClick={() => save()} disabled={!!busy || !Object.keys(form).length} className="bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50" data-testid="nextlevel-save">

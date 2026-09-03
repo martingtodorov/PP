@@ -31,7 +31,6 @@ const once = (key, fn) => {
   return p;
 };
 
-export const pfBank = () => once("bank", () => api.get("/bank-details").then((r) => r.data));
 export const pfCountries = () => once("countries", () => api.get("/nextcart/countries").then((r) => r.data));
 export const pfGeo = () => once("geo", () => api.get("/geo/country").then((r) => r.data));
 
@@ -91,7 +90,6 @@ export const pfPickups = (providerKey, destinationType, country) =>
 
 /** Fire-and-forget warm-up: countries, bank, geo, courier config and the default pickup list. */
 export const prefetchCheckout = async () => {
-  pfBank();
   pfCountries();
   const saved = loadSaved();
   let country = saved?.contact?.country || countryForLocale(currentLocale());

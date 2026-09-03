@@ -80,13 +80,14 @@ export const FulfillmentCard = () => {
         <Field label="app-id на магазина (ff-…)"><input value={v("app_id")} onChange={set("app_id")} className={input} data-testid="fulfillment-app-id" /></Field>
         <Field label="app-secret"><input value={v("app_secret")} onChange={set("app_secret")} className={input} data-testid="fulfillment-app-secret" /></Field>
         <Field label="Тегло на артикул (kg)"><input type="number" step="0.1" value={v("weight")} onChange={set("weight")} className={input} data-testid="fulfillment-weight" /></Field>
-        <Field label="Банков превод — изпращай">
-          <select value={v("bank_transfer_when")} onChange={set("bank_transfer_when")} className={input} data-testid="fulfillment-bank-when">
-            <option value="paid">след „Маркирай като платена“</option>
-            <option value="immediately">веднага при поръчка</option>
-          </select>
+        <Field label="Съдържание на товарителницата">
+          <input value={v("contents_text")} onChange={set("contents_text")} className={input} placeholder="аминокиселини" data-testid="fulfillment-contents-text" />
         </Field>
       </div>
+      <p className="mt-2 text-xs text-slate-500">
+        Поръчките с банков превод не се подават автоматично към склада — подаваш ги ръчно от поръчката.
+        Товарителниците им са без наложен платеж.
+      </p>
       <div className="mt-3 text-xs text-slate-500 flex items-center gap-2 font-mono break-all" data-testid="fulfillment-webhook">
         webhook: {cfg.webhook_url || "—"}
         {cfg.webhook_url && (

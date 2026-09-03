@@ -30,8 +30,11 @@ COUNTRY_COURIERS: Dict[str, list] = {
     "RO": ["fancourier"],
     "GR": ["speedex"],
     "HU": ["gls"], "PL": ["gls"], "SK": ["gls"], "CZ": ["gls"],
-    "SI": ["gls"], "HR": ["gls"], "IT": ["gls"], "DE": ["gls"],
+    "SI": ["gls"], "HR": ["gls"], "IT": ["gls"], "DE": ["gls"], "ES": ["gls"],
 }
+
+# Payment methods per destination — Spain ships prepaid only (owner's decision).
+COUNTRY_PAYMENTS: Dict[str, list] = {"ES": ["bank_transfer"]}
 
 # The merchant's own delivery offer — wins over whatever the NextCart profile says (price and presence).
 METHOD_OVERRIDES: Dict[str, Dict[str, Dict[str, Any]]] = {
@@ -39,7 +42,19 @@ METHOD_OVERRIDES: Dict[str, Dict[str, Dict[str, Any]]] = {
         "econt_locker": {"provider_key": "econt", "destination_type": "locker", "price_eur": 3.39},
         "econt_address": {"provider_key": "econt", "destination_type": "address", "price_eur": 4.99},
     },
+    "ES": {
+        "gls_address": {"provider_key": "gls", "destination_type": "address", "price_eur": 8.99},
+    },
 }
+
+
+def payment_methods_for(country: str) -> list:
+    keys = COUNTRY_PAYMENTS.get((country or "").upper())
+    return [m for m in PAYMENT_METHODS if not keys or m["key"] in keys]
+
+
+def cod_allowed(country: str) -> bool:
+    return any(m["key"] == "cod" for m in payment_methods_for(country))
 
 
 def method_price(country: str, method_key: str, destination_type: str = "") -> Optional[float]:
@@ -239,8 +254,11 @@ async def _shape_delivery(data: Dict[str, Any], country: str) -> Dict[str, Any]:
     for i, m in enumerate(methods):
         m["is_default"] = i == 0
 
+    payments = payment_methods_for(country)
+    if payments:
+        payments = [{**m, "is_default": i == 0} for i, m in enumerate(payments)]
     out = {**data, "delivery_providers": providers, "delivery_methods": methods,
-           "payment_methods": PAYMENT_METHODS, "cod_available": True,
+           "payment_methods": payments, "cod_available": any(m["key"] == "cod" for m in payments),
            "storefront_delivery_country_iso2": country, "storefront_delivery_currency": "EUR"}
     if methods:
         out["delivery_unavailable_reason"] = None
@@ -253,12 +271,12 @@ async def _shape_delivery(data: Dict[str, Any], country: str) -> Dict[str, Any]:
 COUNTRY_NAME_BG = {
     "BG": "България", "RO": "Румъния", "GR": "Гърция", "HU": "Унгария", "PL": "Полша",
     "SK": "Словакия", "CZ": "Чехия", "SI": "Словения", "HR": "Хърватия", "IT": "Италия",
-    "DE": "Германия",
+    "DE": "Германия", "ES": "Испания",
 }
 
 COUNTRY_DIAL = {
     "BG": "359", "RO": "40", "GR": "30", "HU": "36", "PL": "48", "SK": "421", "CZ": "420",
-    "SI": "386", "HR": "385", "IT": "39", "DE": "49",
+    "SI": "386", "HR": "385", "IT": "39", "DE": "49", "ES": "34",
 }
 
 
