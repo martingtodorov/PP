@@ -111,7 +111,13 @@ server {
     }
 
     location = /robots.txt   { try_files $uri @backend; }
-    location = /sitemap.xml  { try_files $uri @backend; }
+
+    # the sitemap is generated per locale by the backend — /sitemap.xml is what crawlers ask for
+    location = /sitemap.xml {
+        proxy_pass http://{{ backend_private_ip }}:8001/api/sitemap.xml;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
 
     # llms.txt / agents.md must be served as Markdown, never as the SPA shell
     location = /llms.txt {

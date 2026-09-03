@@ -236,9 +236,6 @@ def test_bank_transfer_not_auto_pushed(any_product, admin_headers):
         _cleanup(order_id, admin_headers)
 
 
-# --- 8. Bank details endpoint exists and contains iban/bic/holder (used by success page) ---
+# --- 8. Bank details come with the order (the public endpoint was removed) ---
 def test_bank_details_endpoint():
-    r = requests.get(f"{API}/bank-details", timeout=15)
-    assert r.status_code == 200
-    d = r.json()
-    assert d.get("iban") and d.get("bic") and d.get("holder")
+    assert requests.get(f"{API}/bank-details", timeout=15).status_code == 404

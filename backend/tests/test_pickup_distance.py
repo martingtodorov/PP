@@ -29,6 +29,11 @@ def test_pickups_are_sorted_by_distance_from_the_visitor():
     assert len(known) > d["count"] * 0.9, "most offices must resolve to coordinates"
     assert known == sorted(known)
     assert known[0] < 20, f"the closest Burgas office should be within 20 km, got {known[0]}"
+    # Econt publishes its own coordinates, so Burgas offices differ from each other
+    exact = [o for o in d["pickups"] if o["distance_exact"]]
+    assert len(exact) > d["count"] * 0.9, "Econt offices must use the courier's own coordinates"
+    burgas = [o["distance_km"] for o in d["pickups"][:8]]
+    assert len(set(burgas)) > 3, f"offices in one town must not share one distance: {burgas}"
     # offices we cannot place go last
     tail = [o["distance_km"] for o in d["pickups"][len(known):]]
     assert all(x is None for x in tail)
@@ -36,6 +41,15 @@ def test_pickups_are_sorted_by_distance_from_the_visitor():
     sofia = next((o for o in d["pickups"] if "софия" in (o["city"] or "").lower()
                   and o["distance_km"] is not None), None)
     assert sofia and sofia["distance_km"] > 200, sofia
+
+
+def test_boxnow_lockers_use_the_published_locker_coordinates():
+    d = _pickups({"provider_key": "boxnow", "destination_type": "locker", "country": "BG", **BURGAS})
+    assert d["sorted_by"] == "distance"
+    exact = [o for o in d["pickups"] if o["distance_exact"]]
+    assert len(exact) > d["count"] * 0.8
+    known = [o["distance_km"] for o in d["pickups"] if o["distance_km"] is not None]
+    assert known == sorted(known) and known[0] < 20
 
 
 def test_greek_lockers_rank_by_city_centroid():

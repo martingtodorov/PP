@@ -132,7 +132,5 @@ class TestCourierRegression:
             assert c in isos
 
     def test_bank_details(self, api):
-        r = api.get(f"{BASE_URL}/api/bank-details")
-        assert r.status_code == 200
-        d = r.json()
-        assert d.get("iban") == "BG61STSA93000032400775"
+        # removed on purpose: the company name is only shown on a confirmed order
+        assert api.get(f"{BASE_URL}/api/bank-details").status_code == 404

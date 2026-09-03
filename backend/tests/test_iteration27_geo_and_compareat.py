@@ -76,13 +76,13 @@ class TestGeoReverse:
         pc = str((r.json() or {}).get("postal_code") or "")
         assert pc.startswith("81"), f"expected Burgas-region 81xx postcode, got {pc}"
 
-    def test_ocean_coordinate_returns_503(self):
-        # middle of the Atlantic
+    def test_ocean_coordinate_returns_the_position_without_a_city(self):
+        # middle of the Atlantic — no city, but the coordinates still rank the courier offices
         r = requests.get(f"{LOCAL}/api/geo/reverse",
                          params={"lat": 0.0, "lon": -30.0}, timeout=15)
-        assert r.status_code == 503, r.text
-        # must be Bulgarian error, not a wrong city
-        assert "разпозна" in r.text or "Локац" in r.text
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["city"] == "" and d["lat"] == 0.0 and d["lng"] == -30.0
 
 
 # --- Retatrutide compare-at -------------------------------------------------

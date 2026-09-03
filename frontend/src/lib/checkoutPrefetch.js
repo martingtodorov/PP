@@ -36,7 +36,7 @@ export const pfGeo = () => once("geo", () => api.get("/geo/country").then((r) =>
 
 /* The IP only tells us the country, so the city (which orders the courier offices) comes from the
    device position, reverse-geocoded into the local spelling the courier database uses. */
-const DEVICE_KEY = "pp_geo_device_v1";
+const DEVICE_KEY = "pp_geo_device_v2";
 const DEVICE_TTL = 30 * 60 * 1000;
 
 const readDevice = () => {
@@ -69,13 +69,17 @@ export const pfDeviceGeo = async ({ prompt = false } = {}) => {
   const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, {
     enableHighAccuracy: false, timeout: 12000, maximumAge: 5 * 60 * 1000,
   }));
-  const { data } = await api.get("/geo/reverse", {
-    params: { lat: pos.coords.latitude, lon: pos.coords.longitude },
-  });
+  // the coordinates alone already rank the offices — the reverse geocoder only adds the city name,
+  // so a failure there (rate limit, outage) must not cost us the distance sorting
+  let data = {};
   try {
-    window.localStorage.setItem(DEVICE_KEY, JSON.stringify({ at: Date.now(), geo: data }));
+    data = (await api.get("/geo/reverse", { params: { lat: pos.coords.latitude, lon: pos.coords.longitude } })).data;
+  } catch (e) { /* keep the coordinates */ }
+  const geo = { ...data, lat: pos.coords.latitude, lng: pos.coords.longitude, source: "device" };
+  try {
+    window.localStorage.setItem(DEVICE_KEY, JSON.stringify({ at: Date.now(), geo }));
   } catch (e) { /* ignore */ }
-  return data;
+  return geo;
 };
 
 export const pfConfig = (country) =>
