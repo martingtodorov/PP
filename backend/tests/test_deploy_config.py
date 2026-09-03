@@ -269,7 +269,8 @@ def test_inventory_matches_production():
     inv = (ANSIBLE / "inventory.ini.example").read_text()
     assert "ansible_host=2.28.79.24 ansible_user=root" in inv
     assert "ansible_host=10.0.0.3 ansible_user=deploy" in inv
-    assert "-J root@2.28.79.24" in inv
+    assert "-W %h:%p root@2.28.79.24" in inv        # jump through pp-front (ProxyCommand carries the key)
+    assert "pp_ssh_key=" in inv                      # one place to set the SSH key
     assert "backend_private_ip=10.0.0.3" in inv
 
 
