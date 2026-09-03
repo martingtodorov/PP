@@ -45,32 +45,22 @@ def test_fulfillment_config_defaults(admin_headers):
     assert cfg.get("app_id") == "ff-OcTywYtADkJDKfs6i"
     assert cfg.get("webhook_url") == "https://api.nextlevel.delivery/webhooks/orders/ff-OcTywYtADkJDKfs6i"
     assert float(cfg.get("weight")) == 0.1
-    assert cfg.get("bank_transfer_when") == "paid"
     assert cfg.get("has_api") is False
 
 
 def test_fulfillment_config_update_and_validation(admin_headers):
-    # Invalid bank_transfer_when
-    r_bad = requests.put(f"{API}/admin/integrations/nextlevel-fulfillment",
-                         headers=admin_headers, json={"bank_transfer_when": "bogus"}, timeout=15)
-    assert r_bad.status_code == 422, r_bad.text
-
-    # Valid update
+    # bank transfer orders are always submitted manually now — the setting is gone
     r = requests.put(f"{API}/admin/integrations/nextlevel-fulfillment",
-                     headers=admin_headers, json={"weight": 0.2, "bank_transfer_when": "immediately"}, timeout=15)
+                     headers=admin_headers, json={"weight": 0.2}, timeout=15)
     assert r.status_code == 200, r.text
     cfg = r.json()
     assert float(cfg["weight"]) == 0.2
-    assert cfg["bank_transfer_when"] == "immediately"
     assert cfg["enabled"] is False  # sanity: unchanged
 
-    # Restore defaults
     r2 = requests.put(f"{API}/admin/integrations/nextlevel-fulfillment",
-                      headers=admin_headers, json={"weight": 0.1, "bank_transfer_when": "paid"}, timeout=15)
+                      headers=admin_headers, json={"weight": 0.1}, timeout=15)
     assert r2.status_code == 200, r2.text
-    cfg2 = r2.json()
-    assert float(cfg2["weight"]) == 0.1
-    assert cfg2["bank_transfer_when"] == "paid"
+    assert float(r2.json()["weight"]) == 0.1
 
 
 def test_fulfillment_test_endpoint_webhook_mode(admin_headers):

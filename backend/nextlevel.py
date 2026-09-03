@@ -38,6 +38,8 @@ def _now() -> str:
 # ---------------------------------------------------------------- settings
 DEFAULTS = {"enabled": False, "auto_create": True, "app_id": "", "app_secret": "", "sender_id": 0,
             "sender_office_id": 1, "default_weight": 0.1, "cod_processing": "CASH", "package": "PACK",
+            # what the waybill declares as contents (owner's decision: never the SKU list)
+            "contents_text": "аминокиселини",
             # owner's decision: every parcel may be opened before it is paid for, return on us
             "open_before_pay": True, "obpd_option": "OPEN", "obpd_return_payer": "SENDER"}
 
@@ -140,9 +142,8 @@ def build_payload(order: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         receiver["other"] = ((receiver.get("other") or "") + " " + str(ship["note"])).strip()[:200]
 
     items = order.get("items") or []
-    # every order ships by SKU — the warehouse reads the codes, not the marketing titles
-    contents = ", ".join(f"{i.get('variant_sku') or i.get('sku') or i.get('title', '')} x{i.get('quantity', 1)}"
-                         for i in items)[:200] or "peptides"
+    # the waybill declares a neutral content, never the SKU list (owner's decision)
+    contents = (cfg.get("contents_text") or DEFAULTS["contents_text"])[:200]
     payload: Dict[str, Any] = {
         "sender": {"id": int(cfg["sender_id"]), "office_id": int(cfg.get("sender_office_id") or 1)},
         "receiver": receiver,
@@ -367,6 +368,7 @@ class ConfigIn(BaseModel):
     sender_office_id: Optional[int] = None
     default_weight: Optional[float] = None
     cod_processing: Optional[str] = None
+    contents_text: Optional[str] = None
 
 
 def _masked(cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -390,6 +392,8 @@ def init(db_, admin_guard) -> APIRouter:
         patch = {k: v for k, v in payload.model_dump().items() if v is not None}
         if "app_secret" in patch and patch["app_secret"].startswith("•"):
             patch.pop("app_secret")
+        if "contents_text" in patch:
+            patch["contents_text"] = patch["contents_text"].strip()[:200] or DEFAULTS["contents_text"]
         await _db.settings.update_one({"key": SETTINGS_KEY}, {"$set": {f"value.{k}": v for k, v in patch.items()}}, upsert=True)
         return _masked(await get_config())
 

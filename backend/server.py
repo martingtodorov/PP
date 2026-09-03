@@ -943,6 +943,11 @@ async def checkout(payload: CheckoutIn, request: Request):
             payload.delivery.price_amount = shipping_override
     totals = _calc_totals(line_items, payload.shipping_method, discount.get("discount_eur", 0.0), shipping_override)
     user = await get_user_from_request(request)
+    # some markets are prepaid only (Spain) — the client must not be able to send COD
+    from nextcart import cod_allowed
+    pay_method = payload.payment_method if payload.payment_method in ("bank_transfer", "cod") else "bank_transfer"
+    if pay_method == "cod" and not cod_allowed((payload.shipping.country or "").upper()):
+        pay_method = "bank_transfer"
     loc = (payload.locale or "bg").lower()
     fx = await currency.rate_for_locale(db, loc)
     local = currency.order_amounts(line_items, totals, discount, fx["currency"], fx["rate"])
@@ -968,7 +973,7 @@ async def checkout(payload: CheckoutIn, request: Request):
         **local,
         "payment_status": "awaiting_payment",
         "fulfillment_status": "unfulfilled",
-        "payment_method": payload.payment_method if payload.payment_method in ("bank_transfer", "cod") else "bank_transfer",
+        "payment_method": pay_method,
         "tracking": None,
         "created_at": now_utc(),
         "updated_at": now_utc(),
@@ -1038,6 +1043,22 @@ async def checkout(payload: CheckoutIn, request: Request):
     return {"order": order_clean, "bank_transfer": bank}
 
 
+def _bank_block(order: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Bank details belong to the confirmation only — the checkout no longer shows them."""
+    if (order.get("payment_method") or "bank_transfer") != "bank_transfer":
+        return None
+    if order.get("status") == "cancelled" or order.get("payment_status") == "paid":
+        return None
+    return {
+        "name": os.environ.get("BANK_NAME", "DSK Bank"),
+        "iban": os.environ.get("BANK_IBAN", "BG61STSA93000032400775"),
+        "bic": os.environ.get("BANK_BIC", "STSABGSF"),
+        "holder": os.environ.get("BANK_HOLDER", "Purepeptide LTD"),
+        "reference": order.get("order_number", ""),
+        "amount_eur": order.get("total_eur", 0.0),
+    }
+
+
 @api.get("/orders/{order_id}")
 async def get_order(order_id: str, request: Request):
     o = await db.orders.find_one({"id": order_id}, {"_id": 0})
@@ -1047,13 +1068,14 @@ async def get_order(order_id: str, request: Request):
     blocker = cancel_blocker(o)
     o["cancellable"] = not blocker
     o["cancel_blocker"] = blocker
+    bank = _bank_block(o)
     is_owner = user and (user.get("role") == "admin" or o.get("customer_id") == user.get("id"))
     if not is_owner:
         # allow guest lookup by id (acts as token) for confirmation page
         if o.get("shipment"):
             o["shipment"] = {k: v for k, v in o["shipment"].items() if k != "payload"}
-        return {"order": o, "guest_view": True}
-    return {"order": o}
+        return {"order": o, "bank_transfer": bank, "guest_view": True}
+    return {"order": o, "bank_transfer": bank}
 
 
 @api.get("/me/orders")
