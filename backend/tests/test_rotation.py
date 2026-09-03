@@ -25,11 +25,11 @@ def test_parse_link_list_takes_bare_paths():
         "/collections/immunology", "/products/bpc-157-5"]
 
 
-def test_split_url_handles_locale_prefix_and_rejects_pages():
+def test_split_url_handles_locale_prefix_and_pages():
     assert server.split_url("https://purepeptide.bg/collections/immunology") == ("collections", "immunology")
     assert server.split_url("/en/products/bpc-157-5") == ("products", "bpc-157-5")
     assert server.split_url("/articles/tb-500") == ("articles", "tb-500")
-    assert server.split_url("/pages/faq") == ("", "")
+    assert server.split_url("/pages/faq") == ("pages", "faq")
     assert server.split_url("https://purepeptide.bg/") == ("", "")
 
 

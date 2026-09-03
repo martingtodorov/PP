@@ -130,7 +130,10 @@ export default function AdminDelistedLinksPage() {
         </label>
         <p className="text-xs text-slate-500 mb-3">
           Всеки на нов ред, разделени със запетая или залепени един за друг — сам разпознавам къде свършва
-          един и започва следващият. Езикът и причината се взимат от полетата по-горе.
+          един и започва следващият. Ротирам продукти, колекции, статии и страници
+          (<span className="font-mono">/products/</span>, <span className="font-mono">/collections/</span>,
+          <span className="font-mono"> /articles/</span>, <span className="font-mono">/pages/</span>).
+          Езикът и причината се взимат от полетата по-горе.
         </p>
         <textarea
           rows={4}

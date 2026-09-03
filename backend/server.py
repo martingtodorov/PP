@@ -642,7 +642,7 @@ async def delete_delisted_link(link_id: str, user=Depends(require_admin)):
 
 # ---------- Content rotation ----------
 ROTATABLE = {"collections": ("collections_cat", "handle"), "products": ("products", "handle"),
-             "articles": ("articles", "handle")}
+             "articles": ("articles", "handle"), "pages": ("pages", "slug")}
 URL_RE = re.compile(r"https?://[^\s<>\"'`,;)\]}]+|(?<![\w/])/[a-z0-9\-_%/\u0400-\u04FF]{3,}")
 
 
@@ -676,22 +676,52 @@ def rotation_code(taken: set) -> str:
             return code
 
 
-async def rotate_one(link: Dict[str, Any], user_email: str) -> Dict[str, Any]:
-    kind, handle = split_url(link["url"])
-    if not kind:
-        raise HTTPException(400, f"Не мога да ротирам този URL: {link['url']}")
-    loc = normalize_locale(link.get("locale") or DEFAULT_LOCALE)
+async def rotate_page(link: Dict[str, Any], handle: str, loc: str, user_email: str) -> Dict[str, Any]:
+    """Rotate a static page URL for one locale: /pages/faq -> /pages/faq-xyz.
+
+    The document keeps its `slug` (the admin editor and the page family key stay untouched); the
+    published URL lives in `pub_slug`, so a second rotation replaces the 3-letter code instead of
+    stacking suffixes."""
+    doc = await db.pages.find_one({"locale": loc, "$or": [{"slug": handle}, {"pub_slug": handle}]}, {"_id": 0})
+    if not doc:
+        doc = await db.pages.find_one({"locale": loc, "rotations.from": handle}, {"_id": 0})
+    if not _has_content(doc):
+        raise HTTPException(404, f"Няма съдържание за страница „{handle}“ на език {loc}")
+
+    rotations = list(doc.get("rotations") or [])
+    base = rotations[0]["from"] if rotations else (doc.get("pub_slug") or doc["slug"])
+    new_slug = f"{base}-{rotation_code({r.get('code') for r in rotations})}"
+
+    rewritten = False
+    html = doc.get("html") or ""
+    if len(html) > 40:
+        try:
+            html = await ai_rewrite_html(html, loc, context=f"страница „{doc.get('title') or base}“ — ротация на съдържание")
+            rewritten = True
+        except Exception as exc:
+            log.warning("rotation rewrite failed for page %s: %s", handle, exc)
+
+    rotations.append({"locale": loc, "from": doc.get("pub_slug") or doc["slug"], "to": new_slug,
+                      "code": new_slug.split("-")[-1], "rewritten": rewritten, "at": now_utc(), "by": user_email})
+    update = {"pub_slug": new_slug, "rotations": rotations, "updated_at": now_utc()}
+    if rewritten:
+        update["html"] = html
+    await db.pages.update_one({"slug": doc["slug"], "locale": loc}, {"$set": update})
+    _links_cache.clear()
+    return {"kind": "pages", "handle": new_slug, "path": f"/pages/{new_slug}", "rewritten": rewritten}
+
+
+async def rotate_content(kind: str, handle: str, loc: str, user_email: str) -> Dict[str, Any]:
     coll = db[ROTATABLE[kind][0]]
     doc = await coll.find_one({"$or": [{"handle": handle}, {f"translations.{loc}.handle": handle}]}, {"_id": 0})
     if not doc:
         raise HTTPException(404, f"Няма съдържание с handle „{handle}“")
 
-    history = [r for r in (doc.get("rotations") or []) if r.get("locale") == loc]
-    base = history[0]["from"] if history else doc["handle"]
-    new_handle = f"{base}-{rotation_code({r.get('code') for r in (doc.get('rotations') or [])})}"
-
     tr = dict(doc.get("translations") or {})
     entry = dict(tr.get(loc) or {})
+    history = [r for r in (doc.get("rotations") or []) if r.get("locale") == loc]
+    base = history[0]["from"] if history else (entry.get("handle") or doc["handle"])
+    new_handle = f"{base}-{rotation_code({r.get('code') for r in (doc.get('rotations') or [])})}"
     entry["handle"] = new_handle
 
     rewritten = False
@@ -711,16 +741,26 @@ async def rotate_one(link: Dict[str, Any], user_email: str) -> Dict[str, Any]:
     await coll.update_one({"handle": doc["handle"]}, {"$set": {"translations": tr, "rotations": rotations,
                                                               "updated_at": now_utc()}})
     _links_cache.clear()
+    return {"kind": kind, "handle": new_handle, "path": f"/{kind}/{new_handle}", "rewritten": rewritten}
+
+
+async def rotate_one(link: Dict[str, Any], user_email: str) -> Dict[str, Any]:
+    kind, handle = split_url(link["url"])
+    if not kind:
+        raise HTTPException(400, f"Не мога да ротирам този URL: {link['url']}")
+    loc = normalize_locale(link.get("locale") or DEFAULT_LOCALE)
+    res = (await rotate_page(link, handle, loc, user_email) if kind == "pages"
+           else await rotate_content(kind, handle, loc, user_email))
 
     site = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((site or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
-    new_url = _loc_url(loc, f"/{kind}/{new_handle}", routes)
+    new_url = _loc_url(loc, res["path"], routes)
     await db.delisted_links.update_one({"id": link["id"]}, {"$set": {
-        "status": "rotated", "replacement_url": new_url, "rotated_at": now_utc(), "rewritten": rewritten,
-        "notes": (link.get("notes") or "").strip(),
+        "status": "rotated", "replacement_url": new_url, "rotated_at": now_utc(),
+        "rewritten": res["rewritten"], "notes": (link.get("notes") or "").strip(),
     }})
-    return {"id": link["id"], "url": link["url"], "new_url": new_url, "handle": new_handle,
-            "locale": loc, "kind": kind, "rewritten": rewritten}
+    return {"id": link["id"], "url": link["url"], "new_url": new_url, "handle": res["handle"],
+            "locale": loc, "kind": kind, "rewritten": res["rewritten"]}
 
 
 class BulkLinksIn(BaseModel):
@@ -2138,10 +2178,21 @@ def _has_content(doc: Optional[Dict[str, Any]]) -> bool:
 @api.get("/pages/{slug}")
 async def public_page(slug: str, locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
+    # a rotated page is published under its new slug only; the old one must 404 for that locale
+    moved = await db.pages.find_one({"locale": loc, "pub_slug": slug}, {"_id": 0})
+    if moved:
+        out = _page_out(moved)
+        out["locale"] = loc
+        out["source_locale"] = loc
+        return {"page": out}
+    if await db.pages.find_one({"locale": loc, "rotations.from": slug}, {"_id": 0, "slug": 1}):
+        raise HTTPException(404, "Страницата не е намерена")
     chain = [loc] + [l for l in ("en", "bg") if l != loc]
     for candidate in chain:
         doc = await db.pages.find_one({"slug": slug, "locale": candidate}, {"_id": 0})
         if _has_content(doc):
+            if candidate == loc and doc.get("pub_slug"):
+                raise HTTPException(404, "Страницата не е намерена")
             out = _page_out(doc)
             out["locale"] = loc
             out["source_locale"] = candidate
@@ -3001,7 +3052,13 @@ async def resolve_links(locale: str = Query(DEFAULT_LOCALE)):
                         doc = found
                         break
             if doc:
-                out[key] = f"/pages/{doc['slug']}"
+                slug = doc["slug"]
+                if loc != DEFAULT_LOCALE:
+                    local = await db.pages.find_one({"slug": slug, "locale": loc}, {"_id": 0, "pub_slug": 1})
+                    slug = (local or {}).get("pub_slug") or slug
+                else:
+                    slug = doc.get("pub_slug") or slug
+                out[key] = f"/pages/{slug}"
     _links_cache[loc] = (time.time(), out)
     return out
 
@@ -3023,7 +3080,8 @@ async def link_index(locale: str = Query(DEFAULT_LOCALE)):
         "collections": [slim(c) for c in localize_list(cols, loc)],
         "products": [slim(p) for p in localize_list(prods, loc)],
         "articles": [slim(a) for a in localize_list(arts, loc)],
-        "pages": [{"slug": s, "title": (d.get("title") or PAGE_LABELS.get(s, s))}
+        "pages": [{"slug": (d.get("pub_slug") if d.get("locale") == loc and d.get("pub_slug") else s),
+                   "title": (d.get("title") or PAGE_LABELS.get(s, s))}
                   for s, d in by_slug.items() if s in PAGE_SLUGS and not d.get("canonical_slug")],
     }
 
@@ -3047,13 +3105,22 @@ async def sitemap():
         "/pages/html-sitemap-collections", "/pages/html-sitemap-blogs",
         "/pages/html-sitemap-articles", "/pages/html-sitemap-pages",
     ]
+    # rotated pages are published per locale under a new slug
+    rotated_pages: Dict[str, Dict[str, str]] = {}
+    async for d in db.pages.find({"pub_slug": {"$nin": [None, ""]}}, {"_id": 0, "slug": 1, "locale": 1, "pub_slug": 1}):
+        rotated_pages.setdefault(d["locale"], {})[d["slug"]] = d["pub_slug"]
+
+    def page_path(path: str, loc: str) -> str:
+        slug = path.rsplit("/", 1)[-1]
+        return f"/pages/{rotated_pages.get(loc, {}).get(slug, slug)}"
 
     def handle_for(doc, loc):
         return ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc.get("handle")
 
     entries: List[tuple] = []  # (path_per_locale dict, priority)
     for path in static_pages:
-        entries.append(({loc: path for loc in active}, "0.9" if path == "" else "0.7"))
+        paths = {loc: (page_path(path, loc) if path else path) for loc in active}
+        entries.append((paths, "0.9" if path == "" else "0.7"))
     for c in cols:
         entries.append(({loc: f"/collections/{handle_for(c, loc)}" for loc in active}, "0.8"))
     for p in prods:

@@ -3,6 +3,7 @@
    gr = purepeptide.gr · ro = purepeptide.ro
    fr/de/cz/hu/pl/sk/si live under purepeptide.eu/<prefix> */
 import { CHECKOUT_STRINGS } from "./checkoutStrings";
+import { PRODUCT_BLOCKS_GEN, TRUST_CARDS_GEN, FAQ_GEN } from "./blocksGenerated";
 
 export const LOCALES = ["bg", "en", "fr", "de", "cz", "hu", "pl", "sk", "si", "gr", "ro"];
 export const DEFAULT_LOCALE = "bg";
@@ -25,6 +26,13 @@ export const localeFromHost = (host = "") => {
   if (h === "purepeptide-labs.bg") return DEFAULT_LOCALE;
   return null;
 };
+
+/** Shipping country a storefront belongs to — the domain/language decides the checkout default
+ *  (purepeptide.gr ships to Greece, .ro to Romania, /cz to Czechia …). en/fr have no own country. */
+export const LOCALE_COUNTRY = {
+  bg: "BG", gr: "GR", ro: "RO", cz: "CZ", hu: "HU", pl: "PL", sk: "SK", si: "SI", de: "DE",
+};
+export const countryForLocale = (locale) => LOCALE_COUNTRY[locale] || "";
 
 export const LOCALE_META = {
   bg: { label: "Български", hreflang: "bg-BG", origin: "https://purepeptide.bg", prefix: "" },
@@ -482,16 +490,10 @@ export const PRODUCT_BLOCKS = {
     { title: "✅ Анализ на качество - Janoshik", html: "<p>Нашите пептиди се произвеждат при спазване на строги стандарти за <strong>качество и контрол</strong>. Всеки продукт се доставя в <strong>лиофилизирана форма</strong>, което осигурява <strong>стабилност</strong> и предотвратява влошаване на качеството по време на транспорт. Тестваме всяка партида.</p>" },
     { title: "❌ Защо не предлагаме разтвори", html: "<p>Не предлагаме готови водни разтвори, защото в тях пептидните молекули са значително <strong>по-нестабилни</strong>. Присъствието на вода ускорява хидролиза, окисление и агрегация. Лиофилизираната форма съхранява структурата до <strong>24 месеца</strong> при хладилни условия.</p>" },
     { title: "❄️ Правилно съхранение", html: "<p>При съхранение в хладилник при <strong>2°C – 8°C</strong> срокът на годност е до 24 месеца. На стайна температура стабилността се задържа около 3–4 месеца. След реконституиране съхранявайте в хладилник до 4 седмици.</p>" },
-    { title: "📦 Доставка", html: "<p>Осигуряваме бърза и сигурна доставка чрез Спиди. Поръчките се обработват в рамките на 1–3 работни дни и се доставят до офис или личен адрес с наложен платеж. След изпращане получавате имейл с потвърждение.</p>" },
+    { title: "📦 Доставка", html: "<p>Осигуряваме бърза и сигурна доставка с проследяване чрез местен куриер. Поръчките се обработват в рамките на 1–3 работни дни и се доставят до офис, автоматичен пакетомат или личен адрес. След изпращане получавате имейл с потвърждение.</p>" },
     { title: "📖 Разтваряне", html: "<ol><li>Работете в чиста среда и използвайте стерилни консумативи.</li><li>Изтеглете необходимия обем бактериостатична вода със стерилна спринцовка.</li><li>Насочете иглата към вътрешната стена на флакона и бавно добавете водата.</li><li>Завъртете леко флакона, докато прахът се разтвори напълно.</li><li>Съхранявайте реконституирания разтвор при 2–8°C до 4-6 седмици.</li></ol>" },
   ],
-  en: [
-    { title: "✅ Quality analysis - Janoshik", html: "<p>Our peptides are manufactured under strict <strong>quality control</strong> standards. Every product ships in <strong>lyophilised form</strong>, which ensures <strong>stability</strong> and prevents degradation during transport. Every batch is tested.</p>" },
-    { title: "❌ Why we do not sell solutions", html: "<p>We do not offer pre-mixed aqueous solutions because peptide molecules are significantly <strong>less stable</strong> in water. Hydrolysis, oxidation and aggregation are accelerated. The lyophilised form preserves structure for up to <strong>24 months</strong> refrigerated.</p>" },
-    { title: "❄️ Correct storage", html: "<p>Refrigerated at <strong>2°C – 8°C</strong> the shelf life is up to 24 months. At room temperature stability holds for roughly 3–4 months. After reconstitution store refrigerated for up to 4 weeks.</p>" },
-    { title: "📦 Shipping", html: "<p>Orders are processed within 1–3 business days and shipped with a tracked courier. You receive a confirmation email once the parcel leaves our facility.</p>" },
-    { title: "📖 Reconstitution", html: "<ol><li>Work in a clean environment with sterile consumables.</li><li>Draw the required volume of bacteriostatic water with a sterile syringe.</li><li>Aim the needle at the inner wall of the vial and add the water slowly.</li><li>Swirl gently until the powder is fully dissolved.</li><li>Store the reconstituted solution at 2–8°C for up to 4-6 weeks.</li></ol>" },
-  ],
+  ...PRODUCT_BLOCKS_GEN,
 };
 
 export const TRUST_CARDS = {
@@ -500,11 +502,7 @@ export const TRUST_CARDS = {
     { n: "02", title: "Информация с научен фокус", body: "Описанията ни следват неутрален и изследователски подход, основан на публикувана научна литература и лабораторен контекст. Целта е съдържанието да бъде точно, разбираемо и полезно." },
     { n: "03", title: "Качество и контрол", body: "Всяка партида преминава HPLC и LC-MS анализ от независимата лаборатория Janoshik. Сертификатите са достъпни директно в продуктовите страници." },
   ],
-  en: [
-    { n: "01", title: "Transparency in every batch", body: "PurePeptide focuses on clear product information, laboratory analysis and batch traceability, so every decision can be based on data rather than exaggerated claims." },
-    { n: "02", title: "Research-focused information", body: "Our descriptions follow a neutral, research-oriented approach grounded in published scientific literature and laboratory context." },
-    { n: "03", title: "Quality and control", body: "Every batch undergoes HPLC and LC-MS analysis by the independent Janoshik laboratory. Certificates are available directly on the product pages." },
-  ],
+  ...TRUST_CARDS_GEN,
 };
 
 export const FAQ_ITEMS = {
@@ -512,14 +510,9 @@ export const FAQ_ITEMS = {
     { q: "Какво отличава пептидите на PurePeptide?", a: "Прозрачност и контрол на качеството. Всеки продукт е лиофилизиран за по-дълъг срок на съхранение и е преминал HPLC и LC-MS анализ с чистота над 99%. Тестовете се извършват от чешката лаборатория Janoshik." },
     { q: "Как мога да проверя сертификатите за анализ?", a: "Всеки продукт разполага със сертификат за анализ (CoA), извършен от Janoshik Labs. Документите са достъпни в продуктовите страници и съдържат партиден номер." },
     { q: "Колко време са стабилни неразтворените пептиди?", a: "В лиофилизиран вид при 2–8°C пептидите запазват стабилност до 24 месеца. При стайна температура – около 3–4 месеца." },
-    { q: "Колко време отнема доставката?", a: "Работим със Спиди. Пратките обикновено пристигат в рамките на 1–3 работни дни." },
+    { q: "Колко време отнема доставката?", a: "Пратките се изпращат с проследяване чрез местен куриер и обикновено пристигат в рамките на 1–3 работни дни." },
   ],
-  en: [
-    { q: "What makes PurePeptide peptides different?", a: "Transparency and quality control. Every product is lyophilised for a longer shelf life and has passed HPLC and LC-MS analysis with purity above 99%, tested by the Czech Janoshik laboratory." },
-    { q: "How can I check the certificates of analysis?", a: "Every product has a certificate of analysis (CoA) from Janoshik Labs, available on the product page including the batch number." },
-    { q: "How long are unreconstituted peptides stable?", a: "Lyophilised at 2–8°C peptides remain stable for up to 24 months; at room temperature roughly 3–4 months." },
-    { q: "How long does shipping take?", a: "Parcels are shipped with a tracked courier and usually arrive within 1–3 business days." },
-  ],
+  ...FAQ_GEN,
 };
 
 export const pick = (dict, locale) => dict[locale] || dict.en || dict.bg;

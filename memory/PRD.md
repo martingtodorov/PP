@@ -1,4 +1,5 @@
 # PurePeptide — Product Requirements & Status
+> Историята след 2026-06-03 се води в `/app/memory/CHANGELOG.md`.
 
 ## Problem statement
 Replace the PurePeptide Shopify storefront + admin with a custom stack (React + FastAPI + MongoDB),
