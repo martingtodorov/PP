@@ -48,7 +48,7 @@ def test_a_bulgarian_courier_is_swapped_for_the_one_serving_france():
     assert r.status_code == 200, r.text[:300]
     o = r.json()["order"]
     assert o["delivery"]["provider_key"] == "gls"
-    assert o["payment_method"] == "bank_transfer" and o["shipping_eur"] == 0.0   # prepaid ships free
+    assert o["payment_method"] == "bank_transfer" and o["shipping_eur"] == 8.99   # France price, not 4.99
     _cleanup(o)
 
 
@@ -70,15 +70,15 @@ def test_the_offer_of_the_destination_country_is_validated_server_side():
     assert asyncio.run(resolve("FR", "gls", "gls_address", "address"))["price"] == 8.99
 
 
-def test_bank_transfer_orders_ship_free():
+def test_a_bank_transfer_order_pays_the_courier_price_too():
     body = _payload("BG", "econt", "econt_address", 4.99)
     body["shipping"].update({"country": "BG", "city": "София", "postal_code": "1000", "line1": "ул. Тест 1"})
     body["payment_method"] = "bank_transfer"
     r = requests.post(f"{API}/checkout", json=body, timeout=60)
     assert r.status_code == 200, r.text[:300]
     o = r.json()["order"]
-    assert o["shipping_eur"] == 0.0 and o["delivery"]["price_amount"] == 0.0
-    assert o["total_eur"] == o["subtotal_eur"]
+    assert o["shipping_eur"] == 4.99 and o["delivery"]["price_amount"] == 4.99
+    assert o["total_eur"] == round(o["subtotal_eur"] + 4.99, 2)
     _cleanup(o)
 
 

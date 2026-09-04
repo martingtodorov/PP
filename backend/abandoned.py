@@ -17,6 +17,7 @@ from pydantic import BaseModel, EmailStr, Field
 import currency
 import email_service
 import email_templates
+import bank as bank_details
 
 log = logging.getLogger("purepeptide.abandoned")
 
@@ -199,7 +200,5 @@ async def send_test_email(payload: Dict[str, Any] = Body(...), admin=Depends(_ad
         raise HTTPException(400, "Няма поръчки за примерен имейл")
     # the preview speaks the chosen storefront's currency, whatever the sample order was placed in
     order = email_templates.localize_order({**order, "customer_email": to, "locale": locale}, fx)
-    bank = {"name": os.environ.get("BANK_NAME", ""), "iban": os.environ.get("BANK_IBAN", ""),
-            "bic": os.environ.get("BANK_BIC", ""), "holder": os.environ.get("BANK_HOLDER", ""),
-            "reference": order.get("order_number", "")}
+    bank = bank_details.from_settings(settings, order.get("order_number", ""))
     return await email_service.send_order_confirmation(order, bank, settings)

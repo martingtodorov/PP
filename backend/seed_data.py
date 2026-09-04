@@ -432,6 +432,11 @@ DEFAULT_SETTINGS = {
     "seed_version": SEED_VERSION,
     "resend_api_key": "",
     "resend_from": "PurePeptide <onboarding@resend.dev>",
+    # bank transfer instructions — shown on the confirmation page and in the order e-mail
+    "bank_name": "DSK Bank",
+    "bank_iban": "BG61STSA93000032400775",
+    "bank_bic": "STSABGSF",
+    "bank_holder": "Purepeptide LTD",
     # Editable per-locale routing: which domain / URL prefix / homepage path each language uses.
     "locale_routes": {
         "bg": {"origin": "https://purepeptide.bg", "prefix": "", "home_path": "/", "enabled": True},

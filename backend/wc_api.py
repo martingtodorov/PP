@@ -110,7 +110,9 @@ def to_wc_order(order: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             "image": {"id": 0, "src": (img if img.startswith("http") else f"{base}{img}") if img else ""},
             "parent_name": it.get("title") or "",
         })
-    shipping_total = _local(order, "shipping")
+    is_cod = order.get("payment_method") == "cod"
+    # a bank transfer already covers the shipping — NextLevel must see it as free, not charge it again
+    shipping_total = _local(order, "shipping") if is_cod else 0.0
     method_title = {"office": "Доставка до офис", "locker": "Доставка до автомат", "address": "Доставка до адрес"}.get(delivery.get("destination_type") or "", "Доставка")
     courier = (delivery.get("provider_key") or "").lower()
     office_nl = str(office.get("id") or "").split(":")[-1] if office else ""
@@ -127,7 +129,6 @@ def to_wc_order(order: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     sh = order.get("shipment") or {}
     if sh.get("awb"):
         meta.append({"id": 10, "key": "_awb", "value": sh["awb"]})
-    is_cod = order.get("payment_method") == "cod"
     if is_cod and cfg.get("open_before_pay", True):
         # NextLevel services.obpd — the receiver may open/inspect the parcel before paying
         meta += [{"id": 11, "key": "_obpd_option", "value": (cfg.get("obpd_option") or "OPEN").upper()},

@@ -961,7 +961,19 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .pp-acc__body { padding: 0 2px 18px; }
 
 /* Breadcrumbs */
-.pp-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: #64748b; }
+/* one line always — the trail scrolls sideways instead of wrapping onto a second row */
+.pp-crumbs {
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 6px;
+  font-size: 12px; color: #64748b;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity;
+  margin-inline: -1rem; padding-inline: 1rem;
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent 100%);
+}
+.pp-crumbs::-webkit-scrollbar { display: none; }
+.pp-crumbs > span { flex: 0 0 auto; white-space: nowrap; }
+.pp-crumbs > span:last-child { scroll-snap-align: end; padding-right: 4px; }
+@media (min-width: 640px) { .pp-crumbs { margin-inline: 0; padding-inline: 0; } }
 .pp-crumbs a:hover { color: #FE6F61; }
 
 /* ============================================================
