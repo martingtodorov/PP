@@ -393,7 +393,23 @@ def _money_of(order: Dict[str, Any]):
     return lambda eur, orig=None: _money(orig if orig is not None else eur, code)
 
 
-def _shell(locale: str, order_label: str, title: str, content: str, contact_email: str) -> str:
+def seller_lines(settings: Optional[Dict[str, Any]] = None) -> str:
+    """Company details for invoices — name, registration number, VAT and address, from the settings."""
+    s = settings or {}
+    parts = [str(s.get("company_name") or "").strip()]
+    if s.get("company_eik"):
+        parts.append(f'ЕИК/UIC {str(s["company_eik"]).strip()}')
+    if s.get("company_vat"):
+        parts.append(f'ДДС/VAT {str(s["company_vat"]).strip()}')
+    head = " · ".join(p for p in parts if p)
+    address = str(s.get("company_address") or "").strip()
+    if not head and not address:
+        return ""
+    return "<br>".join(x for x in [head, address] if x)
+
+
+def _shell(locale: str, order_label: str, title: str, content: str, contact_email: str,
+           seller: str = "") -> str:
     base = base_url(locale)
     return f"""<!doctype html>
 <html lang="{locale}"><head><meta charset="utf-8">
@@ -417,6 +433,7 @@ def _shell(locale: str, order_label: str, title: str, content: str, contact_emai
   <tr><td style="padding:20px 28px;background:{DARK};color:#94a3b8;font-size:11px;line-height:1.7;">
     {tr(locale, 'footer')} <a href="mailto:{contact_email}" style="color:#cbd5e1;">{contact_email}</a><br>
     {tr(locale, 'disclaimer')}
+    {f'<br><br><span style="color:#64748b;">{seller}</span>' if seller else ''}
   </td></tr>
 </table></td></tr></table></body></html>"""
 
@@ -458,7 +475,7 @@ def _button(url: str, label: str) -> str:
 
 
 def render_order(order: Dict[str, Any], bank: Optional[Dict[str, Any]], locale: str,
-                 contact_email: str) -> tuple:
+                 contact_email: str, seller: str = "") -> tuple:
     loc = (locale or order.get("locale") or "bg").lower()
     base = base_url(loc)
     delivery = order.get("delivery") or {}
@@ -544,10 +561,10 @@ def render_order(order: Dict[str, Any], bank: Optional[Dict[str, Any]], locale: 
 
     order_label = f"{tr(loc, 'order')} {order.get('order_number', '')}"
     subject = tr(loc, "subject_order", n=order.get("order_number", ""))
-    return subject, _shell(loc, order_label, subject, content, contact_email)
+    return subject, _shell(loc, order_label, subject, content, contact_email, seller)
 
 
-def render_abandoned(cart: Dict[str, Any], locale: str, contact_email: str,
+def render_abandoned(cart: Dict[str, Any], locale: str, contact_email: str, seller: str = "",
                      discount_code: str = "", fx: Optional[Dict[str, Any]] = None) -> tuple:
     loc = (locale or cart.get("locale") or "bg").lower()
     base = base_url(loc)
@@ -584,7 +601,7 @@ def render_abandoned(cart: Dict[str, Any], locale: str, contact_email: str,
     </table>
   </td></tr>"""
     subject = tr(loc, "ab_subject")
-    return subject, _shell(loc, "", subject, content, contact_email)
+    return subject, _shell(loc, "", subject, content, contact_email, seller)
 
 
 # ---------- admin notifications (always Bulgarian) ----------
@@ -696,7 +713,7 @@ def render_admin_note(badge: str, title: str, body_html: str, cta_url: str = "",
     return _admin_shell(badge, title, content, cta_url, cta_label)
 
 
-def render_shipment(order: Dict[str, Any], locale: str, contact_email: str) -> tuple:
+def render_shipment(order: Dict[str, Any], locale: str, contact_email: str, seller: str = "") -> tuple:
     """Waybill issued: courier, number, tracking link and the order page — in the customer's language."""
     loc = (locale or order.get("locale") or "bg").lower()
     base = base_url(loc)
@@ -725,10 +742,10 @@ def render_shipment(order: Dict[str, Any], locale: str, contact_email: str) -> t
   </td></tr>
   <tr><td style="padding:10px 28px 28px;">{buttons}</td></tr>"""
     subject = tr(loc, "sh_subject", n=n)
-    return subject, _shell(loc, f"{tr(loc, 'order')} {n}", tr(loc, "sh_title"), content, contact_email)
+    return subject, _shell(loc, f"{tr(loc, 'order')} {n}", tr(loc, "sh_title"), content, contact_email, seller)
 
 
-def render_delivered(order: Dict[str, Any], locale: str, contact_email: str) -> tuple:
+def render_delivered(order: Dict[str, Any], locale: str, contact_email: str, seller: str = "") -> tuple:
     """Courier confirmed delivery: a short thank-you with the order link."""
     loc = (locale or order.get("locale") or "bg").lower()
     base = base_url(loc)
@@ -747,10 +764,10 @@ def render_delivered(order: Dict[str, Any], locale: str, contact_email: str) -> 
     <table role="presentation" width="100%" style="font-size:14px;border-top:1px solid #e2e8f0;">{table}</table>
   </td></tr>
   <tr><td style="padding:10px 28px 28px;">{_button(f"{base}/checkout/success/{order.get('id', '')}", tr(loc, 'sh_view'))}</td></tr>"""
-    return tr(loc, "dv_subject", n=n), _shell(loc, f"{tr(loc, 'order')} {n}", tr(loc, "dv_title"), content, contact_email)
+    return tr(loc, "dv_subject", n=n), _shell(loc, f"{tr(loc, 'order')} {n}", tr(loc, "dv_title"), content, contact_email, seller)
 
 
-def render_cancelled(order: Dict[str, Any], locale: str, contact_email: str, reason: str = "") -> tuple:
+def render_cancelled(order: Dict[str, Any], locale: str, contact_email: str, reason: str = "", seller: str = "") -> tuple:
     """The order was cancelled by the customer or by the shop — nothing left to pay."""
     loc = (locale or order.get("locale") or "bg").lower()
     n = order.get("order_number", "")
@@ -767,10 +784,10 @@ def render_cancelled(order: Dict[str, Any], locale: str, contact_email: str, rea
     <table role="presentation" width="100%" style="font-size:14px;border-top:1px solid #e2e8f0;">{table}</table>
   </td></tr>""" if table else """
   <tr><td style="padding:0 28px 22px;"></td></tr>""")
-    return tr(loc, "cx_subject", n=n), _shell(loc, f"{tr(loc, 'order')} {n}", tr(loc, "cx_title"), content, contact_email)
+    return tr(loc, "cx_subject", n=n), _shell(loc, f"{tr(loc, 'order')} {n}", tr(loc, "cx_title"), content, contact_email, seller)
 
 
-def render_payment_received(order: Dict[str, Any], locale: str, contact_email: str) -> tuple:
+def render_payment_received(order: Dict[str, Any], locale: str, contact_email: str, seller: str = "") -> tuple:
     """Bank transfer landed — confirm it in the customer's own language."""
     loc = (locale or order.get("locale") or "bg").lower()
     base = base_url(loc)
@@ -781,4 +798,4 @@ def render_payment_received(order: Dict[str, Any], locale: str, contact_email: s
     <p style="margin:0;font-size:14px;line-height:1.6;color:#334155;">{tr(loc, 'pr_body', n=n)}</p>
   </td></tr>
   <tr><td style="padding:16px 28px 28px;">{_button(f"{base}/checkout/success/{order.get('id', '')}", tr(loc, 'sh_view'))}</td></tr>"""
-    return tr(loc, "pr_subject", n=n), _shell(loc, f"{tr(loc, 'order')} {n}", tr(loc, "pr_title"), content, contact_email)
+    return tr(loc, "pr_subject", n=n), _shell(loc, f"{tr(loc, 'order')} {n}", tr(loc, "pr_title"), content, contact_email, seller)

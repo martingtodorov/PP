@@ -42,3 +42,34 @@ def test_an_empty_field_falls_back_to_the_environment():
     import bank as bank_module
     out = bank_module.from_settings({"bank_iban": "  "}, "X1")
     assert out["iban"] == os.environ.get("BANK_IBAN", "")
+
+
+def test_the_company_details_are_editable_and_printed_in_the_mail():
+    import email_templates as et
+    s = _admin()
+    original = s.get(f"{API}/admin/settings", timeout=20).json()["settings"]
+    edited = {**original, "company_name": "Пюърпептид ЕООД", "company_eik": "207123456",
+              "company_vat": "BG207123456", "company_address": "гр. София, ул. Тест 1"}
+    try:
+        assert s.put(f"{API}/admin/settings", json={"value": edited}, timeout=20).status_code == 200
+        stored = s.get(f"{API}/admin/settings", timeout=20).json()["settings"]
+        assert stored["company_eik"] == "207123456" and stored["company_address"] == "гр. София, ул. Тест 1"
+
+        seller = et.seller_lines(stored)
+        assert "Пюърпептид ЕООД" in seller and "207123456" in seller and "ул. Тест 1" in seller
+        order = {"id": "x", "order_number": "TST01", "locale": "bg", "currency": "EUR",
+                 "items": [{"title": "Ipamorelin", "quantity": 1, "price_eur": 49.0}],
+                 "subtotal_eur": 49.0, "shipping_eur": 4.99, "total_eur": 53.99,
+                 "payment_method": "bank_transfer", "delivery": {}, "shipping": {}}
+        _, html = et.render_order(order, None, "bg", "info@purepeptide.bg", seller)
+        assert "207123456" in html and "гр. София, ул. Тест 1" in html
+    finally:
+        s.put(f"{API}/admin/settings", json={"value": original}, timeout=20)
+
+
+def test_without_company_details_nothing_extra_is_printed():
+    import email_templates as et
+    assert et.seller_lines({}) == ""
+    _, html = et.render_shipment({"order_number": "T", "shipment": {"awb": "1", "courier": "Еконт"}},
+                                 "bg", "info@purepeptide.bg")
+    assert "ЕИК" not in html
