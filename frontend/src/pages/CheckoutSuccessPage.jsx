@@ -67,6 +67,8 @@ export default function CheckoutSuccessPage() {
           ) : (
             <p className="text-sm text-slate-600 mt-2" data-testid="tracking-pending">{t("trackingPending")}</p>
           )}
+          <Link to={`/track?n=${order.order_number}`} className="inline-block mt-4 text-sm font-semibold text-coral-700 hover:text-coral-800"
+            data-testid="success-track-link">{t("trackOrderLink")} →</Link>
         </section>
 
         {bank_transfer && (

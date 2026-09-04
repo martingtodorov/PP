@@ -672,6 +672,7 @@ const Footer = ({ collections, articles, settings }) => {
             <li><Link to={lp(link("chemicalAnalysis"))} className="hover:text-white">{t("chemicalAnalysis")}</Link></li>
             <li><Link to={lp(link("contacts"))} className="hover:text-white">{t("contacts")}</Link></li>
             <li><Link to={lp("/account")} className="hover:text-white">{t("account")}</Link></li>
+            <li><Link to={lp("/track")} className="hover:text-white" data-testid="footer-track-order">{t("trackOrderLink")}</Link></li>
           </ul>
         </div>
 

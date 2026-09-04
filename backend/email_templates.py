@@ -304,6 +304,17 @@ T: Dict[str, Dict[str, str]] = {
 }
 
 
+# Public tracking page (order number + phone) — merged in so every locale has it.
+for _loc, _cta in {
+    "bg": "Проследи поръчката", "en": "Track your order", "fr": "Suivre ma commande",
+    "de": "Bestellung verfolgen", "cz": "Sledovat objednávku", "hu": "Megrendelés követése",
+    "pl": "Śledź zamówienie", "sk": "Sledovať objednávku", "si": "Sledi naročilu",
+    "gr": "Παρακολούθηση παραγγελίας", "ro": "Urmărește comanda",
+}.items():
+    T.setdefault(_loc, {})["track_cta"] = _cta
+
+
+
 def tr(locale: str, key: str, **kw) -> str:
     loc = (locale or "bg").lower()
     table = T.get(loc) or T["bg"]
@@ -507,7 +518,8 @@ def render_order(order: Dict[str, Any], bank: Optional[Dict[str, Any]], locale: 
     <p style="margin:0 0 18px;font-size:14px;color:#475569;line-height:1.7;">{intro}</p>
     {_button(order_url, tr(loc, 'view_order'))}
     <p style="margin:12px 0 0;font-size:12px;color:#94a3b8;">{tr(loc, 'or_visit')}
-      <a href="{base}" style="color:{BRAND};">{tr(loc, 'visit_shop')}</a></p>
+      <a href="{base}" style="color:{BRAND};">{tr(loc, 'visit_shop')}</a>
+      &nbsp;·&nbsp;<a href="{base}/track?n={order.get('order_number', '')}" style="color:{BRAND};">{tr(loc, 'track_cta')}</a></p>
   </td></tr>
   <tr><td style="padding:22px 28px 0;">
     <h2 style="margin:0 0 4px;font-size:15px;color:{DARK};">{tr(loc, 'summary')}</h2>

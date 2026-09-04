@@ -1078,6 +1078,95 @@ async def my_orders(user=Depends(require_user)):
     return {"orders": docs}
 
 
+class TrackIn(BaseModel):
+    order_number: str = Field(min_length=3, max_length=32)
+    phone: str = Field(min_length=5, max_length=32)
+
+
+_track_hits: Dict[str, List[float]] = {}
+
+
+def _only_digits(value: Any) -> str:
+    return re.sub(r"\D", "", str(value or ""))
+
+
+def _track_view(o: Dict[str, Any]) -> Dict[str, Any]:
+    """What a guest may see: status, courier, waybill, items — no e-mail, no full address of others."""
+    delivery = o.get("delivery") or {}
+    office = delivery.get("office") or {}
+    ship = o.get("shipping") or {}
+    info = o.get("customer_info") or {}
+    shipment = o.get("shipment") or {}
+    cancelled = o.get("status") == "cancelled" or o.get("fulfillment_status") == "cancelled"
+    ff_status = str((o.get("fulfillment") or {}).get("status") or "").lower()
+    delivered = ff_status == "delivered" or str(shipment.get("status") or "").lower() == "delivered"
+    return {
+        "order_number": o.get("order_number"),
+        "created_at": o.get("created_at"),
+        "currency": str(o.get("currency") or "EUR").upper(),
+        "total_eur": round(float(o.get("total_eur") or 0), 2),
+        "total_display": float(o.get("total_orig") if o.get("total_orig") is not None else (o.get("total_eur") or 0)),
+        "payment_method": o.get("payment_method") or "bank_transfer",
+        "payment_status": o.get("payment_status") or "awaiting_payment",
+        "fulfillment_status": "cancelled" if cancelled else (o.get("fulfillment_status") or "unfulfilled"),
+        "steps": {
+            "placed": True,
+            "paid": o.get("payment_status") == "paid" or (o.get("payment_method") == "cod" and bool(shipment.get("awb"))),
+            "shipped": bool(shipment.get("awb")) or o.get("fulfillment_status") in ("shipped", "fulfilled"),
+            "delivered": delivered,
+        },
+        "cancelled": cancelled,
+        "items": [{"title": i.get("title", ""), "variant": i.get("variant_name") or "",
+                   "quantity": int(i.get("quantity") or 1),
+                   "price_display": float(i.get("price_orig") if i.get("price_orig") is not None else (i.get("price_eur") or 0))}
+                  for i in (o.get("items") or o.get("line_items") or [])],
+        "delivery": {
+            "label": delivery.get("label") or o.get("shipping_method") or "",
+            "courier": delivery.get("provider_name") or "",
+            "office_name": office.get("name") or "",
+            "office_address": office.get("address") or "",
+            "line1": ship.get("line1") or info.get("address") or "",
+            "city": ship.get("city") or info.get("city") or "",
+            "postal_code": ship.get("postal_code") or info.get("postcode") or "",
+            "country": ship.get("country") or info.get("country") or "",
+        },
+        "shipment": {
+            "awb": shipment.get("awb") or "",
+            "courier": shipment.get("courier") or "",
+            "status": shipment.get("status") or "",
+            "tracking_link": shipment.get("tracking_link") or (o.get("tracking") or {}).get("tracking_url") or "",
+        } if shipment.get("awb") else None,
+    }
+
+
+@api.post("/orders/track")
+async def track_order(payload: TrackIn, request: Request):
+    """Public order tracking: order number + the phone the order was placed with."""
+    ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "?")
+    hits = [t for t in _track_hits.get(ip, []) if time.time() - t < 600]
+    if len(hits) >= 15:
+        raise HTTPException(429, "Твърде много опити. Опитайте пак след няколко минути.")
+    _track_hits[ip] = hits + [time.time()]
+
+    number = payload.order_number.strip().upper().lstrip("#")
+    given = _only_digits(payload.phone)[-8:]
+    o = await db.orders.find_one({"order_number": number}, {"_id": 0})
+    stored = [_only_digits(o.get("customer_phone")),
+              _only_digits((o.get("shipping") or {}).get("phone")),
+              _only_digits((o.get("customer_info") or {}).get("phone"))] if o else []
+    if not o or len(given) < 6 or not any(s.endswith(given) for s in stored if s):
+        raise HTTPException(404, "Не намерихме поръчка с този номер и телефон")
+
+    if (o.get("fulfillment") or {}).get("payload") and not (o.get("shipment") or {}).get("status") == "Delivered":
+        try:
+            await fulfillment.refresh_order(o["id"])
+            o = await db.orders.find_one({"id": o["id"]}, {"_id": 0}) or o
+        except Exception as exc:  # live status is a bonus, never a blocker
+            log.info("tracking refresh for %s skipped: %s", number, exc)
+    return {"order": _track_view(o)}
+
+
+
 # ---------- Admin ----------
 @api.get("/admin/stats")
 async def admin_stats(user=Depends(require_admin)):
