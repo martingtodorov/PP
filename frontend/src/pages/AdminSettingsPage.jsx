@@ -72,6 +72,17 @@ export default function AdminSettingsPage() {
         </div>
 
         <div className="border-t border-slate-200 pt-5">
+          <h2 className="font-bold text-slate-900 mb-3">Банкова сметка (за банков превод)</h2>
+          <p className="text-xs text-slate-500 mb-3">Показва се на страницата след поръчка и в имейла за потвърждение.</p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div><Label>Титуляр</Label><Input value={s.bank_holder || ""} onChange={(e) => set("bank_holder", e.target.value)} data-testid="set-bank-holder" /></div>
+            <div><Label>Банка</Label><Input value={s.bank_name || ""} onChange={(e) => set("bank_name", e.target.value)} data-testid="set-bank-name" /></div>
+            <div><Label>IBAN</Label><Input className="font-mono" value={s.bank_iban || ""} onChange={(e) => set("bank_iban", e.target.value.toUpperCase())} data-testid="set-bank-iban" /></div>
+            <div><Label>BIC / SWIFT</Label><Input className="font-mono" value={s.bank_bic || ""} onChange={(e) => set("bank_bic", e.target.value.toUpperCase())} data-testid="set-bank-bic" /></div>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-200 pt-5">
           <h2 className="font-bold text-slate-900 mb-3">Кодове за отстъпка</h2>
           <div className="space-y-2" data-testid="discount-codes">
             {(s.discount_codes || []).map((d, i) => (

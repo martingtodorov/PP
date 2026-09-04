@@ -133,6 +133,8 @@ def build_order(order: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     shipping = _local(order, "shipping")
     is_cod = order.get("payment_method") == "cod"
+    # a bank transfer covers the shipping too, so the warehouse must not charge it again
+    prepaid_shipping = not is_cod
     payload: Dict[str, Any] = {
         "order_id": str(order.get("order_number") or order.get("id")),
         "ref": str(order.get("order_number") or ""),
@@ -140,8 +142,8 @@ def build_order(order: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         "products": products,
         "price": round(_local(order, "subtotal") - _local(order, "discount"), 2),
         "currency": currency,
-        "shipping_price": shipping,
-        "is_shipping_free": shipping <= 0,
+        "shipping_price": 0.0 if prepaid_shipping else shipping,
+        "is_shipping_free": prepaid_shipping or shipping <= 0,
         "receiver": receiver,
         "payment_method": "cod" if is_cod else "bank_transfer",
         "is_paid": (not is_cod) or order.get("payment_status") == "paid",

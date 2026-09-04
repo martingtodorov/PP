@@ -49,6 +49,7 @@ import currency
 from links_map import LINK_TARGETS
 import email_templates
 import push_service
+import bank as bank_details
 
 # ---------- App + DB ----------
 mongo_url = os.environ["MONGO_URL"]
@@ -286,6 +287,20 @@ async def seed_admin():
         })
 
 
+async def backfill_settings():
+    """New DEFAULT_SETTINGS keys must reach an existing shop too — seed_catalog stops early once the
+    real catalog is imported, so the backfill inside it never ran on production."""
+    current = await db.settings.find_one({"key": "site"})
+    if not current:
+        return
+    missing = {k: v for k, v in DEFAULT_SETTINGS.items() if k not in (current.get("value") or {})}
+    if missing:
+        await db.settings.update_one(
+            {"key": "site"}, {"$set": {**{f"value.{k}": v for k, v in missing.items()}, "updated_at": now_utc()}}
+        )
+        log.info("Settings backfilled: %s", ", ".join(sorted(missing)))
+
+
 async def seed_catalog():
     """Seed / re-seed the catalog. A change of SEED_VERSION rebuilds the mirrored Shopify catalog."""
     current = await db.settings.find_one({"key": "site"})
@@ -390,6 +405,7 @@ async def on_startup():
     await ensure_indexes()
     await seed_admin()
     await seed_catalog()
+    await backfill_settings()
     await seed_pages()
     try:
         storage.init_storage()
@@ -958,10 +974,6 @@ async def checkout(payload: CheckoutIn, request: Request):
     pay_method = payload.payment_method if payload.payment_method in ("bank_transfer", "cod") else "bank_transfer"
     if pay_method == "cod" and not cod_allowed((payload.shipping.country or "").upper()):
         pay_method = "bank_transfer"
-    if pay_method == "bank_transfer":
-        shipping_override = 0.0      # prepaid orders ship free (owner's decision)
-        if payload.delivery:
-            payload.delivery.price_amount = 0.0
     totals = _calc_totals(line_items, payload.shipping_method, discount.get("discount_eur", 0.0), shipping_override)
     loc = (payload.locale or "bg").lower()
     fx = await currency.rate_for_locale(db, loc)
@@ -1009,19 +1021,12 @@ async def checkout(payload: CheckoutIn, request: Request):
                                 f"Поръчка {order['order_number']}", "checkout")
 
     # bank instructions
-    bank = {
-        "name": os.environ.get("BANK_NAME", "DSK Bank"),
-        "iban": os.environ.get("BANK_IBAN", "BG61STSA93000032400775"),
-        "bic": os.environ.get("BANK_BIC", "STSABGSF"),
-        "holder": os.environ.get("BANK_HOLDER", "Purepeptide LTD"),
-        "reference": order["order_number"],
-        "amount_eur": totals["total_eur"],
-    }
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    site_settings = (s or {}).get("value", {})
+    bank = bank_details.from_settings(site_settings, order["order_number"], totals["total_eur"])
     order_clean = {k: v for k, v in order.items() if k != "_id"}
     await db.orders.update_one({"id": order["id"]}, {"$set": {"wc_id": wc_api.wc_int(order["id"])}})
     asyncio.create_task(fulfillment.dispatch_new_order(order["id"]))
-    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
-    site_settings = (s or {}).get("value", {})
     try:
         await email_service.send_order_confirmation(order_clean, bank, site_settings)
     except Exception:
@@ -1061,20 +1066,13 @@ async def checkout(payload: CheckoutIn, request: Request):
     return {"order": order_clean, "bank_transfer": bank}
 
 
-def _bank_block(order: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def _bank_block(order: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Bank details belong to the confirmation only — the checkout no longer shows them."""
     if (order.get("payment_method") or "bank_transfer") != "bank_transfer":
         return None
     if order.get("status") == "cancelled" or order.get("payment_status") == "paid":
         return None
-    return {
-        "name": os.environ.get("BANK_NAME", "DSK Bank"),
-        "iban": os.environ.get("BANK_IBAN", "BG61STSA93000032400775"),
-        "bic": os.environ.get("BANK_BIC", "STSABGSF"),
-        "holder": os.environ.get("BANK_HOLDER", "Purepeptide LTD"),
-        "reference": order.get("order_number", ""),
-        "amount_eur": order.get("total_eur", 0.0),
-    }
+    return await bank_details.details(db, order.get("order_number", ""), order.get("total_eur", 0.0))
 
 
 @api.get("/orders/{order_id}")
@@ -1086,7 +1084,7 @@ async def get_order(order_id: str, request: Request):
     blocker = cancel_blocker(o)
     o["cancellable"] = not blocker
     o["cancel_blocker"] = blocker
-    bank = _bank_block(o)
+    bank = await _bank_block(o)
     is_owner = user and (user.get("role") == "admin" or o.get("customer_id") == user.get("id"))
     if not is_owner:
         # allow guest lookup by id (acts as token) for confirmation page
@@ -1378,14 +1376,7 @@ async def admin_send_invoice(order_id: str, user=Depends(require_admin)):
     if not view["customer"]["email"]:
         raise HTTPException(400, "Поръчката няма имейл адрес")
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
-    bank = {
-        "name": os.environ.get("BANK_NAME", "DSK Bank"),
-        "iban": os.environ.get("BANK_IBAN", "BG61STSA93000032400775"),
-        "bic": os.environ.get("BANK_BIC", "STSABGSF"),
-        "holder": os.environ.get("BANK_HOLDER", "Purepeptide LTD"),
-        "reference": view["order_number"],
-        "amount_eur": view["total_eur"],
-    }
+    bank = bank_details.from_settings((s or {}).get("value"), view["order_number"], view["total_eur"])
     payload = {**o, "customer_email": view["customer"]["email"], "customer_name": view["customer"]["name"],
                "items": [{"title": i["title"], "variant_name": i["variant"], "quantity": i["quantity"],
                           "price_eur": i["price_eur"], "variant_sku": i["sku"]} for i in view["items"]],

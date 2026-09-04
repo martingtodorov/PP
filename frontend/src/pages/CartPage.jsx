@@ -70,9 +70,6 @@ export default function CartPage() {
                     <div className="flex justify-between text-coral-700"><span>{t("discountLabel")} ({discount?.code})</span><span className="font-semibold">− {fmtAmount(amt.discountAmount)}</span></div>
                   )}
                   <div className="flex justify-between"><span className="text-slate-600">{t("shippingLabel")}</span><span className="font-semibold">{amt.shipping === 0 ? t("shippingFree") : fmtAmount(amt.shipping)}</span></div>
-                  {amt.shipping > 0 && (
-                    <p className="text-xs text-coral-700" data-testid="cart-bank-transfer-hint">{t("freeOnBankTransfer")}</p>
-                  )}
                   <div className="border-t border-slate-200 pt-3 flex justify-between text-base">
                     <span className="font-display font-bold text-slate-900">{t("totalLabel")}</span>
                     <span className="font-display font-extrabold text-slate-900" data-testid="cart-total">{fmtAmount(amt.total)}</span>

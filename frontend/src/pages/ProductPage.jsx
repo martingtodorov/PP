@@ -159,11 +159,11 @@ export default function ProductPage() {
           ]}
         />
 
-        <div className="grid lg:grid-cols-2 gap-5 lg:gap-14 mt-0 lg:items-start">
+        <div className="grid lg:grid-cols-[1.15fr_1fr] gap-5 lg:gap-12 mt-0 lg:items-start">
           {/* Gallery — sticks while the text on the right scrolls (desktop) */}
           <div className="min-w-0 lg:sticky lg:top-24 lg:self-start" data-testid="product-gallery">
             <div className="aspect-square w-full max-w-full bg-white rounded-xl overflow-hidden">
-              <img src={img(images[imgIdx], 900)} alt={p.title} className="w-full h-full object-contain px-2 sm:px-4 py-0" data-testid="product-main-image" />
+              <img src={img(images[imgIdx], 1200)} alt={p.title} className="w-full h-full object-contain" data-testid="product-main-image" />
             </div>
             {images.length > 1 && (
               <div className="pp-thumbs -mx-4 px-4 sm:mx-0 sm:px-0 mt-1 sm:mt-1.5" data-testid="product-thumbs">
