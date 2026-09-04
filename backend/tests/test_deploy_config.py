@@ -604,3 +604,20 @@ def test_media_urls_carry_a_revision_so_a_poisoned_cache_can_be_bypassed():
     api_js = (ROOT / "frontend" / "src" / "lib" / "api.js").read_text()
     assert "MEDIA_REV" in api_js
     assert "v=${MEDIA_REV}" in api_js
+
+
+@pytest.mark.parametrize("playbook,marker", [
+    ("deploy_backend.yml", "live_release"),
+    ("deploy_frontend.yml", "last_src"),
+])
+def test_tag_limited_runs_work_on_the_release_that_is_live(playbook, marker):
+    """`--tags config,service` skips the checkout — the run must not look into an empty release dir."""
+    play = yaml.safe_load((PLAYBOOKS / playbook).read_text())[0]
+    pre = play["pre_tasks"]
+    names = [t.get("name", "") for t in pre]
+    assert any("code" in str(t.get("set_fact", {})) and "ansible_run_tags" in str(t.get("set_fact", {}))
+               for t in pre), names
+    freeze = next(t for t in pre if "Freeze" in t.get("name", ""))
+    value = str(list(freeze["set_fact"].values())[0])
+    assert "code_selected" in value and marker in value, value
+    assert any(t.get("fail") and marker in str(t.get("when")) for t in pre), names

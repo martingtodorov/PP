@@ -221,3 +221,22 @@ export const TRACK_STRINGS = {
     seoTrackDesc: "Preverite stanje svojega naročila PurePeptide s številko naročila in telefonom.",
   },
 };
+
+/* Prepaid orders ship free — shown in the cart, before the payment method is chosen. */
+const FREE_ON_BANK_TRANSFER = {
+  bg: "Безплатна при плащане с банков превод",
+  en: "Free when you pay by bank transfer",
+  ro: "Gratuită la plata prin transfer bancar",
+  gr: "Δωρεάν με πληρωμή μέσω τραπεζικής κατάθεσης",
+  de: "Kostenlos bei Zahlung per Banküberweisung",
+  fr: "Gratuite en cas de paiement par virement bancaire",
+  cz: "Zdarma při platbě bankovním převodem",
+  hu: "Ingyenes banki átutalásos fizetésnél",
+  pl: "Bezpłatna przy płatności przelewem bankowym",
+  sk: "Zdarma pri platbe bankovým prevodom",
+  si: "Brezplačna pri plačilu z bančnim nakazilom",
+};
+
+Object.entries(FREE_ON_BANK_TRANSFER).forEach(([loc, text]) => {
+  TRACK_STRINGS[loc].freeOnBankTransfer = text;
+});

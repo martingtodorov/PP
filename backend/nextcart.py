@@ -82,6 +82,42 @@ def method_price(country: str, method_key: str, destination_type: str = "") -> O
     return None
 
 
+async def resolve_delivery(country: str, provider_key: str, method_key: str,
+                           destination_type: str = "") -> Dict[str, Any]:
+    """Validate — and where possible correct — a checkout delivery selection.
+
+    A stale selection (Econt picked for Bulgaria, then the country switched to France) must never go
+    through as it is: Econt does not serve France and its price belongs to another market. We know
+    which courier serves the destination (abroad that is GLS), so the selection is rewritten to that
+    courier's method with the same destination type instead of failing the order.
+    Returns {"ok": True, "price": €, "method": <corrected method or None>}."""
+    iso = (country or "").upper()
+    allowed = COUNTRY_COURIERS.get(iso)
+    stale = bool(allowed and provider_key and provider_key not in allowed)
+    if not stale:
+        price = method_price(iso, method_key)
+        if price is not None:
+            return {"ok": True, "price": price, "method": None}
+    try:
+        cfg = await nextcart_config(iso)
+    except HTTPException:
+        if stale:
+            return {"ok": False, "reason": "courier"}
+        return {"ok": True, "price": None, "method": None}   # config down — keep the client's price
+    methods = cfg.get("delivery_methods") or []
+    m = None if stale else next((x for x in methods if x.get("key") == method_key), None)
+    if m is None and destination_type:
+        # the same kind of delivery (office / locker / address) with the courier of that country
+        m = next((x for x in methods if x.get("destination_type") == destination_type
+                  and (not stale or x.get("provider_key") in (allowed or []))), None)
+    if m is None and stale and destination_type != "address":
+        # a pickup point of the old courier is meaningless here — the customer must pick a real one
+        return {"ok": False, "reason": "pickup"}
+    if m is None:
+        return {"ok": False, "reason": "method"}
+    return {"ok": True, "price": float(m.get("price_amount") or 0), "method": m if stale else None}
+
+
 def _apply_overrides(country: str, methods: list, providers: list) -> None:
     for key, ov in METHOD_OVERRIDES.get(country, {}).items():
         pk, dest, price = ov["provider_key"], ov["destination_type"], float(ov["price_eur"])

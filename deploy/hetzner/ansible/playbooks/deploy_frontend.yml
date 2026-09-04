@@ -7,14 +7,46 @@
 
   pre_tasks:
     - import_tasks: ../tasks/infra_defaults.yml
+    # `--tags build` / `--tags publish` skip the checkout, so a fresh (empty) build directory would
+    # make the package.json lookup fail — reuse the newest source tree that is already on the host.
+    - name: Does this run check out code?
+      set_fact:
+        code_selected: >-
+          {{ (('all' in ansible_run_tags) or ('code' in ansible_run_tags))
+             and ('code' not in ansible_skip_tags) and ('all' not in ansible_skip_tags) }}
+      tags: [always]
+
+    - name: Find the newest source tree already on the host
+      shell: "ls -1dt /opt/{{ app_name }}-src/*/ 2>/dev/null | head -1"
+      register: last_src
+      changed_when: false
+      failed_when: false
+      when: not (code_selected | bool)
+      tags: [always]
+
+    - name: A build/publish-only run needs an existing source tree
+      fail:
+        msg: >-
+          No source tree in /opt/{{ app_name }}-src — nothing to build.
+          Run with --tags code (or the full playbook) first.
+      when:
+        - not (code_selected | bool)
+        - (last_src.stdout | default('') | trim) == ''
+      tags: [always]
+
     # a lookup() in vars: is re-evaluated per reference — freeze the build directory once
     - name: Freeze the build directory for this run
       set_fact:
-        src_dir: "/opt/{{ app_name }}-src/{{ ref }}-{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+        src_dir: >-
+          {{ ('/opt/' ~ app_name ~ '-src/' ~ ref ~ '-' ~ lookup('pipe', 'date +%Y%m%d%H%M%S'))
+             if (code_selected | bool) else (last_src.stdout | trim | regex_replace('/$', '')) }}
       tags: [always]
 
     - name: Build directory
-      debug: { msg: "building {{ ref }} in {{ src_dir }}" }
+      debug:
+        msg: >-
+          {{ 'building ' ~ ref ~ ' in ' ~ src_dir if code_selected | bool
+             else 'no checkout in this run — reusing ' ~ src_dir }}
       tags: [always]
 
   tasks:

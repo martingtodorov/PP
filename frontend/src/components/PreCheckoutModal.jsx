@@ -349,8 +349,11 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   useEffect(() => {
     if (!open) return;
     setCfg(null);
-    pfConfig(contact.country)
-      .then((data) => {
+    /* clear the previous country's courier first — a stale selection must never reach checkout */
+    setProvider("");
+    setMethodKey("");
+    setPickup(null);
+    pfConfig(contact.country)      .then((data) => {
         setCfg(data);
         const list = data.delivery_methods || [];
         const remembered = list.find((m) => m.key === saved.current?.methodKey);
@@ -459,7 +462,8 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
       .catch(() => {});
   }, [needsAddress, geo, provider, contact.country, addr.city]);
 
-  const shipping = method?.price_amount || 0;
+  /* prepaid orders ship free (owner's decision) — mirrors _calc_totals in the backend */
+  const shipping = payment === "bank_transfer" ? 0 : (method?.price_amount || 0);
   const total = Math.max(subtotal - discountAmount, 0) + shipping;
   /* the amounts actually shown: rounded per line, then summed — same rule as the backend */
   const amt = cartAmounts({ items, shippingEur: shipping, discount });
@@ -609,7 +613,9 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                         track("checkout_courier_selected", { provider: p.key });
                       }}
                       data-testid={`pc-courier-${p.key}`}>
-                      <img src={p.logo_url} alt={p.name || p.key} />
+                      {contact.country === "BG"
+                        ? <img src={p.logo_url} alt={p.name || p.key} />
+                        : <span className="nc2-courier-name">{p.name || p.key.toUpperCase()}</span>}
                       <span className="nc2-courier-sub">{providerSub(p.key)}</span>
                     </button>
                   ))}
@@ -627,7 +633,9 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                       <input type="radio" name="pc-method" checked={method?.key === m.key}
                         onChange={() => { setMethodKey(m.key); setPickup(null); }} />
                       <span className="nc2-method-label">{methodLabel(m, t, locale)}</span>
-                      <span className="nc2-method-price">{fmtPrice(m.price_amount)}</span>
+                      <span className="nc2-method-price">
+                        {payment === "bank_transfer" ? t("shippingFree") : fmtPrice(m.price_amount)}
+                      </span>
                     </label>
                   ))}
                 </div>
@@ -739,7 +747,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                   )}
                   <div className="nc2-sum-row">
                     <span>{t("shippingLabel")}{method ? ` · ${providerName(method, locale)}` : ""}</span>
-                    <span>{method ? fmtAmount(amt.shipping) : "—"}</span>
+                    <span>{method ? (shipping ? fmtAmount(amt.shipping) : t("shippingFree")) : "—"}</span>
                   </div>
                   <div className="nc2-sum-row nc2-sum-total"><strong>{t("totalLabel")}</strong><strong data-testid="pc-total">{fmtAmount(amt.total)}</strong></div>
                   {showsBGN() && <p className="nc2-muted text-right">{fmtBGN(total)}</p>}

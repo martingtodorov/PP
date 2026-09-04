@@ -1533,6 +1533,8 @@ button.bg-coral-600:disabled { box-shadow: none; }
 .nc2-courier-sub { font-size: 11px; line-height: 1.1; color: #64748b; text-align: center; }
 .nc2-courier--on .nc2-courier-sub { color: #fe6f61; }
 .nc2-courier img { max-height: 30px; max-width: 100%; object-fit: contain; }
+.nc2-courier-name { font-size: 15px; font-weight: 700; color: #0f172a; letter-spacing: 0.02em; }
+.nc2-courier--on .nc2-courier-name { color: #fe6f61; }
 .nc2-courier:hover { transform: translateY(-2px); }
 .nc2-courier--on { border-color: #fe6f61; box-shadow: 0 0 0 3px rgba(254, 111, 97, 0.13); }
 .nc2-methods { display: flex; flex-direction: column; gap: 8px; }
