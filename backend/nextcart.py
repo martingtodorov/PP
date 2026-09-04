@@ -11,6 +11,7 @@ import logging
 import math
 import os
 import pathlib
+import re
 import time
 import unicodedata
 from typing import Any, Dict, Optional
@@ -478,6 +479,103 @@ async def nextcart_offices(
     return _store(key, 180, {**local, "offices": offices[:limit]})
 
 
+@functools.lru_cache(maxsize=20)
+def _city_index(country: str) -> list:
+    """Our own city/postcode list per country (scripts/build_city_index.py)."""
+    data = _snapshot(f"cities_{country.upper()}.json") or {}
+    return data.get("cities") or []
+
+
+# English names customers type instead of the local one (the index only carries local names).
+_EXONYMS = {
+    "bucharest": "bucuresti", "prague": "praha", "warsaw": "warszawa", "cracow": "krakow",
+    "vienna": "wien", "rome": "roma", "milan": "milano", "munich": "munchen",
+    "cologne": "koln", "athens": "athina", "copenhagen": "kobenhavn",
+}
+
+
+def _city_base(name: str) -> str:
+    """"Bucureşti 15" and "Bucureşti 77" are postal sectors of one city — show it once."""
+    return re.sub(r"\s+\d+$", "", name).strip()
+
+
+def _city_suggestions(country: str, q: str, limit: int = 8) -> list:
+    text = _norm_city(q)
+    if len(text) < 2:
+        return []
+    starts, contains = [], []
+    for c in _city_index(country):
+        name = _norm_city(c["city"])
+        if name.startswith(text):
+            starts.append(c)
+        elif text in name:
+            contains.append(c)
+        if len(starts) >= limit * 6:
+            break
+    if not starts and not contains:
+        local = next((v for k, v in _EXONYMS.items() if k.startswith(text)), "")
+        if local:
+            return _city_suggestions(country, local, limit)
+    # more postal codes under the same name = bigger city → show it first
+    weight: Dict[str, int] = {}
+    for c in starts + contains:
+        base = _city_base(c["city"]).lower()
+        weight[base] = weight.get(base, 0) + 1
+
+    def rank(c):
+        return (-weight[_city_base(c["city"]).lower()], len(c["city"]))
+
+    ranked = sorted(starts, key=rank) + sorted(contains, key=rank)
+    out, seen = [], set()
+    for c in ranked:
+        base = _city_base(c["city"])
+        if base.lower() in seen:
+            continue
+        seen.add(base.lower())
+        out.append({"city": base, "postal_code": c["postal_code"], "place_id": c["place_id"]})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _city_point(country: str, place_id: Optional[int]) -> Optional[Dict[str, Any]]:
+    if not place_id:
+        return None
+    return next((c for c in _city_index(country) if c["place_id"] == place_id), None)
+
+
+async def _street_suggestions(country: str, q: str, place_id: Optional[int], limit: int = 8) -> list:
+    """Streets come from Photon (OpenStreetMap), biased to the city the customer picked."""
+    city = _city_point(country, place_id)
+    params: Dict[str, Any] = {"q": f"{q} {city['city']}" if city else q, "limit": limit * 3,
+                              "lang": "default"}
+    if city:
+        params.update({"lat": city["lat"], "lon": city["lng"]})
+    r = await _client.get("https://photon.komoot.io/api", params=params,
+                          headers={"User-Agent": "purepeptide-store/1.0"})
+    typed = _norm_city(q)
+    same_city, other = [], []
+    seen = set()
+    for feat in (r.json() or {}).get("features") or []:
+        p = feat.get("properties") or {}
+        if (p.get("countrycode") or "").upper() != country.upper():
+            continue
+        street = p.get("street") or (p.get("name") if p.get("osm_key") == "highway" else "")
+        name = _norm_city(street)
+        # Photon answers loosely — keep only streets that really contain what the customer typed
+        if not street or name in seen or typed not in name:
+            continue
+        seen.add(name)
+        row = {"address1": street, "city": p.get("city") or (city or {}).get("city") or "",
+               "postal_code": p.get("postcode") or (city or {}).get("postal_code") or "",
+               "place_id": place_id}
+        if city and _norm_city(row["city"]) == _norm_city(city["city"]):
+            same_city.append(row)
+        else:
+            other.append(row)
+    return (same_city + other)[:limit]
+
+
 @router.get("/address-suggestions")
 async def nextcart_address_suggestions(
     mode: str = Query(..., pattern="^(city|street)$"),
@@ -487,16 +585,26 @@ async def nextcart_address_suggestions(
     post: str = Query("", max_length=20),
     country: str = Query("", max_length=2),
 ):
-    if SNAPSHOT_ONLY:
-        return {"suggestions": []}
+    """Predictive city / street input for delivery to an address.
+
+    NextCart's own address database is unreachable from our servers, so the suggestions are built
+    from our GeoNames city index and OpenStreetMap (Photon) for the streets."""
+    iso = (country or COUNTRY).upper()
+    if not SNAPSHOT_ONLY:
+        try:
+            return await _get(
+                "/api/shopify-app/storefront/address-suggestions",
+                {"shop": SHOP, "mode": mode, "q": q.strip(), "country": iso,
+                 "provider_key": provider_key, "place_id": place_id, "post": post, "offset": 0},
+            )
+        except HTTPException:
+            pass
+    if mode == "city":
+        return {"suggestions": _city_suggestions(iso, q)}
     try:
-        return await _get(
-            "/api/shopify-app/storefront/address-suggestions",
-            {"shop": SHOP, "mode": mode, "q": q.strip(), "country": (country or COUNTRY).upper(),
-             "provider_key": provider_key, "place_id": place_id, "post": post, "offset": 0},
-        )
-    except HTTPException:
-        # No snapshot possible for a free-text database — the customer types the address manually.
+        return {"suggestions": await _street_suggestions(iso, q.strip(), place_id)}
+    except Exception as exc:
+        log.info("street suggestions for %s failed: %s", q, exc)
         return {"suggestions": []}
 
 

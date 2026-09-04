@@ -6,7 +6,7 @@ import PreCheckoutModal from "../components/PreCheckoutModal";
 import { useSeo } from "../lib/seo";
 import { Button } from "../components/ui/button";
 import { useCart } from "../context/CartContext";
-import { fmtPrice, fmtAmount, cartAmounts, fmtBGN, showsBGN, img } from "../lib/api";
+import { fmtAmount, cartAmounts, fmtBGN, showsBGN, img } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { formatErr } from "../lib/api";
 import { toast } from "sonner";
@@ -20,7 +20,7 @@ export default function CartPage() {
   const [preCheckout, setPreCheckout] = useState(false);
   const [terms, setTerms] = useState(false);
   const [applying, setApplying] = useState(false);
-  const shipping = subtotal === 0 ? 0 : subtotal >= 100 ? 0 : 5.99;
+  const shipping = subtotal === 0 ? 0 : 5.99;
   const total = Math.max(subtotal - discountAmount, 0) + shipping;
   /* the amounts actually shown: rounded per line, then summed — same rule as the backend */
   const amt = cartAmounts({ items, shippingEur: shipping, discount });
@@ -70,11 +70,6 @@ export default function CartPage() {
                     <div className="flex justify-between text-coral-700"><span>{t("discountLabel")} ({discount?.code})</span><span className="font-semibold">− {fmtAmount(amt.discountAmount)}</span></div>
                   )}
                   <div className="flex justify-between"><span className="text-slate-600">{t("shippingLabel")}</span><span className="font-semibold">{amt.shipping === 0 ? t("shippingFree") : fmtAmount(amt.shipping)}</span></div>
-                  {subtotal < 100 && subtotal > 0 && (
-                    <p className="text-xs text-coral-700 bg-coral-50 border border-coral-200 rounded p-2">
-                      {t("freeShippingHint", { amount: fmtPrice(100 - subtotal) })}
-                    </p>
-                  )}
                   <div className="border-t border-slate-200 pt-3 flex justify-between text-base">
                     <span className="font-display font-bold text-slate-900">{t("totalLabel")}</span>
                     <span className="font-display font-extrabold text-slate-900" data-testid="cart-total">{fmtAmount(amt.total)}</span>

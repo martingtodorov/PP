@@ -881,7 +881,7 @@ def _calc_totals(line_items: List[Dict[str, Any]], shipping_method: str, discoun
     if shipping_override is not None:
         shipping_cost = round(float(shipping_override), 2)  # courier price chosen at checkout wins
     else:
-        shipping_cost = 0.0 if subtotal >= 100 else (5.99 if shipping_method != "speedy" else 7.49)
+        shipping_cost = 5.99 if shipping_method != "speedy" else 7.49  # no free-shipping threshold
     total = subtotal - discount_eur + shipping_cost
     return {
         "subtotal_eur": round(subtotal, 2),
