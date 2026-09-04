@@ -40,8 +40,20 @@ def _items_table(items: List[Dict[str, Any]]) -> str:
     return f'<table role="presentation" width="100%" style="font-size:14px;color:#334155;">{rows}</table>'
 
 
+TEST_DOMAINS = ("example.com", "example.org", "example.net", "test", "invalid")
+
+
+def is_test_address(email: str) -> bool:
+    """RFC 2606 reserved domains — used by our own test suite, must never trigger a real send."""
+    return (email or "").rsplit("@", 1)[-1].lower() in TEST_DOMAINS
+
+
 async def send_email(to: str, subject: str, html: str, settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     settings = settings or {}
+    # test orders must never burn the mail quota (example.com/.org/.net are reserved by RFC 2606)
+    if is_test_address(to):
+        log.info("test recipient %s — email skipped", to)
+        return {"sent": False, "reason": "test_recipient"}
     api_key = (settings.get("resend_api_key") or os.environ.get("RESEND_API_KEY") or "").strip()
     sender = (settings.get("resend_from") or os.environ.get("SENDER_EMAIL") or "onboarding@resend.dev").strip()
     if not api_key:

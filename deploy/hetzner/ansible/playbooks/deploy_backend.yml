@@ -16,16 +16,50 @@
 
   pre_tasks:
     - import_tasks: ../tasks/infra_defaults.yml
+    # `--tags config,service` skips the checkout, so there is no new release directory. Everything
+    # after that (server.py lookup, .env symlink, systemd unit) must then work on the release that
+    # is currently live, otherwise the run dies with "no backend/server.py" in an empty directory.
+    - name: Does this run deploy code?
+      set_fact:
+        code_selected: >-
+          {{ (('all' in ansible_run_tags) or ('code' in ansible_run_tags))
+             and ('code' not in ansible_skip_tags) and ('all' not in ansible_skip_tags) }}
+      tags: [always]
+
+    - name: Resolve the release that is currently live
+      command: "readlink -f {{ app_dir }}/current"
+      register: live_release
+      changed_when: false
+      failed_when: false
+      when: not (code_selected | bool)
+      tags: [always]
+
+    - name: A config/service-only run needs an already deployed release
+      fail:
+        msg: >-
+          {{ app_dir }}/current does not point at a release, so there is no code to configure.
+          Run the full deploy once (or at least --tags code,publish) before using
+          --tags {{ ansible_run_tags | join(',') }}.
+      when:
+        - not (code_selected | bool)
+        - live_release.rc != 0 or (live_release.stdout | default('') | trim) in ['', app_dir ~ '/current']
+      tags: [always]
+
     # A lookup() inside vars: is re-evaluated on EVERY reference, so `date +%s` produced a different
     # release_dir for each task: git cloned into ...230942 while the next task looked at ...230943
     # and found an empty directory. set_fact freezes the value for the whole run.
     - name: Freeze the release directory for this run
       set_fact:
-        release_dir: "{{ app_dir }}/releases/{{ ref }}-{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+        release_dir: >-
+          {{ (app_dir ~ '/releases/' ~ ref ~ '-' ~ lookup('pipe', 'date +%Y%m%d%H%M%S'))
+             if (code_selected | bool) else (live_release.stdout | trim) }}
       tags: [always]
 
     - name: Release directory
-      debug: { msg: "deploying {{ ref }} into {{ release_dir }}" }
+      debug:
+        msg: >-
+          {{ 'deploying ' ~ ref ~ ' into ' ~ release_dir if code_selected | bool
+             else 'no code in this run — reconfiguring the live release ' ~ release_dir }}
       tags: [always]
 
     - name: The tunnel routing must be in place (git/pip need the internet)

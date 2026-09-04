@@ -926,20 +926,43 @@ async def checkout(payload: CheckoutIn, request: Request):
     discount = await _resolve_discount(payload.discount_code or "", subtotal_raw)
     shipping_override = None
     if payload.delivery:
-        from nextcart import method_price
-        shipping_override = method_price((payload.shipping.country or "").upper(), payload.delivery.method_key,
-                                         payload.delivery.destination_type)
+        from nextcart import resolve_delivery
+        iso = (payload.shipping.country or "").upper()
+        check = await resolve_delivery(iso, payload.delivery.provider_key,
+                                       payload.delivery.method_key, payload.delivery.destination_type)
+        if not check["ok"]:
+            log.warning("checkout rejected: %s %s is not offered for %s",
+                        payload.delivery.provider_key, payload.delivery.method_key, iso)
+            raise HTTPException(400, "Изберете отново начина на доставка за тази държава")
+        fixed = check.get("method")
+        if fixed:
+            # a courier left over from another country — swap it for the one that serves this one
+            log.warning("checkout: %s -> %s for %s (order rewritten)",
+                        payload.delivery.method_key, fixed.get("key"), iso)
+            payload.delivery.provider_key = fixed.get("provider_key") or ""
+            payload.delivery.provider_name = fixed.get("provider_name") or payload.delivery.provider_name
+            payload.delivery.method_key = fixed.get("key") or payload.delivery.method_key
+            payload.delivery.label = fixed.get("label") or payload.delivery.label
+            payload.shipping_method = payload.delivery.method_key
+            if fixed.get("destination_type"):
+                payload.delivery.destination_type = fixed["destination_type"]
+            if payload.delivery.destination_type == "address":
+                payload.delivery.office = None      # an office of the old courier means nothing now
+        shipping_override = check["price"]
         if shipping_override is None:
             shipping_override = payload.delivery.price_amount
-        else:
-            payload.delivery.price_amount = shipping_override
-    totals = _calc_totals(line_items, payload.shipping_method, discount.get("discount_eur", 0.0), shipping_override)
+        payload.delivery.price_amount = shipping_override
     user = await get_user_from_request(request)
     # some markets are prepaid only (Spain) — the client must not be able to send COD
     from nextcart import cod_allowed
     pay_method = payload.payment_method if payload.payment_method in ("bank_transfer", "cod") else "bank_transfer"
     if pay_method == "cod" and not cod_allowed((payload.shipping.country or "").upper()):
         pay_method = "bank_transfer"
+    if pay_method == "bank_transfer":
+        shipping_override = 0.0      # prepaid orders ship free (owner's decision)
+        if payload.delivery:
+            payload.delivery.price_amount = 0.0
+    totals = _calc_totals(line_items, payload.shipping_method, discount.get("discount_eur", 0.0), shipping_override)
     loc = (payload.locale or "bg").lower()
     fx = await currency.rate_for_locale(db, loc)
     local = currency.order_amounts(line_items, totals, discount, fx["currency"], fx["rate"])
@@ -1023,8 +1046,11 @@ async def checkout(payload: CheckoutIn, request: Request):
         log.exception("Order push notification failed")
     try:
         admin_to = os.environ.get("CONTACT_EMAIL") or os.environ["ADMIN_EMAIL"]
-        admin_subject, admin_html = email_templates.render_admin_order(order_clean)
-        await email_service.send_email(admin_to, admin_subject, admin_html, site_settings)
+        if email_service.is_test_address(order["customer_email"]):
+            log.info("test order %s — admin notification skipped", order["order_number"])
+        else:
+            admin_subject, admin_html = email_templates.render_admin_order(order_clean)
+            await email_service.send_email(admin_to, admin_subject, admin_html, site_settings)
     except Exception:
         log.exception("Admin order email failed")
     try:
