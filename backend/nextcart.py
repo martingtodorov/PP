@@ -241,6 +241,9 @@ def _office_point(country: str, office: Dict[str, Any]) -> Optional[tuple]:
     return (point[0], point[1], False) if point else None
 
 
+APPROX_PENALTY_KM = 3.0   # how much a postal-centroid guess is discounted against exact coordinates
+
+
 def sort_by_distance(offices: list, country: str, lat: float, lng: float) -> list:
     """Closest pickup point first — from the courier's own coordinates, else a postal centroid."""
     out = []
@@ -255,7 +258,10 @@ def sort_by_distance(offices: list, country: str, lat: float, lng: float) -> lis
                  + math.cos(math.radians(lat)) * math.cos(math.radians(point[0])) * math.sin(dlng / 2) ** 2)
             km = round(2 * 6371 * math.asin(min(1.0, math.sqrt(a))), 1)
         out.append({**o, "distance_km": km, "distance_exact": exact})
-    out.sort(key=lambda o: (o["distance_km"] is None, o["distance_km"] or 0))
+    # a centroid distance is a guess for the whole town, so it carries an uncertainty penalty: it can
+    # still beat a far exact point, but never the exact points around the visitor
+    out.sort(key=lambda o: (o["distance_km"] is None,
+                            (o["distance_km"] or 0) + (0 if o["distance_exact"] else APPROX_PENALTY_KM)))
     return out
 
 

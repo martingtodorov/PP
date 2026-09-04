@@ -9,6 +9,14 @@ API = "http://localhost:8001/api"
 BURGAS = {"lat": 42.5048, "lng": 27.4626}
 
 
+APPROX_PENALTY_KM = 3.0     # mirrors nextcart.APPROX_PENALTY_KM
+
+
+def _rank(o):
+    """The order the API promises: distance, with a penalty for centroid guesses."""
+    return (o["distance_km"] or 0) + (0 if o["distance_exact"] else APPROX_PENALTY_KM)
+
+
 def _pickups(params):
     r = requests.get(f"{API}/nextcart/pickups", params=params, timeout=30)
     assert r.status_code == 200, r.text[:300]
@@ -27,7 +35,10 @@ def test_pickups_are_sorted_by_distance_from_the_visitor():
     assert d["sorted_by"] == "distance"
     known = [o["distance_km"] for o in d["pickups"] if o["distance_km"] is not None]
     assert len(known) > d["count"] * 0.9, "most offices must resolve to coordinates"
-    assert known == sorted(known)
+    ranks = [_rank(o) for o in d["pickups"] if o["distance_km"] is not None]
+    assert ranks == sorted(ranks)
+    exact_km = [o["distance_km"] for o in d["pickups"] if o["distance_exact"]]
+    assert exact_km == sorted(exact_km), "exact points must stay in ascending order"
     assert known[0] < 20, f"the closest Burgas office should be within 20 km, got {known[0]}"
     # Econt publishes its own coordinates, so Burgas offices differ from each other
     exact = [o for o in d["pickups"] if o["distance_exact"]]
@@ -47,9 +58,23 @@ def test_boxnow_lockers_use_the_published_locker_coordinates():
     d = _pickups({"provider_key": "boxnow", "destination_type": "locker", "country": "BG", **BURGAS})
     assert d["sorted_by"] == "distance"
     exact = [o for o in d["pickups"] if o["distance_exact"]]
-    assert len(exact) > d["count"] * 0.8
+    assert len(exact) > d["count"] * 0.95, "BOX NOW publishes coordinates for every locker"
     known = [o["distance_km"] for o in d["pickups"] if o["distance_km"] is not None]
-    assert known == sorted(known) and known[0] < 20
+    ranks = [_rank(o) for o in d["pickups"] if o["distance_km"] is not None]
+    assert ranks == sorted(ranks) and known[0] < 20
+    # the nearest locker must be an exact one — a centroid guess may never take the first row
+    assert d["pickups"][0]["distance_exact"], d["pickups"][0]
+
+
+def test_pigeon_offices_have_their_own_coordinates():
+    """Pigeon publishes no API — the offices are geocoded, so distances must differ per office."""
+    d = _pickups({"provider_key": "pigeon", "destination_type": "office", "country": "BG",
+                  "lat": 42.6870, "lng": 23.3170})       # Sofia, NDK
+    exact = [o for o in d["pickups"] if o["distance_exact"]]
+    assert len(exact) > d["count"] * 0.8, f"only {len(exact)} of {d['count']} located"
+    top = d["pickups"][:6]
+    assert top[0]["distance_exact"] and top[0]["distance_km"] < 2
+    assert len({o["distance_km"] for o in top}) > 3, [o["distance_km"] for o in top]
 
 
 def test_greek_lockers_rank_by_city_centroid():
@@ -57,7 +82,8 @@ def test_greek_lockers_rank_by_city_centroid():
                   "lat": 37.9838, "lng": 23.7275})     # Athens
     assert d["sorted_by"] == "distance"
     known = [o["distance_km"] for o in d["pickups"] if o["distance_km"] is not None]
-    assert known and known == sorted(known)
+    ranks = [_rank(o) for o in d["pickups"] if o["distance_km"] is not None]
+    assert known and ranks == sorted(ranks)
     assert known[0] < 40
 
 
