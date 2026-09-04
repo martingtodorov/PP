@@ -14,6 +14,7 @@ import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import CheckoutSuccessPage from "./pages/CheckoutSuccessPage";
 import AccountPage from "./pages/AccountPage";
+import TrackOrderPage from "./pages/TrackOrderPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminProductsPage from "./pages/AdminProductsPage";
@@ -47,6 +48,7 @@ const STOREFRONT = [
   { path: "/cart", el: <CartPage /> },
   { path: "/checkout", el: <CheckoutPage /> },
   { path: "/checkout/success/:orderId", el: <CheckoutSuccessPage /> },
+  { path: "/track", el: <TrackOrderPage /> },
   { path: "/pages/html-sitemap", el: <HtmlSitemapPage /> },
   { path: "/pages/html-sitemap-products", el: <HtmlSitemapPage /> },
   { path: "/pages/html-sitemap-collections", el: <HtmlSitemapPage /> },

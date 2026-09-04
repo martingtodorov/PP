@@ -1,6 +1,7 @@
 /* Cart / checkout UI copy for every storefront language.
    Bulgarian is the source; the admin panel (Текстове на чекаута) can override any value per locale
    and fill the gaps with an AI translation, which is stored server-side and merged on top of this. */
+import { TRACK_STRINGS } from "./trackStrings";
 
 export const CHECKOUT_STRINGS = {
   bg: {
@@ -1873,5 +1874,9 @@ export const CHECKOUT_STRINGS = {
     skipToContent: "Μετάβαση στο περιεχόμενο",
   },
 };
+
+Object.entries(TRACK_STRINGS).forEach(([loc, strings]) => {
+  CHECKOUT_STRINGS[loc] = { ...(CHECKOUT_STRINGS[loc] || {}), ...strings };
+});
 
 export const CHECKOUT_KEYS = Object.keys(CHECKOUT_STRINGS.bg);
