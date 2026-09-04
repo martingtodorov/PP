@@ -814,11 +814,14 @@ async def rotate_pending_links(user=Depends(require_admin)):
 
 
 @api.get("/settings")
-async def get_settings():
+async def get_settings(locale: str = Query(DEFAULT_LOCALE)):
+    from nextcart import shipping_summary
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     value = dict(s["value"]) if s else dict(DEFAULT_SETTINGS)
     for secret in ("resend_api_key", "discount_codes"):
         value.pop(secret, None)
+    # Google's merchant listings want the delivery and return terms inside the product offer
+    value["shipping"] = await shipping_summary(normalize_locale(locale))
     return value
 
 

@@ -42,8 +42,8 @@ export default function ArticlePage() {
     jsonLd: article && graph(
       articleLd({ article, path: `/articles/${handle}` }),
       breadcrumbLd([
-        { name: t("crumbHome"), path: "/" },
-        { name: t("crumbArticles"), path: link("articles") },
+        { name: t("home"), path: "/" },
+        { name: t("articles"), path: link("articles") },
         { name: article.title, path: `/articles/${handle}` },
       ]),
       organizationLd(),

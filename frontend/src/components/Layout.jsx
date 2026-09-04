@@ -17,7 +17,7 @@ import { api, fmtPrice, fmtBGN, showsBGN, formatErr, img } from "../lib/api";
 import { toast } from "sonner";
 import PreCheckoutModal from "./PreCheckoutModal";
 import CookieConsent from "./CookieConsent";
-import { setSiteMedia, siteMedia } from "../lib/media";
+import { setSiteMedia, siteMedia, setShippingInfo } from "../lib/media";
 import { prefetchCheckout } from "../lib/checkoutPrefetch";
 
 const Price = ({ eur, className = "" }) => (
@@ -745,6 +745,7 @@ export default function Layout({ children }) {
         setArticles(a.data.articles);
         setSettings(s.data);
         setSiteMedia(s.data.media);
+        setShippingInfo(s.data.shipping);
       }
     );
   }, [locale]);

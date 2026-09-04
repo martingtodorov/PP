@@ -258,6 +258,31 @@ def sort_by_distance(offices: list, country: str, lat: float, lng: float) -> lis
     return out
 
 
+LOCALE_COUNTRY = {"bg": "BG", "gr": "GR", "ro": "RO", "cz": "CZ", "hu": "HU", "pl": "PL",
+                  "sk": "SK", "si": "SI", "de": "DE", "fr": "FR", "en": "DE"}
+
+RETURN_DAYS = 14          # EU right of withdrawal
+HANDLING_DAYS = (1, 3)
+TRANSIT_DAYS = (1, 3)
+
+
+async def shipping_summary(locale: str) -> Dict[str, Any]:
+    """Delivery + return terms of one storefront, for the product schema (Google merchant listings)."""
+    country = LOCALE_COUNTRY.get((locale or "").lower(), "BG")
+    price, currency = None, "EUR"
+    try:
+        cfg = await nextcart_config(country)
+        methods = cfg.get("delivery_methods") or []
+        currency = cfg.get("storefront_delivery_currency") or "EUR"
+        address = [m["price_amount"] for m in methods if m.get("destination_type") == "address"]
+        price = min(address) if address else min((m["price_amount"] for m in methods), default=None)
+    except Exception as exc:
+        log.info("shipping_summary for %s failed: %s", country, exc)
+    return {"country": country, "currency": currency, "price": price,
+            "handling_days": list(HANDLING_DAYS), "transit_days": list(TRANSIT_DAYS),
+            "return_days": RETURN_DAYS}
+
+
 def _to_eur_method(m: Dict[str, Any]) -> Dict[str, Any]:
     """Storefront totals are in EUR — normalise HUF/PLN/CZK/RON courier prices."""
     cur = (m.get("currency") or "EUR").upper()

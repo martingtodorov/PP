@@ -119,6 +119,18 @@
 - Тестове: 148 зелени (`test_pickup_distance`, `test_iteration27_geo…`, `test_iteration18…`,
   `test_iteration43…`, `test_deploy_config`, `test_fulfillment`, `test_ui_strings`).
 
+## 2026-06-04 — Search Console: breadcrumbs + merchant listings
+- **Breadcrumbs**: страниците ползваха ключове `crumbHome/crumbCatalog/crumbArticles`, които не
+  съществуват в речника → изписваше се самото име на ключа (и Google го отчете като невалидно име).
+  Сега се ползват реалните ключове (`home`, `allPeptides`, `articles`), а `breadcrumbLd` изхвърля
+  елементи без име.
+- **Merchant listings**: всяка оферта вече носи `hasMerchantReturnPolicy` (14 дни, ЕС право на
+  отказ, връщане по поща, транспортът за клиента) и `shippingDetails` (цена за държавата на
+  магазина, 1–3 дни обработка + 1–3 дни доставка). Данните идват от бекенда, не са дублирани:
+  `nextcart.shipping_summary(locale)` → `GET /api/settings?locale=…` → `lib/media.setShippingInfo` →
+  `lib/schema.merchantTerms()`.
+- Тестове: `test_pickup_distance.py` (6, включително новия за `/api/settings` shipping блока).
+
 ### Отворено- Чиповете с категории под страниците са на български в preview, защото preview базата няма преводи на
   колекциите — в продукция са преведени (проверено: `Απώλεια Βάρους`, …). Няма код за поправяне.
 - Ротацията не проверява дали продуктът е скрит / дали има съдържание / дали URL-ът е жив (собственикът
