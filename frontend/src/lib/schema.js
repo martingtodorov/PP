@@ -1,6 +1,6 @@
 /** Shared JSON-LD builders (schema.org) — Organization, WebSite, Breadcrumbs, Product, Article, FAQ. */
 
-import { siteMedia } from "./media";
+import { siteMedia, shippingInfo } from "./media";
 import { currencyCode, nicePrice } from "./money";
 import { currentLocale } from "./api";
 import { translate } from "../i18n/locales";
@@ -41,13 +41,52 @@ export const websiteLd = (locale = "bg") => ({
 
 export const breadcrumbLd = (items = []) => ({
   "@type": "BreadcrumbList",
-  itemListElement: items.map((it, i) => ({
-    "@type": "ListItem",
-    position: i + 1,
-    name: it.name,
-    ...(it.path ? { item: `${ORIGIN()}${it.path}` } : {}),
-  })),
+  // a ListItem without a name is invalid — titles can still be loading when the crumb is built
+  itemListElement: items
+    .filter((it) => (it.name || "").trim())
+    .map((it, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: it.name.trim(),
+      ...(it.path ? { item: `${ORIGIN()}${it.path}` } : {}),
+    })),
 });
+
+/* Google's merchant listings require the return policy and the delivery terms inside every offer. */
+const merchantTerms = () => {
+  const s = shippingInfo();
+  if (!s) return {};
+  const country = s.country || "BG";
+  return {
+    hasMerchantReturnPolicy: {
+      "@type": "MerchantReturnPolicy",
+      applicableCountry: country,
+      returnPolicyCountry: country,
+      returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+      merchantReturnDays: s.return_days || 14,
+      returnMethod: "https://schema.org/ReturnByMail",
+      returnFees: "https://schema.org/ReturnShippingFees",
+    },
+    ...(typeof s.price === "number" ? {
+      shippingDetails: {
+        "@type": "OfferShippingDetails",
+        shippingRate: { "@type": "MonetaryAmount", value: s.price, currency: s.currency || "EUR" },
+        shippingDestination: { "@type": "DefinedRegion", addressCountry: country },
+        deliveryTime: {
+          "@type": "ShippingDeliveryTime",
+          handlingTime: {
+            "@type": "QuantitativeValue", unitCode: "DAY",
+            minValue: (s.handling_days || [1, 3])[0], maxValue: (s.handling_days || [1, 3])[1],
+          },
+          transitTime: {
+            "@type": "QuantitativeValue", unitCode: "DAY",
+            minValue: (s.transit_days || [1, 3])[0], maxValue: (s.transit_days || [1, 3])[1],
+          },
+        },
+      },
+    } : {}),
+  };
+};
 
 export const productLd = ({ product, variant, path }) => {
   const strip = (html) => (html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -81,6 +120,7 @@ export const productLd = ({ product, variant, path }) => {
             offerCount: variants.length,
             availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
             url: `${ORIGIN()}${path}`,
+            ...merchantTerms(),
             offers: variants.map((v) => ({
               "@type": "Offer",
               name: v.name,
@@ -89,6 +129,9 @@ export const productLd = ({ product, variant, path }) => {
               priceCurrency: cur,
               availability: (v.stock || 0) > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
               url: `${ORIGIN()}${path}`,
+              itemCondition: "https://schema.org/NewCondition",
+              seller: { "@id": ORG_ID() },
+              ...merchantTerms(),
             })),
           }
         : {
@@ -99,6 +142,7 @@ export const productLd = ({ product, variant, path }) => {
             url: `${ORIGIN()}${path}`,
             itemCondition: "https://schema.org/NewCondition",
             seller: { "@id": ORG_ID() },
+            ...merchantTerms(),
           },
   };
 };

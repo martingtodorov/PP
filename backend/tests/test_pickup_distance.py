@@ -65,3 +65,16 @@ def test_bad_coordinates_are_rejected():
     r = requests.get(f"{API}/nextcart/pickups", timeout=15, params={
         "provider_key": "econt", "destination_type": "office", "country": "BG", "lat": 999, "lng": 0})
     assert r.status_code == 422
+
+
+def test_settings_expose_the_delivery_terms_for_the_product_schema():
+    """Google merchant listings need shipping + return terms inside every product offer."""
+    for locale, country, price in (("bg", "BG", 4.59), ("gr", "GR", None), ("en", "DE", 8.99)):
+        d = requests.get(f"{API}/settings", params={"locale": locale}, timeout=30).json()["shipping"]
+        assert d["country"] == country
+        assert d["currency"] == "EUR"
+        assert d["return_days"] == 14
+        assert d["handling_days"] == [1, 3] and d["transit_days"] == [1, 3]
+        assert isinstance(d["price"], (int, float)) and d["price"] > 0
+        if price:
+            assert d["price"] == price

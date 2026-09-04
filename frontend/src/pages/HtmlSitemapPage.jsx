@@ -50,7 +50,7 @@ export default function HtmlSitemapPage() {
     path,
     jsonLd: graph(
       { "@type": "WebPage", name: title, url: `${window.location.origin}${path}` },
-      breadcrumbLd([{ name: t("crumbHome"), path: "/" }, { name: title, path }]),
+      breadcrumbLd([{ name: t("home"), path: "/" }, { name: title, path }]),
       organizationLd(),
     ),
   });
