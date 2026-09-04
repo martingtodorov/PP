@@ -72,7 +72,8 @@ async def send_email(to: str, subject: str, html: str, settings: Optional[Dict[s
 async def send_order_confirmation(order: Dict[str, Any], bank: Dict[str, Any], settings: Dict[str, Any]):
     locale = order.get("locale") or "bg"
     contact = (settings.get("contact_email") or os.environ.get("CONTACT_EMAIL") or "info@purepeptide.bg").strip()
-    subject, html = email_templates.render_order(order, bank, locale, contact)
+    subject, html = email_templates.render_order(order, bank, locale, contact,
+                                                 email_templates.seller_lines(settings))
     return await send_email(order["customer_email"], subject, html, settings)
 
 
@@ -80,14 +81,15 @@ async def send_abandoned_cart(cart: Dict[str, Any], settings: Dict[str, Any], di
                               fx: Optional[Dict[str, Any]] = None):
     locale = cart.get("locale") or "bg"
     contact = (settings.get("contact_email") or os.environ.get("CONTACT_EMAIL") or "info@purepeptide.bg").strip()
-    subject, html = email_templates.render_abandoned(cart, locale, contact, discount_code, fx)
+    subject, html = email_templates.render_abandoned(cart, locale, contact,
+                                                     email_templates.seller_lines(settings), discount_code, fx)
     return await send_email(cart["email"], subject, html, settings)
 
 
 async def send_payment_received(order: Dict[str, Any], settings: Dict[str, Any]):
     locale = order.get("locale") or "bg"
     contact = (settings or {}).get("contact_email") or os.environ.get("CONTACT_EMAIL", "")
-    subject, html = email_templates.render_payment_received(order, locale, contact)
+    subject, html = email_templates.render_payment_received(order, locale, contact, email_templates.seller_lines(settings))
     return await send_email(order["customer_email"], subject, html, settings)
 
 
@@ -95,14 +97,14 @@ async def send_shipment_created(order: Dict[str, Any], settings: Dict[str, Any])
     """Waybill issued by NextLevel — courier, number and tracking link, in the customer's language."""
     locale = order.get("locale") or "bg"
     contact = (settings.get("contact_email") or os.environ.get("CONTACT_EMAIL") or "info@purepeptide.bg").strip()
-    subject, html = email_templates.render_shipment(order, locale, contact)
+    subject, html = email_templates.render_shipment(order, locale, contact, email_templates.seller_lines(settings))
     return await send_email(order["customer_email"], subject, html, settings)
 
 
 async def send_delivered(order: Dict[str, Any], settings: Dict[str, Any]):
     locale = order.get("locale") or "bg"
     contact = (settings.get("contact_email") or os.environ.get("CONTACT_EMAIL") or "info@purepeptide.bg").strip()
-    subject, html = email_templates.render_delivered(order, locale, contact)
+    subject, html = email_templates.render_delivered(order, locale, contact, email_templates.seller_lines(settings))
     return await send_email(order["customer_email"], subject, html, settings)
 
 
@@ -113,11 +115,12 @@ async def send_shipped(order: Dict[str, Any], tracking: Dict[str, Any], settings
     shaped = {**order, "shipment": {"courier": (tracking.get("carrier") or "").title(),
                                     "awb": tracking.get("tracking_number", ""),
                                     "tracking_url": tracking.get("tracking_url", "")}}
-    subject, html = email_templates.render_shipment(shaped, locale, contact)
+    subject, html = email_templates.render_shipment(shaped, locale, contact, email_templates.seller_lines(settings))
     return await send_email(order["customer_email"], subject, html, settings)
 
 async def send_order_cancelled(order: Dict[str, Any], settings: Dict[str, Any], reason: str = ""):
     locale = order.get("locale") or "bg"
     contact = (settings or {}).get("contact_email") or os.environ.get("CONTACT_EMAIL", "")
-    subject, html = email_templates.render_cancelled(order, locale, contact, reason)
+    subject, html = email_templates.render_cancelled(order, locale, contact, reason,
+                                                     email_templates.seller_lines(settings))
     return await send_email(order["customer_email"], subject, html, settings)

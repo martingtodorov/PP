@@ -83,6 +83,17 @@ export default function AdminSettingsPage() {
         </div>
 
         <div className="border-t border-slate-200 pt-5">
+          <h2 className="font-bold text-slate-900 mb-3">Данни на фирмата (за фактури)</h2>
+          <p className="text-xs text-slate-500 mb-3">Излизат в долната част на имейлите за поръчка и фактура.</p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div><Label>Име на фирмата</Label><Input value={s.company_name || ""} onChange={(e) => set("company_name", e.target.value)} data-testid="set-company-name" /></div>
+            <div><Label>ЕИК</Label><Input className="font-mono" value={s.company_eik || ""} onChange={(e) => set("company_eik", e.target.value)} data-testid="set-company-eik" /></div>
+            <div><Label>ДДС номер (ако има)</Label><Input className="font-mono" value={s.company_vat || ""} onChange={(e) => set("company_vat", e.target.value.toUpperCase())} data-testid="set-company-vat" /></div>
+            <div><Label>Адрес по регистрация</Label><Input value={s.company_address || ""} onChange={(e) => set("company_address", e.target.value)} data-testid="set-company-address" /></div>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-200 pt-5">
           <h2 className="font-bold text-slate-900 mb-3">Кодове за отстъпка</h2>
           <div className="space-y-2" data-testid="discount-codes">
             {(s.discount_codes || []).map((d, i) => (

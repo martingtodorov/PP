@@ -437,6 +437,11 @@ DEFAULT_SETTINGS = {
     "bank_iban": "BG61STSA93000032400775",
     "bank_bic": "STSABGSF",
     "bank_holder": "Purepeptide LTD",
+    # seller details printed on invoices / order e-mails
+    "company_name": "Purepeptide LTD",
+    "company_eik": "",
+    "company_vat": "",
+    "company_address": "",
     # Editable per-locale routing: which domain / URL prefix / homepage path each language uses.
     "locale_routes": {
         "bg": {"origin": "https://purepeptide.bg", "prefix": "", "home_path": "/", "enabled": True},

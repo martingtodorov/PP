@@ -426,11 +426,16 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
 
   // full pickup list for the chosen method — sorted by distance once we know where the visitor is
   const point = geo?.source === "device" && geo?.lat && geo?.lng ? { lat: geo.lat, lng: geo.lng } : null;
+  const pickupReq = useRef(0);
   useEffect(() => {
     if (!needsPickup || !method) { setPickups([]); return; }
+    /* switching courier fires a second request — a slower earlier answer must not win, otherwise
+       "До офис на Еконт" ends up showing the BOX NOW lockers that were requested before it */
+    const token = ++pickupReq.current;
     setLoadingPickups(true);
     pfPickups(method.provider_key, method.destination_type, contact.country, point)
       .then((data) => {
+        if (token !== pickupReq.current) return;
         const list = data.pickups || [];
         setPickups(list);
         setPickup((cur) => {
@@ -442,8 +447,8 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
           return null;
         });
       })
-      .catch(() => setPickups([]))
-      .finally(() => setLoadingPickups(false));
+      .catch(() => { if (token === pickupReq.current) setPickups([]); })
+      .finally(() => { if (token === pickupReq.current) setLoadingPickups(false); });
   }, [method, needsPickup, contact.country, point?.lat, point?.lng]);
 
   // IP city pre-fills the address form (only on an exact city match, once)
