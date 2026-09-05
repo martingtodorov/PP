@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import re
 from typing import Any, Dict, List
 
 LOCALES = ["bg", "en", "fr", "de", "cz", "hu", "pl", "sk", "si", "gr", "ro"]
@@ -254,10 +255,16 @@ async def ai_rewrite_html(html: str, locale: str, context: str = "") -> str:
         "- Keep every HTML tag, attribute and their order EXACTLY as given: same number of <h1>, "
         "<h2>, <h3>, <p>, <ul>, <li>, <img>, <a> and identical src/href values.\n"
         "- Rewrite only the visible sentences: different word order, synonyms, different sentence "
-        "openings. Keep headings' meaning; you may reword them slightly but never drop a heading.\n"
+        "openings.\n"
+        "- Reproduce every heading VERBATIM, character for character. Headings are navigation, not "
+        "copy: never reword, translate, shorten or reorder them.\n"
         "- Never change facts, numbers, dosages (mg/mcg), CAS numbers, prices, product or peptide "
         "names, legal/disclaimer wording.\n"
-        "- Keep roughly the same length (±15%).\n"
+        "- Keep the LENGTH. Every paragraph and list item keeps at least as many sentences and "
+        "roughly as many words as the original; the whole text must stay within -5% / +20% of the "
+        "original length. Never summarise, never merge paragraphs, never drop a sentence, an "
+        "example, a list item or a detail. If a sentence is hard to rephrase, rephrase only its "
+        "opening and keep the rest.\n"
         "Return ONLY the rewritten HTML, no markdown fences, no commentary."
     )
     client = AsyncAnthropic(api_key=api_key)
@@ -278,4 +285,28 @@ async def ai_rewrite_html(html: str, locale: str, context: str = "") -> str:
         text = text.split("```")[1]
         if text.lstrip().lower().startswith("html"):
             text = text.lstrip()[4:]
-    return text.strip()
+    text = text.strip()
+    check_rewrite(html, text)
+    return text
+
+
+def visible_text(html: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html or "")).strip()
+
+
+def headings_of(html: str) -> List[str]:
+    return [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", h)).strip()
+            for h in re.findall(r"<h[1-6][^>]*>(.*?)</h[1-6]>", html or "", re.S | re.I)]
+
+
+def check_rewrite(original: str, rewritten: str) -> None:
+    """A rotation must not become a summary — the copy keeps its length and its headings.
+
+    Raising here makes the caller keep the original text (the URL still rotates), which is far
+    better than publishing a shortened page with renamed sections.
+    """
+    was, now = visible_text(original), visible_text(rewritten)
+    if len(now) < len(was) * 0.9:
+        raise RuntimeError(f"Пренаписаният текст е скъсен: {len(now)} срещу {len(was)} знака")
+    if headings_of(original) != headings_of(rewritten):
+        raise RuntimeError("Пренаписаният текст промени заглавията на секциите")

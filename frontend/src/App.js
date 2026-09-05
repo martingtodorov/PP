@@ -37,6 +37,7 @@ import AdminInventoryPage from "./pages/AdminInventoryPage";
 import AdminOrderDetailPage from "./pages/AdminOrderDetailPage";
 import StaticPage from "./pages/StaticPage";
 import HtmlSitemapPage from "./pages/HtmlSitemapPage";
+import ArticlesIndexPage from "./pages/ArticlesIndexPage";
 import AdminCollectionEditPage from "./pages/AdminCollectionEditPage";
 
 const STOREFRONT = [
@@ -49,6 +50,7 @@ const STOREFRONT = [
   { path: "/checkout", el: <CheckoutPage /> },
   { path: "/checkout/success/:orderId", el: <CheckoutSuccessPage /> },
   { path: "/track", el: <TrackOrderPage /> },
+  { path: "/pages/articles", el: <ArticlesIndexPage /> },
   { path: "/pages/html-sitemap", el: <HtmlSitemapPage /> },
   { path: "/pages/html-sitemap-products", el: <HtmlSitemapPage /> },
   { path: "/pages/html-sitemap-collections", el: <HtmlSitemapPage /> },
