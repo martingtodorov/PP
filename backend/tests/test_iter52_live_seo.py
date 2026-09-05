@@ -119,5 +119,5 @@ def test_sitemap_image_namespace_and_no_retired():
     prod_urls = [u for u in urls if "/products/" in u]
     assert prod_urls
     assert all("<image:loc>" in u for u in prod_urls[:10])
-    # hreflang alternates still there
-    assert "hreflang" in xml
+    # the files stay lean like Shopify's — hreflang lives in the HTML head of every page
+    assert "hreflang" not in xml

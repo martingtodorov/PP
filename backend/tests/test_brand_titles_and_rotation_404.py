@@ -95,7 +95,7 @@ def child_sitemaps() -> str:
 def test_sitemap_declares_product_images():
     xml = child_sitemaps()
     assert 'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"' in xml
-    product = [u for u in re.findall(r"<url>.*?</url>", xml) if "/products/" in u]
+    product = [u for u in re.findall(r"<url>.*?</url>", xml, re.S) if "/products/" in u]
     assert product and all("<image:loc>" in u for u in product[:5])
 
 
