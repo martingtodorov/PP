@@ -44,7 +44,8 @@ def test_an_empty_field_falls_back_to_the_environment():
     assert out["iban"] == os.environ.get("BANK_IBAN", "")
 
 
-def test_the_company_details_are_editable_and_printed_in_the_mail():
+def test_the_company_details_never_reach_a_customer_mail():
+    """Owner's rule: the company (name, EIK, VAT, address, bank holder) is not mentioned in any e-mail."""
     import email_templates as et
     s = _admin()
     original = s.get(f"{API}/admin/settings", timeout=20).json()["settings"]
@@ -56,13 +57,15 @@ def test_the_company_details_are_editable_and_printed_in_the_mail():
         assert stored["company_eik"] == "207123456" and stored["company_address"] == "гр. София, ул. Тест 1"
 
         seller = et.seller_lines(stored)
-        assert "Пюърпептид ЕООД" in seller and "207123456" in seller and "ул. Тест 1" in seller
+        assert seller == ""
         order = {"id": "x", "order_number": "TST01", "locale": "bg", "currency": "EUR",
                  "items": [{"title": "Ipamorelin", "quantity": 1, "price_eur": 49.0}],
                  "subtotal_eur": 49.0, "shipping_eur": 4.99, "total_eur": 53.99,
                  "payment_method": "bank_transfer", "delivery": {}, "shipping": {}}
-        _, html = et.render_order(order, None, "bg", "info@purepeptide.bg", seller)
-        assert "207123456" in html and "гр. София, ул. Тест 1" in html
+        bank = {"name": "Тест Банк", "iban": "BG00TEST", "bic": "TESTBGSF", "holder": "Пюърпептид ЕООД"}
+        _, html = et.render_order(order, bank, "bg", "info@purepeptide.bg", "Пюърпептид ЕООД · ЕИК 207123456")
+        assert "ЕООД" not in html and "207123456" not in html and "ул. Тест 1" not in html
+        assert "BG00TEST" in html and "Тест Банк" in html          # the transfer details themselves stay
     finally:
         s.put(f"{API}/admin/settings", json={"value": original}, timeout=20)
 
