@@ -244,7 +244,7 @@ def test_each_domain_can_carry_its_own_origin_certificate():
         "purepeptide.bg", "purepeptide.eu", "purepeptide-labs.bg"}
     # every domain still gets the full site config (API proxy + SPA fallback)
     assert conf.count("location ^~ /api/files/") == len(by_cert)
-    assert conf.count("try_files $uri $uri/ @prerender;") == len(by_cert)
+    assert conf.count("try_files $uri @prerender;") == len(by_cert)
 
 
 def test_a_single_certificate_still_renders_one_server_block():
@@ -626,9 +626,13 @@ def test_tag_limited_runs_work_on_the_release_that_is_live(playbook, marker):
 def test_page_requests_go_through_the_prerenderer():
     """Crawlers must get finished HTML: nginx tries the file, then the backend prerender, then the shell."""
     conf = (TEMPLATES / "nginx-purepeptide.conf.j2").read_text()
-    assert "try_files $uri $uri/ @prerender;" in conf
+    assert "try_files $uri @prerender;" in conf
     assert "/api/seo/prerender?path=$request_uri" in conf
-    assert "error_page 400 404 500 502 503 504 = @spa;" in conf
+    # the home page must not be served straight off disk by the index directive
+    assert "location = / {" in conf and "try_files /prerender-the-home-page @prerender;" in conf
+    # a 404 from the prerenderer keeps its status (no soft 404) — only a broken backend falls back
+    assert "error_page 500 502 503 504 = @spa;" in conf
+    assert "404" not in conf.split("location @prerender")[1].split("}")[0]
     assert "location @spa" in conf and "try_files /index.html =404;" in conf
     # the prerenderer reads the built shell from an internal listener, not through Cloudflare
     assert "listen {{ frontend_private_ip }}:8080;" in conf

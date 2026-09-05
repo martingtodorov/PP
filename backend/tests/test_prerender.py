@@ -86,10 +86,28 @@ def test_each_domain_gets_its_own_canonical_and_language():
         assert head_of(html, r'og:locale" content="([^"]+)"') == lang, host
 
 
-def test_private_and_unknown_routes_fall_back_to_the_spa():
-    for path in ["/cart", "/checkout", "/track", "/account/orders", "/admin/settings",
-                 "/products/does-not-exist", "/favicon.ico"]:
-        assert get(path).status_code == 404, path
+def test_private_routes_get_the_plain_shell_with_200():
+    for path in ["/cart", "/checkout", "/track", "/account/orders", "/admin/settings"]:
+        r = get(path)
+        assert r.status_code == 200 and "<h1" not in r.text, path
+
+
+def test_content_that_does_not_exist_answers_404_not_a_soft_200():
+    for path in ["/products/does-not-exist", "/collections/nope", "/articles/nope", "/pages/nope",
+                 "/whatever.js"]:
+        r = get(path)
+        assert r.status_code == 404, path
+        assert "application/ld+json" not in r.text, path
+    body = get("/products/does-not-exist").text
+    assert 'content="noindex, follow"' in body
+    assert body.count('name="robots"') == 1, "the shell's own robots tag must be replaced"
+
+
+def test_the_home_page_is_prerendered_for_every_locale_root():
+    for path in ["/", "/en/", "/fr/", "/ro/"]:
+        r = get(path)
+        assert r.status_code == 200 and r.text.count("<h1") == 1, path
+        assert "application/ld+json" in r.text and 'rel="canonical"' in r.text, path
 
 
 def test_imported_copy_never_adds_a_second_h1():

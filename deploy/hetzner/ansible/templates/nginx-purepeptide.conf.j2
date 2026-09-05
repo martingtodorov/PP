@@ -145,8 +145,9 @@ server {
 
     # ---------- server-side prerender ----------
     # A React shell gives crawlers no title, canonical, H1 or product data. Page requests go to the
-    # backend, which returns finished HTML (head tags, JSON-LD, content); anything it cannot render
-    # (404 from it, or the backend being down) falls back to the plain SPA shell.
+    # backend, which returns finished HTML (head tags, JSON-LD, content) — and keeps the real status,
+    # so a missing product answers 404 instead of a soft 200. Only a broken backend falls back to
+    # the static shell.
     location @prerender {
         proxy_pass http://{{ backend_private_ip }}:8001/api/seo/prerender?path=$request_uri;
         proxy_set_header Host $host;
@@ -154,7 +155,7 @@ server {
         proxy_set_header X-Forwarded-Proto https;
         proxy_read_timeout 10s;
         proxy_intercept_errors on;
-        error_page 400 404 500 502 503 504 = @spa;
+        error_page 500 502 503 504 = @spa;
     }
 
     location @spa {
@@ -162,9 +163,15 @@ server {
         try_files /index.html =404;
     }
 
+    # the home page: without this nginx would serve index.html straight from disk (index directive)
+    # and the prerender would never run for "/"
+    location = / {
+        try_files /prerender-the-home-page @prerender;
+    }
+
     # SPA fallback — locale prefixes (/en, /fr, …) are handled by the app
     location / {
-        try_files $uri $uri/ @prerender;
+        try_files $uri @prerender;
         add_header Cache-Control "no-cache" always;
     }
 {%- endmacro -%}

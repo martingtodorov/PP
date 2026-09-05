@@ -26,6 +26,8 @@ export default function AdminImportPage() {
   const [jobs, setJobs] = useState([]);
   const [repairing, setRepairing] = useState(false);
   const [repair, setRepair] = useState(null);
+  const [coaBusy, setCoaBusy] = useState(false);
+  const [coa, setCoa] = useState(null);
   const timer = useRef(null);
 
   const loadJobs = useCallback(() => {
@@ -62,6 +64,17 @@ export default function AdminImportPage() {
       else if (data.unresolved?.length) toast.error(`${data.unresolved.length} снимки не могат да се възстановят`);
       else toast.info("Всички снимки са налични");
     } catch (e) { toast.error(formatErr(e)); } finally { setRepairing(false); }
+  };
+
+  const importCoa = async () => {
+    setCoaBusy(true);
+    try {
+      const { data } = await api.post("/admin/import/coa-images");
+      setCoa(data);
+      if (data.added.length) toast.success(`Добавени ${data.added.length} снимки с химичен анализ`);
+      else if (data.failed.length) toast.error(`${data.failed.length} неуспешни — виж списъка`);
+      else toast.info("Всички продукти вече имат снимка с химичен анализ");
+    } catch (e) { toast.error(formatErr(e)); } finally { setCoaBusy(false); }
   };
 
   const upload = async () => {
@@ -146,6 +159,42 @@ export default function AdminImportPage() {
                   {repair.unresolved?.length ? (
                     <span className="text-red-600"> · невъзстановими: {repair.unresolved.length}</span>
                   ) : null}
+                </div>
+              )}
+            </div>
+            <div className="mt-6 border-t border-slate-200 pt-6">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-bold mb-2">Химичен анализ (COA)</p>
+              <p className="text-sm text-slate-600">
+                Взима снимката от метаполето <code>custom.chemical_analysis</code> на всеки продукт в
+                Shopify експорта и я добавя <strong>последна</strong> в продуктовата галерия. Главната
+                снимка остава същата, а повторното пускане не дублира нищо.
+              </p>
+              <Button onClick={importCoa} disabled={coaBusy} variant="outline" className="mt-3"
+                data-testid="coa-import-btn">
+                {coaBusy ? "Прехвърлям…" : "Прехвърли снимките от химичния анализ"}
+              </Button>
+              {coa && (
+                <div className="mt-3 text-sm text-slate-700 space-y-2" data-testid="coa-import-result">
+                  <p>
+                    Продукти в експорта: {coa.scanned} · добавени <strong>{coa.added.length}</strong> ·
+                    вече налични {coa.skipped.length}
+                    {coa.failed.length ? <span className="text-red-600"> · неуспешни {coa.failed.length}</span> : null}
+                  </p>
+                  {coa.added.length > 0 && (
+                    <ul className="text-xs text-slate-600 max-h-40 overflow-y-auto space-y-1">
+                      {coa.added.map((a) => (
+                        <li key={a.handle}>
+                          <a href={`/products/${a.handle}`} target="_blank" rel="noreferrer"
+                            className="text-coral-600 hover:underline">{a.title || a.handle}</a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {coa.failed.length > 0 && (
+                    <ul className="text-xs text-red-600 space-y-1">
+                      {coa.failed.map((f) => <li key={f.handle}>{f.handle} — {f.reason}</li>)}
+                    </ul>
+                  )}
                 </div>
               )}
             </div>

@@ -293,3 +293,21 @@
 - Sitemap-и на живо: `/sitemap.xml` (748 URL с hreflang за всички езици),
   `/sitemap_agentic_discovery.xml` и `/robots.txt` отговарят 200 и на четирите домейна.
 - Тестове: 99 зелени (prerender, deploy конфиг, проследяване, банка/фирма, доставки).
+
+## 2026-06-06 — COA снимките в галериите с един клик + потвърден prerender/404
+- Нов `backend/coa_import.py`: `pairs()` чете `data/matrixify-export.xlsx` — метаполето
+  `Metafield: custom.chemical_analysis [file_reference]` от лист „Products“, свързано с колоната
+  `Link` от лист „Files“ → 22 продукта с линк към лабораторния протокол.
+- Нов ендпойнт `POST /api/admin/import/coa-images` (+ `?dry_run=true`, само админ): сваля файла в
+  нашето хранилище (`_refetch_image` + `image_map`/`files` запис), добавя URL-а **последен** в
+  `products.images` и записва `coa_image`. Главната снимка не се променя; повторно пускане е
+  идемпотентно (added=0, skipped=22).
+- Админ → Импорт: нова карта „ХИМИЧЕН АНАЛИЗ (COA)“ с бутон `coa-import-btn` и резултат
+  `coa-import-result` (добавени / вече налични / неуспешни + линкове към продуктите).
+- Пуснато веднъж в preview: 22 добавени, 0 неуспешни.
+- Prerender/404 бъгът е потвърден за затворен на бекенда: `/api/seo/prerender?path=/` → 200 с 1 H1,
+  canonical, hreflang и JSON-LD (Organization + WebSite + ItemList); несъществуващ
+  продукт/колекция/статия/страница → **истински HTTP 404** с `noindex`; частните маршрути
+  (/cart, /checkout, /track, /admin) → 200 със чистата React обвивка. На продукцията заработва
+  СЛЕД деплой на бекенда и на nginx (`location = /` → `@prerender` вече е в шаблона).
+- Тестове: `backend/tests/test_iteration46.py` (17/17) + frontend e2e — iteration_46.json, 0 проблема.
