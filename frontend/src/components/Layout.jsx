@@ -1,5 +1,6 @@
 import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { link } from "../lib/links";
+import { isAllCollection } from "../lib/collections";
 import { useEffect, useRef, useState } from "react";
 import {
   ShoppingBag, Search, X, Truck, Banknote, Atom, Menu, ChevronLeft, ChevronRight, ChevronDown,
@@ -776,7 +777,7 @@ export default function Layout({ children }) {
   useEffect(() => {
     Promise.all([api.get("/collections"), api.get("/articles"), api.get("/settings")]).then(
       ([c, a, s]) => {
-        setCollections(c.data.collections.filter((x) => (x.base_handle || x.handle) !== "2all-the-peptides-1" && !x.nav_hidden));
+        setCollections(c.data.collections.filter((x) => !isAllCollection(x) && !x.nav_hidden));
         setArticles(a.data.articles);
         setSettings(s.data);
         setSiteMedia(s.data.media);

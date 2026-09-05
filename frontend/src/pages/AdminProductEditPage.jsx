@@ -383,9 +383,11 @@ export default function AdminProductEditPage() {
           </section>
 
           <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-3" data-testid="admin-tags-section">
-            <h2 className="font-bold text-slate-900">Вътрешни тагове</h2>
+            <h2 className="font-bold text-slate-900">Тагове за SEO</h2>
             <p className="text-xs text-slate-500">
-              Само за теб — не се показват на клиентите и не излизат в API-то, sitemap-а или Google.
+              Невидими за клиента — не се изписват никъде по страницата. Излизат само като метаданни:
+              <code className="mx-1">meta keywords</code>, <code className="mr-1">keywords</code> в
+              structured data и в llms.txt за AI кроулърите. Търсенето в админа също работи по таг.
             </p>
             <div className="flex flex-wrap gap-2">
               {(p.admin_tags || []).map((tag) => (

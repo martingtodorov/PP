@@ -6,6 +6,8 @@ import { AuthProvider } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import { LocaleProvider } from "./i18n/LocaleContext";
 import { LOCALES, DEFAULT_LOCALE } from "./i18n/locales";
+import Layout from "./components/Layout";
+import NotFoundBlock from "./components/NotFoundBlock";
 import HomePage from "./pages/HomePage";
 import CollectionPage from "./pages/CollectionPage";
 import ProductPage from "./pages/ProductPage";
@@ -109,6 +111,9 @@ function App() {
                 <Route path="/admin/ui-strings" element={<AdminUiStringsPage />} />
                 <Route path="/admin/translations" element={<AdminTranslationsPage />} />
                 <Route path="/admin/articles" element={<AdminArticlesPage />} />
+                {/* any other URL: the server already answered 404, the app shows the 404 page
+                    and walks the visitor to the catalogue */}
+                <Route path="*" element={<Layout><NotFoundBlock /></Layout>} />
               </Routes>
             </LocaleProvider>
           </BrowserRouter>

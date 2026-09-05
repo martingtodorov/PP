@@ -65,7 +65,7 @@ export default function AdminProductsPage() {
     <AdminLayout title="Продукти">
       <div className="flex flex-wrap gap-3 mb-6 items-center">
         <input
-          placeholder="Търсене по име или вътрешен таг…"
+          placeholder="Търсене по име или таг…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="border border-slate-300 rounded-md px-4 py-2 text-sm flex-1 max-w-md"

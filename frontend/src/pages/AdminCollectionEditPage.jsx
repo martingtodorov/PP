@@ -31,6 +31,7 @@ export default function AdminCollectionEditPage() {
   if (!doc) return <AdminLayout title="Колекции"><p className="text-sm text-slate-400">Зареждане…</p></AdminLayout>;
 
   const tr = (doc.translations || {})[locale] || {};
+  const live = tr.handle || doc.handle;          // the handle this locale is published under
   const value = (f) => (locale === "bg" ? doc[f] ?? "" : tr[f] ?? "");
   const setValue = (f, v) => {
     if (locale === "bg") setDoc({ ...doc, [f]: v });

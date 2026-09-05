@@ -585,13 +585,15 @@ async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     if not col or col.get("delisted") or retired_handle(col, loc, handle):
         raise HTTPException(404, "Колекцията не е намерена")
     base_handle = col["handle"]
-    if base_handle in (ALL_COLLECTION, LEGACY_ALL):
+    # the catch-all is recognised by its link_key, so renaming or rotating its handle changes nothing
+    is_catalog = col.get("link_key") == "catalog" or base_handle in (ALL_COLLECTION, LEGACY_ALL)
+    if is_catalog:
         prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0}).to_list(500)
     else:
         prods = await db.products.find({"collections": base_handle, "active": {"$ne": False}}, {"_id": 0}).to_list(500)
     siblings = await db.collections_cat.find(
         {"handle": {"$nin": [base_handle, ALL_COLLECTION, LEGACY_ALL]}, "nav_hidden": {"$ne": True},
-         "delisted": {"$ne": True}}, {"_id": 0}
+         "delisted": {"$ne": True}, "link_key": {"$ne": "catalog"}}, {"_id": 0}
     ).sort("sort_order", 1).to_list(50)
     prods = _apply_manual_order(prods, col.get("product_order"))
     return {
@@ -619,7 +621,8 @@ async def list_products(
         ]
     docs = await db.products.find(q, {"_id": 0}).limit(500).to_list(500)
     if not search:
-        all_col = await db.collections_cat.find_one({"handle": ALL_COLLECTION}, {"_id": 0, "product_order": 1})
+        all_col = await db.collections_cat.find_one(
+            {"$or": [{"link_key": "catalog"}, {"handle": ALL_COLLECTION}]}, {"_id": 0, "product_order": 1})
         docs = _apply_manual_order(docs, (all_col or {}).get("product_order"))
     return {"products": slim(localize_list(docs[:limit], loc), "description")}
 
@@ -2052,12 +2055,28 @@ async def admin_get_product(product_id: str, user=Depends(require_admin)):
 
 @api.put("/admin/collections/{collection_id}")
 async def admin_update_collection(collection_id: str, payload: CollectionIn, user=Depends(require_admin)):
-    res = await db.collections_cat.update_one({"id": collection_id},
-                                              {"$set": await adopt_external_images(payload.model_dump())})
-    if res.matched_count == 0:
+    old = await db.collections_cat.find_one({"id": collection_id}, {"_id": 0})
+    if not old:
         raise HTTPException(404, "Колекцията не е намерена")
+    new_handle = (payload.handle or "").strip()
+    if not new_handle:
+        raise HTTPException(400, "Handle не може да е празен")
+    if new_handle != old.get("handle") and await db.collections_cat.find_one(
+            {"handle": new_handle, "id": {"$ne": collection_id}}):
+        raise HTTPException(400, "Handle вече съществува")
+
+    await db.collections_cat.update_one({"id": collection_id},
+                                        {"$set": await adopt_external_images(payload.model_dump())})
+    # a rotated collection is published under translations[bg].handle, so editing the base handle
+    # used to change nothing on the site — republish the default locale under the typed handle
+    loc = DEFAULT_LOCALE
+    if new_handle != old.get("handle") and any(r.get("locale") == loc
+                                               for r in (old.get("rotations") or [])):
+        live = published_handle(old, loc)
+        if live != new_handle:
+            await rotate_content("collections", live, loc, user["email"], to=new_handle)
     _links_cache.clear()
-    return {"ok": True}
+    return {"ok": True, "handle": new_handle}
 
 
 @api.patch("/admin/collections/{collection_id}/delisted")
@@ -2077,7 +2096,7 @@ async def admin_collection_products(handle: str, user=Depends(require_admin)):
     col = await db.collections_cat.find_one({"handle": handle}, {"_id": 0})
     if not col:
         raise HTTPException(404, "Колекцията не е намерена")
-    q = {} if handle == ALL_COLLECTION else {"collections": handle}
+    q = {} if (handle == ALL_COLLECTION or col.get("link_key") == "catalog") else {"collections": handle}
     prods = await db.products.find(q, {"_id": 0}).to_list(500)
     prods = _apply_manual_order(prods, col.get("product_order"))
     return {
@@ -2119,7 +2138,7 @@ async def admin_order_by_sales(handle: str, user=Depends(require_admin)):
             if h:
                 sold[h] = sold.get(h, 0) + int(it.get("quantity") or 1)
 
-    q = {} if handle == ALL_COLLECTION else {"collections": handle}
+    q = {} if (handle == ALL_COLLECTION or col.get("link_key") == "catalog") else {"collections": handle}
     prods = await db.products.find(q, {"_id": 0, "handle": 1, "title": 1}).to_list(500)
     ordered = sorted(prods, key=lambda p: (-sold.get(p["handle"], 0), p.get("title", "")))
     handles = [p["handle"] for p in ordered]
@@ -4133,7 +4152,8 @@ async def llms_txt():
     cols = await db.collections_cat.find({"nav_hidden": {"$ne": True}, "delisted": {"$ne": True}},
                                          {"_id": 0, "handle": 1, "title": 1}).sort("sort_order", 1).to_list(50)
     prods = await db.products.find({"active": {"$ne": False}},
-                                   {"_id": 0, "handle": 1, "title": 1, "variants": 1, "seo_description": 1}).to_list(500)
+                                   {"_id": 0, "handle": 1, "title": 1, "variants": 1,
+                                    "seo_description": 1, "admin_tags": 1}).to_list(500)
     lines = [
         "# PurePeptide",
         "",
@@ -4160,7 +4180,9 @@ async def llms_txt():
         prices = [v.get("price_eur") for v in (p.get("variants") or []) if v.get("price_eur")]
         price = f" — from €{min(prices):.2f}" if prices else ""
         desc = re.sub(r"\s+", " ", (p.get("seo_description") or "")).strip()[:140]
-        lines.append(f"- [{p.get('title')}{price}]({origin}/products/{p['handle']})" + (f": {desc}" if desc else ""))
+        tags = ", ".join(t for t in (p.get("admin_tags") or []) if t)
+        lines.append(f"- [{p.get('title')}{price}]({origin}/products/{p['handle']})"
+                     + (f": {desc}" if desc else "") + (f" (keywords: {tags})" if tags else ""))
     lines += [
         "",
         "## Optional",

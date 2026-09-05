@@ -317,6 +317,16 @@ def _retired(doc: Dict[str, Any], locale: str, requested: str) -> bool:
     return False
 
 
+async def _catalog_route(locale: str) -> str:
+    """The "all peptides" collection as it is published right now — rotation-proof."""
+    doc = await _db.collections_cat.find_one({"$or": [{"link_key": "catalog"},
+                                                      {"handle": "2all-the-peptides-1"}]},
+                                             {"_id": 0, "handle": 1, "translations": 1})
+    handle = (((doc or {}).get("translations") or {}).get(locale) or {}).get("handle") \
+        or (doc or {}).get("handle") or "2all-the-peptides-1"
+    return url_for(locale, f"/collections/{handle}")
+
+
 async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
     doc = await _db.products.find_one({"handle": handle, "active": True}, {"_id": 0}) \
         or await _db.products.find_one({f"translations.{locale}.handle": handle}, {"_id": 0})
@@ -332,6 +342,7 @@ async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
     title = p.get("seo_title") or f'{p.get("title")}'
     description = p.get("seo_description") or _text(p.get("description"))
     terms = await _merchant_terms(locale)
+    tags = [t for t in (doc.get("admin_tags") or []) if t][:20]
     # A validity date is expected on the price, but "today + 365" would rewrite every product page
     # on every deploy — the end of next year is stable and identical in the React build.
     price_valid = f"{datetime.now(timezone.utc).year + 1}-12-31"
@@ -372,10 +383,13 @@ async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
          "sku": (variants[0].get("sku") if variants else ""),
          "mpn": (variants[0].get("sku") if variants else ""),
          "brand": {"@type": "Brand", "name": "PurePeptide"}, "category": "Research peptides",
+         # the owner's tags: metadata for search engines and AI crawlers, nothing on the page
+         **({"keywords": ", ".join(tags)} if tags else {}),
          "url": url_for(locale, route), "offers": offer_node},
         _breadcrumbs(locale, trail), _organization(locale), _website(locale))
+    keywords = (f'<meta name="keywords" content="{esc(", ".join(tags))}">' if tags else "")
     return {"head": _head(locale, route, title, description, images[0] if images else "",
-                          og_type="product", extra=ld, alt=_alt_routes(doc, "/products/")),
+                          og_type="product", extra=ld + keywords, alt=_alt_routes(doc, "/products/")),
             "body": "".join(x for x in body if x)}
 
 
@@ -387,7 +401,11 @@ async def _collection(locale: str, handle: str) -> Optional[Dict[str, str]]:
     c = localize_doc(doc, locale)
     route = f"/collections/{c.get('handle') or handle}"
     base_handle = doc.get("handle")
-    products = await _db.products.find({"collections": base_handle, "active": True}, {"_id": 0}).to_list(60)
+    # the catch-all collection holds every product and is recognised by its link_key, so renaming
+    # or rotating its handle keeps the SSR listing full
+    query = ({"active": True} if doc.get("link_key") == "catalog"
+             else {"collections": base_handle, "active": True})
+    products = await _db.products.find(query, {"_id": 0}).to_list(60)
     items = [localize_doc(p, locale) for p in products]
     title = c.get("seo_title") or f'{c.get("title")}'
     description = c.get("seo_description") or _text(c.get("description"))
@@ -758,9 +776,15 @@ async def render(path: str, host: str) -> Optional[Tuple[str, int]]:
     if not rendered:
         # the route exists in the app but its content does not — a real 404, with the shell so the
         # visitor still sees the app's own not-found page
+        # a hard 404 (the status stays 404 for crawlers) that still walks a human to the catalogue
+        # after 3 seconds — a delayed meta refresh is not read as a redirect by search engines
+        catalog = await _catalog_route(locale)
         head = _head(locale, route.lstrip("/"), _t(locale, "notFound"), "", "",
-                     robots="noindex, follow")
-        return _inject(shell, head, f'<h1>{esc(_t(locale, "notFound"))}</h1>', locale), 404
+                     robots="noindex, follow",
+                     extra=f'<meta http-equiv="refresh" content="3;url={catalog}">')
+        body = (f'<h1>{esc(_t(locale, "notFound"))}</h1>'
+                f'<p><a href="{catalog}">{esc(_t(locale, "catalog"))}</a></p>')
+        return _inject(shell, head, body, locale), 404
     out = (_inject(shell, rendered["head"], rendered["body"], locale), 200)
     _pages[key] = (time.time(), out)
     return out
