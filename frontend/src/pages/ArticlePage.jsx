@@ -8,23 +8,29 @@ import { api, img } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { useSeo } from "../lib/seo";
 import { graph, articleLd, breadcrumbLd, organizationLd } from "../lib/schema";
+import { demoteHeadings } from "../lib/richText";
 
 export default function ArticlePage() {
   const { handle } = useParams();
-  const [articles, setArticles] = useState([]);
+  const [article, setArticle] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [product, setProduct] = useState(null);
+  const [others, setOthers] = useState([]);
   const { lp, t, locale } = useLocaleCtx();
 
   useEffect(() => {
-    setLoaded(false);
-    api.get("/articles")
-      .then(({ data }) => setArticles(data.articles))
-      .catch(() => setArticles([]))
-      .finally(() => setLoaded(true));
+    api.get("/articles", { params: { locale } })
+      .then(({ data }) => setOthers(data.articles || []))
+      .catch(() => setOthers([]));
   }, [locale]);
 
-  const article = articles.find((a) => a.handle === handle);
+  useEffect(() => {
+    setLoaded(false);
+    api.get(`/articles/${handle}`, { params: { locale } })
+      .then(({ data }) => setArticle(data.article))
+      .catch(() => setArticle(null))
+      .finally(() => setLoaded(true));
+  }, [handle, locale]);
 
   useEffect(() => {
     setProduct(null);
@@ -81,7 +87,9 @@ export default function ArticlePage() {
           <img src={img(article.image, 900)} alt={article.title} className="w-full h-full object-contain" decoding="async" />
         </div>
         <div className="pp-rte mt-8" data-testid="article-body">
-          <p className="text-lg text-slate-700">{article.excerpt}</p>
+          {article.body
+            ? <div dangerouslySetInnerHTML={{ __html: demoteHeadings(article.body) }} />
+            : <p className="text-lg text-slate-700">{article.excerpt}</p>}
           <p>{t("disclaimer")}</p>
         </div>
 
@@ -97,7 +105,7 @@ export default function ArticlePage() {
         <section className="mt-12 border-t border-slate-200 pt-8">
           <p className="text-xs uppercase tracking-[0.18em] text-slate-500 font-bold mb-4">{t("articles")}</p>
           <ul className="space-y-3">
-            {articles.filter((a) => a.handle !== handle).map((a) => (
+            {others.filter((a) => a.handle !== handle).map((a) => (
               <li key={a.handle}>
                 <Link to={lp(`/articles/${a.handle}`)} className="text-slate-800 hover:text-coral-600 underline-offset-4 hover:underline">
                   {a.title}

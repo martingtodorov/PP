@@ -11,6 +11,7 @@ import { LOCALES } from "../i18n/locales";
 import { isAllCollection } from "../lib/collections";
 import { useSeo } from "../lib/seo";
 import { graph, itemListLd, breadcrumbLd, organizationLd } from "../lib/schema";
+import { demoteHeadings } from "../lib/richText";
 
 export default function CollectionPage() {
   const { handle = "2all-the-peptides-1" } = useParams();
@@ -100,7 +101,7 @@ export default function CollectionPage() {
         )}
         {c.description && (
           <div className="pp-rte pp-rte--tight text-slate-600 mt-2 max-w-3xl leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: c.description }} data-testid="collection-description" />
+            dangerouslySetInnerHTML={{ __html: demoteHeadings(c.description) }} data-testid="collection-description" />
         )}
       </div>
 

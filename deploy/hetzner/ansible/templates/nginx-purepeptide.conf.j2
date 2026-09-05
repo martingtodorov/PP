@@ -137,9 +137,34 @@ server {
         proxy_set_header X-Forwarded-Proto https;
     }
 
+    # the shell the prerenderer starts from — must be served straight off disk, never proxied
+    location = /index.html {
+        add_header Cache-Control "no-cache" always;
+        try_files $uri =404;
+    }
+
+    # ---------- server-side prerender ----------
+    # A React shell gives crawlers no title, canonical, H1 or product data. Page requests go to the
+    # backend, which returns finished HTML (head tags, JSON-LD, content); anything it cannot render
+    # (404 from it, or the backend being down) falls back to the plain SPA shell.
+    location @prerender {
+        proxy_pass http://{{ backend_private_ip }}:8001/api/seo/prerender?path=$request_uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 10s;
+        proxy_intercept_errors on;
+        error_page 400 404 500 502 503 504 = @spa;
+    }
+
+    location @spa {
+        add_header Cache-Control "no-cache" always;
+        try_files /index.html =404;
+    }
+
     # SPA fallback — locale prefixes (/en, /fr, …) are handled by the app
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files $uri $uri/ @prerender;
         add_header Cache-Control "no-cache" always;
     }
 {%- endmacro -%}
@@ -161,3 +186,18 @@ server {
 {{ site_body() }}
 }
 {%- endfor -%}
+
+# Internal shell endpoint: the backend fetches the built index.html from here to prerender pages.
+# Port 80 redirects to https and https goes through Cloudflare, so neither can serve this.
+server {
+    listen {{ frontend_private_ip }}:8080;
+    server_name _;
+    root {{ web_root }}/build;
+    access_log off;
+
+    location = /index.html {
+        add_header Cache-Control "no-cache" always;
+        try_files $uri =404;
+    }
+    location / { return 404; }
+}

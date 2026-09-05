@@ -28,7 +28,7 @@ from typing import Optional, List, Dict, Any
 import bcrypt
 import jwt
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, UploadFile, File, Form, Query
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, HTMLResponse
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from motor.motor_asyncio import AsyncIOMotorClient
 from starlette.middleware.cors import CORSMiddleware
@@ -600,6 +600,17 @@ async def list_articles(locale: str = Query(DEFAULT_LOCALE)):
     # drafts (Published = False in Shopify) stay out of the storefront
     docs = await db.articles.find({"published": {"$ne": False}}, {"_id": 0}).to_list(50)
     return {"articles": slim(localize_list(docs, loc), "body")}
+
+
+@api.get("/articles/{handle}")
+async def get_article(handle: str, locale: str = Query(DEFAULT_LOCALE)):
+    """Full article including the body — the list endpoint strips it to stay small."""
+    loc = normalize_locale(locale)
+    doc = await db.articles.find_one({"handle": handle, "published": {"$ne": False}}, {"_id": 0}) \
+        or await db.articles.find_one({f"translations.{loc}.handle": handle}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Статията не е намерена")
+    return {"article": localize_doc(doc, loc)}
 
 
 @api.get("/locales")
@@ -3445,6 +3456,33 @@ app.include_router(_wc_router, prefix="/wp-json/wc/v3")
 app.include_router(_wc_router, prefix="/api/wc/wp-json/wc/v3")
 api.include_router(abandoned.init(db, require_admin))
 api.include_router(ui_strings.init(db, require_admin))
+
+import prerender  # noqa: E402
+
+prerender.init(db)
+
+
+@api.get("/seo/prerender", include_in_schema=False)
+async def seo_prerender(request: Request, path: str = "/"):
+    """Finished HTML for a public route — nginx sends every page request here (404 → SPA shell)."""
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    out = await prerender.render(path, host)
+    if not out:
+        raise HTTPException(404, "not prerendered")
+    return HTMLResponse(out, headers={"Cache-Control": "public, max-age=60, s-maxage=300",
+                                      "X-Prerender": "1"})
+
+
+@app.middleware("http")
+async def _drop_prerender_cache(request: Request, call_next):
+    """Any successful admin write makes the prerendered HTML stale."""
+    response = await call_next(request)
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and response.status_code < 400 \
+            and "/admin/" in request.url.path:
+        prerender.bump()
+    return response
+
+
 app.include_router(api)
 
 _origins_env = os.environ.get("CORS_ORIGINS", "*")
