@@ -444,7 +444,8 @@ async def _article(locale: str, handle: str) -> Optional[Dict[str, str]]:
     ld = _ld({"@type": "Article", "@id": f'{url_for(locale, route)}#article', "headline": a.get("title"),
               "description": _text(description, 500), "image": _abs(a.get("image") or "", origin),
               "datePublished": a.get("published_at"), "dateModified": a.get("updated_at") or a.get("published_at"),
-              "author": {"@type": "Organization", "name": a.get("author") or "PurePeptide"},
+              # no personal by-lines anywhere: the brand is the author of every article
+              "author": {"@type": "Organization", "name": "PurePeptide"},
               "publisher": {"@id": f"{origin}/#organization"}, "mainEntityOfPage": url_for(locale, route)},
              _breadcrumbs(locale, trail), _organization(locale), _website(locale))
     body = [_crumb_html(locale, trail), f'<h1>{esc(a.get("title"))}</h1>', demote(a.get("body")) or f'<p>{esc(description)}</p>']

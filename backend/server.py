@@ -614,7 +614,8 @@ async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
         {"handle": {"$in": p.get("collections", [])}}, {"_id": 0}
     ).to_list(20)
     articles = await db.articles.find(
-        {"product_handle": p["handle"], "published": {"$ne": False}}, {"_id": 0}).to_list(5)
+        {"product_handle": p["handle"], "published": {"$ne": False}},
+        {"_id": 0, "author": 0}).to_list(5)
     if not articles:
         # internal linking fallback: match the peptide name (e.g. "BPC-157") in article titles
         tokens = re.findall(r"[A-Za-z][A-Za-z0-9]{2,}(?:-[0-9]{2,4})?", p.get("title", ""))
@@ -626,7 +627,7 @@ async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
                     {"title": {"$regex": rx, "$options": "i"}},
                     {"handle": {"$regex": rx, "$options": "i"}},
                 ]},
-                {"_id": 0},
+                {"_id": 0, "author": 0},
             ).to_list(4)
     return {
         "product": localize_doc(p, loc),
@@ -640,7 +641,8 @@ async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
 async def list_articles(locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
     # drafts (Published = False in Shopify) stay out of the storefront
-    docs = await db.articles.find({"published": {"$ne": False}}, {"_id": 0}).to_list(50)
+    # the by-line is never sent to the storefront — no author names on the site (owner's rule)
+    docs = await db.articles.find({"published": {"$ne": False}}, {"_id": 0, "author": 0}).to_list(50)
     return {"articles": slim(localize_list(docs, loc), "body")}
 
 
@@ -648,8 +650,9 @@ async def list_articles(locale: str = Query(DEFAULT_LOCALE)):
 async def get_article(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     """Full article including the body — the list endpoint strips it to stay small."""
     loc = normalize_locale(locale)
-    doc = await db.articles.find_one({"handle": handle, "published": {"$ne": False}}, {"_id": 0}) \
-        or await db.articles.find_one({f"translations.{loc}.handle": handle}, {"_id": 0})
+    doc = await db.articles.find_one({"handle": handle, "published": {"$ne": False}},
+                                     {"_id": 0, "author": 0}) \
+        or await db.articles.find_one({f"translations.{loc}.handle": handle}, {"_id": 0, "author": 0})
     if not doc:
         raise HTTPException(404, "Статията не е намерена")
     return {"article": localize_doc(doc, loc)}
@@ -3602,7 +3605,7 @@ async def link_index(locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
     cols = await db.collections_cat.find({"nav_hidden": {"$ne": True}}, {"_id": 0}).sort("sort_order", 1).to_list(200)
     prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0}).to_list(500)
-    arts = await db.articles.find({"published": {"$ne": False}}, {"_id": 0}).to_list(200)
+    arts = await db.articles.find({"published": {"$ne": False}}, {"_id": 0, "author": 0}).to_list(200)
     pages = await db.pages.find({"locale": {"$in": [loc, "bg"]}}, {"_id": 0}).to_list(200)
     by_slug: Dict[str, Dict[str, Any]] = {}
     for p in pages:
@@ -3663,7 +3666,7 @@ async def _sitemap_groups(request: Request):
     cols = await db.collections_cat.find({}, {"_id": 0}).to_list(200)
     # a de-activated product 404s on the storefront — listing it in a sitemap is a dead link
     prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0}).to_list(500)
-    arts = await db.articles.find({"published": {"$ne": False}}, {"_id": 0}).to_list(200)
+    arts = await db.articles.find({"published": {"$ne": False}}, {"_id": 0, "author": 0}).to_list(200)
     static_pages = [""] + [f"/pages/{s}" for s in PAGE_SLUGS] + [
         "/pages/articles", "/pages/html-sitemap", "/pages/html-sitemap-products",
         "/pages/html-sitemap-collections", "/pages/html-sitemap-blogs",
@@ -3977,7 +3980,9 @@ import prerender  # noqa: E402
 prerender.init(db)
 
 
-@api.get("/seo/prerender", include_in_schema=False)
+# HEAD as well as GET: unfurlers (Facebook, LinkedIn, Slack) and uptime monitors probe with HEAD,
+# and a GET-only route answered 405 for every HTML page. Starlette drops the body for HEAD itself.
+@api.api_route("/seo/prerender", methods=["GET", "HEAD"], include_in_schema=False)
 async def seo_prerender(request: Request, path: str = "/"):
     """Finished HTML for a page request. 404 keeps its status (no soft 404); only a failure here
     (5xx) makes nginx fall back to the static shell."""

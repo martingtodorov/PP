@@ -1040,6 +1040,7 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .pp-megamenu a:hover { background: #FFF4F2; color: #E0503F; padding-left: 16px; }
 .pp-megamenu__all { border-top: 1px solid #f1f5f9; margin-top: 6px; padding-top: 4px; }
 .pp-megamenu__all a { font-weight: 600; color: #E0503F; }
+.pp-megamenu--compact > ul { min-width: 224px; }
 
 /* Full-bleed hero on desktop */
 @media (min-width: 1024px) {

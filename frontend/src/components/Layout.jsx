@@ -464,6 +464,10 @@ const Header = ({ collections, settings }) => {
 
   const menuCollections = [...collections].sort((a, b) => (a.menu_order ?? 99) - (b.menu_order ?? 99));
 
+  /* desktop row: five links stay visible, the rest sit in the "More" dropdown */
+  const deskPrimary = topNav.slice(0, 5);
+  const deskMore = topNav.slice(5);
+
   const isActive = (item) => {
     const [path] = item.to.split("#");
     if (item.exact) return pathname === path && !hash;
@@ -533,13 +537,13 @@ const Header = ({ collections, settings }) => {
         </div>
 
         {/* ---------- desktop: one row, logo left of the nav, search next to cart ---------- */}
-        <div className="hidden lg:flex max-w-7xl mx-auto px-6 xl:px-8 h-20 items-center gap-8" data-testid="desktop-header">
+        <div className="hidden lg:flex max-w-[1720px] mx-auto px-5 xl:px-8 h-20 items-center gap-6" data-testid="desktop-header">
           <Link to={lp("/")} className="flex-shrink-0" aria-label="PurePeptide" data-testid="logo-link-desktop">
             <img src={siteMedia("logo", "/logo-header.png")} alt="PurePeptide" width="240" height="48" className="h-10 w-auto" fetchPriority="high" decoding="async" />
           </Link>
 
-          <nav className="flex items-center gap-7" aria-label="Primary" data-testid="desktop-nav">
-            {topNav.map((n) =>
+          <nav className="flex items-center gap-6" aria-label="Primary" data-testid="desktop-nav">
+            {deskPrimary.map((n) =>
               n.dropdown ? (
                 <div key={n.label} className="relative group" data-testid="shop-dropdown-wrap">
                   <NavLink to={n.to} className={`pp-desknav__link${isActive(n) ? " is-active" : ""}`} data-testid="nav-shop">
@@ -574,6 +578,30 @@ const Header = ({ collections, settings }) => {
                 </NavLink>
               )
             )}
+
+            {/* the long-tail links live in one dropdown, so the row fits in every language */}
+            <div className="relative group" data-testid="more-dropdown-wrap">
+              <button
+                type="button"
+                className={`pp-desknav__link${deskMore.some(isActive) ? " is-active" : ""}`}
+                aria-haspopup="true"
+                data-testid="nav-more"
+              >
+                {t("moreMenu")}
+                <ChevronDown className="h-3.5 w-3.5 ml-1 inline-block transition-transform group-hover:rotate-180" />
+              </button>
+              <div className="pp-megamenu pp-megamenu--compact" data-testid="more-dropdown">
+                <ul>
+                  {deskMore.map((n) => (
+                    <li key={n.label}>
+                      <NavLink to={n.to} data-testid={`nav-more-${n.label.toLowerCase().replace(/[^a-zа-я0-9]+/gi, "-")}`}>
+                        {n.label}
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </nav>
 
           <div className="ml-auto flex items-center gap-2">

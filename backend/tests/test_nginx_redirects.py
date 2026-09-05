@@ -2,7 +2,7 @@
 
 Renders the real Ansible template, starts nginx with it (TLS stripped, so no Cloudflare Origin
 certificates are needed) and checks the redirects the owner asked for:
-  purepeptide.eu/            -> 301 /en/
+  purepeptide.eu/            -> 301 /en/#geo   (the marker that allows the IP check)
   purepeptide.eu/products/x  -> 301 /en/products/x
   purepeptide.eu/cz          -> 301 /cz/
 and nothing else moves: /en/... , /api/... , assets, robots.txt, and the single-language domains.
@@ -80,6 +80,17 @@ def nginx():
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+def head(host: str, path: str):
+    conn = http.client.HTTPConnection("127.0.0.1", PORT, timeout=15)
+    conn.request("HEAD", path, headers={"Host": host})
+    r = conn.getresponse()
+    r.read()
+    out = (r.status, r.getheader("Content-Type"))
+    conn.close()
+    return out
+
+
+
 def get(host: str, path: str):
     conn = http.client.HTTPConnection("127.0.0.1", PORT, timeout=15)
     conn.request("GET", path, headers={"Host": host})
@@ -90,7 +101,7 @@ def get(host: str, path: str):
 
 
 @pytest.mark.parametrize("path,expected", [
-    ("/", "https://purepeptide.eu/en/"),
+    ("/", "https://purepeptide.eu/en/#geo"),
     ("/products/sermorelin", "https://purepeptide.eu/en/products/sermorelin"),
     ("/collections/immunity", "https://purepeptide.eu/en/collections/immunity"),
     ("/cart", "https://purepeptide.eu/en/cart"),
@@ -191,7 +202,7 @@ def test_reserved_paths_on_shared_domain_never_redirect(nginx, path):
 
 # no redirect chains: the .eu -> /en/... target must land on 200 or 404 in ONE hop
 @pytest.mark.parametrize("start,expected", [
-    ("/", "/en/"),
+    ("/", "/en/#geo"),
     ("/products/sermorelin", "/en/products/sermorelin"),
     ("/cz", "/cz/"),
 ])
@@ -200,7 +211,7 @@ def test_no_redirect_loops_or_chains(nginx, start, expected):
     assert status == 301
     assert location.endswith(expected)
     # second hop must not be a redirect
-    target_path = location.split("purepeptide.eu", 1)[1]
+    target_path = location.split("purepeptide.eu", 1)[1].split("#")[0]
     status2, location2, _ = get("purepeptide.eu", target_path)
     assert status2 in (200, 404), (target_path, status2, location2)
     assert location2 is None or not location2.startswith("http")
@@ -231,7 +242,7 @@ def test_private_route_lang_is_locale(nginx):
 @pytest.mark.parametrize("host,expected", [
     ("www.purepeptide.bg", "https://purepeptide.bg/"),
     ("www.purepeptide.ro", "https://purepeptide.ro/products/sermorelin"),
-    ("www.purepeptide.eu", "https://purepeptide.eu/en/"),
+    ("www.purepeptide.eu", "https://purepeptide.eu/en/#geo"),
 ])
 def test_www_redirects_to_the_apex(nginx, host, expected):
     """www was not in any server_name, so it never reached a 301 at the origin."""
@@ -261,3 +272,36 @@ def test_a_zone_without_its_own_certificate_keeps_the_shared_one():
     assert "ssl_certificate     /etc/ssl/cloudflare/purepeptide.bg.pem;" in conf
     assert "ssl_certificate     /dev/null;" in conf          # the shared fallback for the rest
     assert "server_name purepeptide-labs.bg purepeptide.eu purepeptide.ro purepeptide.gr;" in conf
+
+
+def test_the_apex_keeps_the_query_string(nginx):
+    """UTM tags must survive the apex hop, with the geo marker after them."""
+    status, location, _ = get("purepeptide.eu", "/?utm_source=google&utm_medium=cpc")
+    assert (status, location) == (301, "https://purepeptide.eu/en/?utm_source=google&utm_medium=cpc#geo")
+
+
+@pytest.mark.parametrize("path", ["/en/", "/en/?utm_source=google"])
+def test_english_is_never_redirected_away(nginx, path):
+    """The owner's rule: /en and /en/ are English at all times."""
+    status, location, _ = get("purepeptide.eu", path)
+    assert status != 301, location
+
+
+# ---------- HEAD on the HTML path ----------
+# unfurlers (Facebook, LinkedIn, Slack) and uptime monitors probe with HEAD; the prerender route was
+# GET only, so every page answered 405 while GET answered 200
+@pytest.mark.parametrize("host,path", [
+    ("purepeptide.bg", "/"),
+    ("purepeptide.bg", "/products/sermorelin"),
+    ("purepeptide.bg", "/collections/immunity"),
+    ("purepeptide.bg", "/pages/html-sitemap"),
+    ("purepeptide.eu", "/en/"),
+    ("purepeptide.eu", "/en/products/sermorelin"),
+    ("purepeptide.gr", "/"),
+])
+def test_head_answers_like_get_on_html_pages(nginx, host, path):
+    g_status, _, _ = get(host, path)
+    h_status, h_type = head(host, path)
+    assert h_status != 405, f"HEAD {host}{path} -> 405"
+    assert h_status == g_status, (host, path, g_status, h_status)
+    assert (h_type or "").startswith("text/html"), h_type

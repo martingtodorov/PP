@@ -73,7 +73,6 @@ export default function ArticlesIndexPage() {
                 {a.excerpt && <p className="mt-1.5 text-sm text-slate-600 line-clamp-2">{a.excerpt}</p>}
                 <p className="mt-2 text-xs text-slate-400">
                   {a.published_at ? new Date(a.published_at).toLocaleDateString(locale === "bg" ? "bg-BG" : undefined) : ""}
-                  {a.author ? ` · ${a.author}` : ""}
                 </p>
               </div>
             </Link>

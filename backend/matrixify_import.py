@@ -457,7 +457,7 @@ def import_articles() -> None:
             "excerpt": strip_html(top.get("Summary HTML") or body, 220),
             "body": clean_body(rewrite_body_images(body), title),
             "image": store_image(top.get("Image Src")),
-            "author": top.get("Author") or "PurePeptide",
+            "author": "",                       # no personal by-lines, not even from an import
             "published": str(top.get("Published")) in ("True", "true", "1"),
             "product_handle": linked,
             **seo_pair(top, title, top.get("Summary HTML") or body),

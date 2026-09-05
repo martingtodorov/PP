@@ -199,9 +199,7 @@ export const articleLd = ({ article, path }) => ({
   image: article.image && article.image.startsWith("/") ? `${ORIGIN()}${article.image}` : article.image,
   datePublished: article.published_at,
   dateModified: article.updated_at || article.published_at,
-  author: article.author
-    ? { "@type": "Person", name: article.author }
-    : { "@id": ORG_ID() },
+  author: { "@id": ORG_ID() },
   publisher: { "@id": ORG_ID() },
   mainEntityOfPage: { "@type": "WebPage", "@id": `${ORIGIN()}${path}` },
   inLanguage: "bg",

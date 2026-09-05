@@ -45,7 +45,8 @@ def test_an_empty_field_falls_back_to_the_environment():
 
 
 def test_the_company_details_never_reach_a_customer_mail():
-    """Owner's rule: the company (name, EIK, VAT, address, bank holder) is not mentioned in any e-mail."""
+    """Owner's rule: no company footer (name, EIK, VAT, address) in a customer e-mail.
+    The SEPA beneficiary line inside the transfer block stays — banks require a beneficiary name."""
     import email_templates as et
     s = _admin()
     original = s.get(f"{API}/admin/settings", timeout=20).json()["settings"]
@@ -62,10 +63,11 @@ def test_the_company_details_never_reach_a_customer_mail():
                  "items": [{"title": "Ipamorelin", "quantity": 1, "price_eur": 49.0}],
                  "subtotal_eur": 49.0, "shipping_eur": 4.99, "total_eur": 53.99,
                  "payment_method": "bank_transfer", "delivery": {}, "shipping": {}}
-        bank = {"name": "Тест Банк", "iban": "BG00TEST", "bic": "TESTBGSF", "holder": "Пюърпептид ЕООД"}
+        bank = {"name": "Тест Банк", "iban": "BG00TEST", "bic": "TESTBGSF", "holder": "Бенефициент Тест"}
         _, html = et.render_order(order, bank, "bg", "info@purepeptide.bg", "Пюърпептид ЕООД · ЕИК 207123456")
         assert "ЕООД" not in html and "207123456" not in html and "ул. Тест 1" not in html
         assert "BG00TEST" in html and "Тест Банк" in html          # the transfer details themselves stay
+        assert "Получател: <strong>Бенефициент Тест" in html       # SEPA beneficiary line stays
     finally:
         s.put(f"{API}/admin/settings", json={"value": original}, timeout=20)
 
