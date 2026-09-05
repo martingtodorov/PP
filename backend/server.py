@@ -3451,11 +3451,31 @@ def _loc_url(locale: str, path: str, routes: Dict[str, Any] = None) -> str:
     return f"{cfg['origin']}{cfg.get('prefix', '')}{path}"
 
 
+def _bare_host(value: str) -> str:
+    return value.replace("https://", "").replace("http://", "").split("/")[0] \
+        .split(":")[0].lower().removeprefix("www.")
+
+
+def _host_locales(request: Request, routes: Dict[str, Any], active: List[str]) -> List[str]:
+    """The locales that actually live on the requested domain.
+
+    A sitemap may only list URLs of its own host — purepeptide.bg/sitemap.xml listing the .eu and
+    .ro pages made Search Console report hundreds of foreign URLs. purepeptide.eu keeps its eight
+    prefixed languages, .bg / .ro / .gr keep one each.
+    """
+    host = _bare_host(request.headers.get("x-forwarded-host") or request.headers.get("host") or "")
+    own = [l for l in active if _bare_host((routes.get(l) or SITE_ORIGINS[l])["origin"]) == host]
+    if not own and host == "purepeptide-labs.bg":       # the Bulgarian alias domain
+        own = [l for l in active if l == DEFAULT_LOCALE]
+    return own or active
+
+
 @api.get("/sitemap.xml")
-async def sitemap():
+async def sitemap(request: Request):
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
     active = [l for l in LOCALES if (routes.get(l) or {}).get("enabled", True)]
+    listed = _host_locales(request, routes, active)
     cols = await db.collections_cat.find({}, {"_id": 0}).to_list(200)
     prods = await db.products.find({}, {"_id": 0}).to_list(500)
     arts = await db.articles.find({"published": {"$ne": False}}, {"_id": 0}).to_list(200)
@@ -3500,7 +3520,7 @@ async def sitemap():
         )
         if "en" in paths:
             alternates += f'<xhtml:link rel="alternate" hreflang="x-default" href="{_loc_url("en", paths["en"], routes)}"/>'
-        for loc in active:
+        for loc in listed:
             parts.append(
                 f"<url><loc>{_loc_url(loc, paths[loc], routes)}</loc><lastmod>{today}</lastmod>"
                 f"<changefreq>weekly</changefreq><priority>{prio}</priority>{alternates}</url>"
@@ -3510,11 +3530,14 @@ async def sitemap():
 
 
 @api.get("/sitemap_agentic_discovery.xml")
-async def agentic_sitemap():
+async def agentic_sitemap(request: Request):
     """Compact sitemap for AI agents / LLM crawlers (key entry points only)."""
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
-    origin = (routes.get("bg") or SITE_ORIGINS["bg"])["origin"]
+    active = [l for l in LOCALES if (routes.get(l) or {}).get("enabled", True)]
+    locale = _host_locales(request, routes, active)[0]
+    cfg = routes.get(locale) or SITE_ORIGINS[locale]
+    origin = f"{cfg['origin']}{cfg.get('prefix', '')}"
     cols = await db.collections_cat.find({}, {"_id": 0, "handle": 1}).to_list(200)
     prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0, "handle": 1}).to_list(500)
     paths = ["/", f"/collections/{await catalog_handle()}", "/pages/html-sitemap", "/pages/articles",
@@ -3623,7 +3646,7 @@ async def llms_txt():
 
 
 @api.get("/robots.txt", response_class=PlainTextResponse)
-async def robots():
+async def robots(request: Request):
     lines = [
         "User-agent: *",
         "Allow: /",
@@ -3647,7 +3670,9 @@ async def robots():
     ]
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
-    for origin in dict.fromkeys((routes.get(loc) or SITE_ORIGINS[loc])["origin"] for loc in LOCALES):
+    # a domain advertises its OWN sitemaps only — the other storefronts have their own robots.txt
+    for origin in dict.fromkeys((routes.get(loc) or SITE_ORIGINS[loc])["origin"]
+                                for loc in _host_locales(request, routes, LOCALES)):
         lines.append(f"Sitemap: {origin}/sitemap.xml")
         lines.append(f"Sitemap: {origin}/sitemap_agentic_discovery.xml")
     origin_bg = (routes.get("bg") or SITE_ORIGINS["bg"])["origin"]
