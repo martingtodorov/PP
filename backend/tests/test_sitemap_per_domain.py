@@ -127,3 +127,27 @@ def test_agents_md_and_llms_txt_are_served():
     for path in ("/agents.md", "/llms.txt"):
         r = requests.get(f"{BASE}/api{path}", headers={"Host": "purepeptide.bg"}, timeout=30)
         assert r.status_code == 200 and len(r.text) > 200, path
+
+
+@pytest.mark.parametrize("path", [
+    "/sitemap.xml", "/sitemap_products_1.xml", "/sitemap_collections_1.xml",
+    "/sitemap_pages_1.xml", "/sitemap_blogs_1.xml", "/sitemap_agentic_discovery.xml",
+    "/robots.txt", "/llms.txt", "/agents.md",
+])
+def test_head_is_answered(path):
+    """FastAPI routes are GET-only, so every validator probing with HEAD got a 405 first."""
+    r = requests.head(f"{BASE}/api{path}", headers={"Host": "purepeptide.bg"}, timeout=30)
+    assert r.status_code == 200, (path, r.status_code)
+
+
+def test_sitemaps_are_not_cached_for_an_hour():
+    """A stale CDN copy outlived a deploy and looked like the fix had not shipped."""
+    for path in ("/sitemap.xml", "/sitemap_products_1.xml", "/robots.txt"):
+        r = requests.get(f"{BASE}/api{path}", headers={"Host": "purepeptide.bg"}, timeout=30)
+        assert "max-age=300" in r.headers.get("cache-control", ""), path
+
+
+def test_the_shared_domain_stays_well_inside_the_sitemap_limits():
+    xml = child("purepeptide.eu", "products")
+    assert len(xml.encode()) < 50 * 1024 * 1024
+    assert xml.count("<url>") < 50000
