@@ -365,3 +365,21 @@
   който също групира прегледите в 30-минутни прозорци (полето `visits.cookieless`).
 - Конверсията е таванирана на 100% (в preview тестовите поръчки надвишаваха проследените сесии).
 - Тестове: `tests/test_analytics_bots.py` (10) + `tests/test_iteration48_analytics_prerender.py` (14) — 24/24.
+
+## 2026-06-06 (четвърта част) — html lang по език и 301 към каноничните URL адреси
+- **`<html lang>` вече е на езика на страницата**: `prerender._set_lang()` пренаписва `lang` в шела
+  (досега винаги `bg`, дори за английските/румънските/чешките страници), а `seo.js` подава чист
+  езиков подтаг → `.bg → bg`, `.eu/en → en`, `.eu/cz → cs`, `.eu/si → sl`, `.gr → el`, `.ro → ro`.
+  Прилага се и за 404 страниците, „файловите“ 404-та и частните маршрути (/en/cart).
+- **Край на дублираните URL адреси на purepeptide.eu** (nginx шаблон):
+  - `/` → 301 `/en/`; всеки адрес без езиков префикс → 301 `/en<uri>` (продукти, колекции, статии,
+    страници, /cart, /checkout, /track).
+  - `/en`, `/fr`, `/de`, `/cz`, `/hu`, `/pl`, `/sk`, `/si` (без наклонена черта) → 301 със черта.
+  - Не се пипат: `/api/`, `/wp-json/`, `/static/`, `/admin`, robots/sitemap/llms/agents, файлове с
+    разширение, както и еднoезичните домейни (.bg, .ro, .gr, purepeptide-labs.bg).
+  - Реализирано с `map $host $pp_shared_host` + `map $uri $pp_reserved` + `map $pp_needs_en`.
+- IP пренасочването на .eu е запазено: geo проверката вече се изпълнява и на `/en` (`atEnglishRoot`
+  в `LocaleContext.jsx`), защото nginx праща apex-а точно там.
+- Тестове: `tests/test_nginx_redirects.py` (49 — истински nginx с рендиран Ansible шаблон, TLS свален,
+  бекендът е локалният FastAPI) + `tests/test_iteration49_html_lang.py` (27). Отчет: iteration_49.json,
+  0 проблема.

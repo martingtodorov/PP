@@ -5,6 +5,29 @@ map $sent_http_content_type $pp_immutable {
     ~font/                     "public, max-age=31536000, immutable";
 }
 
+# ---------- one canonical URL per page ----------
+# purepeptide.eu serves no language of its own: every page lives under a prefix (/en, /cz, …).
+# Without these redirects the same page answered 200 on three URLs (/, /en/, /products/x) with a
+# canonical pointing elsewhere — duplicate, crawlable URLs. Now the prefixed one is the only one.
+map $host $pp_shared_host {
+    default                             0;
+    "~*^(www\.)?purepeptide\.eu$"       1;
+}
+
+# 1 = the URI already carries a locale prefix or must never be redirected (API, assets, admin)
+map $uri $pp_reserved {
+    default                                                          0;
+    "~^/(en|fr|de|cz|hu|pl|sk|si)(/|$)"                              1;
+    "~^/(api|wp-json|static|admin)(/|$)"                             1;
+    "~^/(robots\.txt|sitemap\.xml|llms\.txt|agents\.md|index\.html|service-worker\.js|manifest\.json|favicon\.ico|asset-manifest\.json)$" 1;
+    "~*\.[a-z0-9]{2,5}$"                                             1;
+}
+
+map "$pp_shared_host:$pp_reserved" $pp_needs_en {
+    default   0;
+    "1:0"     1;
+}
+
 server {
     listen 80;
     listen [::]:80;
@@ -163,14 +186,26 @@ server {
         try_files /index.html =404;
     }
 
+    # a locale root must end in a slash — /cz answered 200 with a canonical of /cz/
+    location ~ ^/(en|fr|de|cz|hu|pl|sk|si)$ {
+        return 301 https://$host/$1/;
+    }
+
     # the home page: without this nginx would serve index.html straight from disk (index directive)
     # and the prerender would never run for "/"
     location = / {
+        if ($pp_shared_host) {
+            return 301 https://$host/en/;
+        }
         try_files /prerender-the-home-page @prerender;
     }
 
     # SPA fallback — locale prefixes (/en, /fr, …) are handled by the app
     location / {
+        # on purepeptide.eu an unprefixed page is a duplicate of the English one
+        if ($pp_needs_en) {
+            return 301 https://$host/en$request_uri;
+        }
         try_files $uri @prerender;
         add_header Cache-Control "no-cache" always;
     }
