@@ -155,14 +155,18 @@ def brand_title(title: str) -> str:
 
 
 def _head(locale: str, route: str, title: str, description: str, image: str,
-          og_type: str = "website", extra: str = "", robots: str = "") -> str:
+          og_type: str = "website", extra: str = "", robots: str = "",
+          alt: Optional[Dict[str, str]] = None) -> str:
     title = brand_title(title)
     origin = SITE_ORIGINS.get(locale, SITE_ORIGINS[DEFAULT_LOCALE])["origin"]
     canonical = url_for(locale, route)
+    # collection handles and rotated page slugs differ per locale, so reusing the current route for
+    # every hreflang pointed at URLs that 404 — Google then discards the whole language cluster
+    per_locale = {loc: (alt or {}).get(loc) or route for loc in LOCALES}
     alternates = "".join(
-        f'<link rel="alternate" hreflang="{LOCALE_META[loc]["hreflang"]}" href="{url_for(loc, route)}">'
+        f'<link rel="alternate" hreflang="{LOCALE_META[loc]["hreflang"]}" href="{url_for(loc, per_locale[loc])}">'
         for loc in LOCALES
-    ) + f'<link rel="alternate" hreflang="x-default" href="{url_for("en", route)}">'
+    ) + f'<link rel="alternate" hreflang="x-default" href="{url_for("en", per_locale["en"])}">'
     return (
         f"<title>{esc(title)}</title>"
         f'<meta name="description" content="{esc(description)}">'
@@ -283,6 +287,22 @@ def _product_li(locale: str, product: Dict[str, Any]) -> str:
     return f'<li><a href="{href}">{esc(product.get("title"))}</a>{tail}</li>'
 
 
+def _alt_routes(doc: Dict[str, Any], prefix: str) -> Dict[str, str]:
+    """The published path of this document in every locale — handles are localised (and rotated
+    per locale), so the hreflang targets must come from the translations, never from the current URL."""
+    tr = doc.get("translations") or {}
+    base = doc.get("handle")
+    return {loc: f"{prefix}{(tr.get(loc) or {}).get('handle') or base}" for loc in LOCALES}
+
+
+async def _page_alt_routes(base_slug: str) -> Dict[str, str]:
+    """Same for static pages: a page rotated in one locale keeps the base slug in the others."""
+    published: Dict[str, str] = {}
+    async for d in _db.pages.find({"slug": base_slug}, {"_id": 0, "locale": 1, "pub_slug": 1}):
+        published[d["locale"]] = d.get("pub_slug") or base_slug
+    return {loc: f"/pages/{published.get(loc, base_slug)}" for loc in LOCALES}
+
+
 def _retired(doc: Dict[str, Any], locale: str, requested: str) -> bool:
     """A handle rotated away in the admin must 404 for crawlers too, not only in the JSON API.
 
@@ -355,7 +375,7 @@ async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
          "url": url_for(locale, route), "offers": offer_node},
         _breadcrumbs(locale, trail), _organization(locale), _website(locale))
     return {"head": _head(locale, route, title, description, images[0] if images else "",
-                          og_type="product", extra=ld),
+                          og_type="product", extra=ld, alt=_alt_routes(doc, "/products/")),
             "body": "".join(x for x in body if x)}
 
 
@@ -384,7 +404,8 @@ async def _collection(locale: str, handle: str) -> Optional[Dict[str, str]]:
                   {"@type": "ListItem", "position": i + 1, "name": p.get("title"),
                    "url": url_for(locale, f'/products/{p.get("handle")}')} for i, p in enumerate(items)]}},
              _breadcrumbs(locale, trail), _organization(locale), _website(locale))
-    return {"head": _head(locale, route, title, description, c.get("image") or "", extra=ld),
+    return {"head": _head(locale, route, title, description, c.get("image") or "", extra=ld,
+                          alt=_alt_routes(doc, "/collections/")),
             "body": "".join(body)}
 
 
@@ -428,7 +449,7 @@ async def _article(locale: str, handle: str) -> Optional[Dict[str, str]]:
              _breadcrumbs(locale, trail), _organization(locale), _website(locale))
     body = [_crumb_html(locale, trail), f'<h1>{esc(a.get("title"))}</h1>', demote(a.get("body")) or f'<p>{esc(description)}</p>']
     return {"head": _head(locale, route, title, description, a.get("image") or "",
-                          og_type="article", extra=ld),
+                          og_type="article", extra=ld, alt=_alt_routes(doc, "/articles/")),
             "body": "".join(body)}
 
 
@@ -455,7 +476,9 @@ async def _page(locale: str, slug: str) -> Optional[Dict[str, str]]:
               "description": _text(description, 500), "url": url_for(locale, route)},
              _breadcrumbs(locale, trail), _organization(locale), _website(locale))
     body = [_crumb_html(locale, trail), f'<h1>{esc(doc.get("title"))}</h1>', demote(doc.get("html"))]
-    return {"head": _head(locale, route, title, description, "", extra=ld), "body": "".join(body)}
+    return {"head": _head(locale, route, title, description, "", extra=ld,
+                          alt=await _page_alt_routes(doc.get("slug") or slug)),
+            "body": "".join(body)}
 
 
 _SITEMAP_SECTIONS = {

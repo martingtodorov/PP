@@ -499,3 +499,19 @@
   (`/en/llms.txt` беше 404).
 - `scripts/check_sitemap.py` следва index-а и проверява и файловете `.md/.txt/.xml` през бекенда.
   Резултат: purepeptide.bg 105 URL-а, purepeptide.eu 567, purepeptide.ro 105 — 0 счупени.
+
+## 2026-06-06 (десета част) — hreflang сочеше към 404 (колекции + /pages/)
+- **Причина**: `prerender._head()` подаваше ТЕКУЩИЯ route за всичките 11 alternates, докато
+  handle-ите на колекциите и slug-овете на ротираните страници са локализирани → 10 от 11 hreflang
+  адреса връщаха 404 и Google изхвърляше целия езиков кластър. Продуктите и статиите изглеждаха
+  наред само защото handle-ите им са еднакви на всички езици.
+- **Фикс**: нови `_alt_routes(doc, prefix)` (от `translations[loc].handle`) и `_page_alt_routes(slug)`
+  (от `pub_slug` за всеки локал); `_head(..., alt=...)` строи canonical/hreflang/x-default от тях.
+  Подадено в `_product`, `_collection`, `_article`, `_page`. Нито един slug не е пипан.
+- Фронтендът (React пренаписва head-а) вече също е коректен за `/pages/`: `/api/pages/{slug}`
+  връща `slugs` (локал → публикуван slug), а `StaticPage` го подава като `alternates`.
+  Колекциите и продуктите вече ползваха `handles` от API-то.
+- Тест: `tests/test_hreflang_targets_resolve.py` — за 4 домейна × 4 типа URL се извлича всеки
+  hreflang href и се проверява 200, плюс тест че alternate-ът съдържа handle-а на ДРУГИЯ локал
+  (18 теста, всички минават). Обновен и остарелият `test_private_and_unknown_routes_404`
+  (частните маршрути умишлено връщат шела; robots.txt ги забранява).
