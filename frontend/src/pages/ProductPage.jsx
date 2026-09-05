@@ -15,6 +15,7 @@ import { PRODUCT_BLOCKS, pick, LOCALES } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
 import { graph, productLd, breadcrumbLd, organizationLd } from "../lib/schema";
 import { isAllCollection } from "../lib/collections";
+import { demoteHeadings } from "../lib/richText";
 
 /** Size token of a variant name, e.g. "5 mg" -> "5mg" */
 const sizeToken = (name) => (name || "").toLowerCase().replace(/\s+/g, "");
@@ -260,7 +261,7 @@ export default function ProductPage() {
               {pick(PRODUCT_BLOCKS, locale).map((b, i) => (
                 <details key={b.title} className="pp-acc__row" open={i === 0}>
                   <summary>{b.title}</summary>
-                  <div className="pp-acc__body pp-rte" dangerouslySetInnerHTML={{ __html: b.html }} />
+                  <div className="pp-acc__body pp-rte" dangerouslySetInnerHTML={{ __html: demoteHeadings(b.html) }} />
                 </details>
               ))}
             </div>
@@ -273,7 +274,7 @@ export default function ProductPage() {
             {/* Long description — in the right column under the buy panel, like purepeptide.bg */}
             {p.description && (
               <section className="pt-6 border-t border-slate-200">
-                <div className="pp-rte" dangerouslySetInnerHTML={{ __html: p.description }} data-testid="product-description" />
+                <div className="pp-rte" dangerouslySetInnerHTML={{ __html: demoteHeadings(p.description) }} data-testid="product-description" />
               </section>
             )}
           </div>

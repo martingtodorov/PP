@@ -236,3 +236,31 @@
   товарителница, доставена, отказана, изоставена количка) чрез `email_templates.seller_lines()`.
   Ако полетата са празни, нищо допълнително не се печата.
 - Тестове: `test_bank_settings.py` 4/4 (банкова сметка + данни на фирмата в имейла).
+
+## 2026-06-05 — SSR/Prerender за всички публични страници (SEO)
+Одит показа, че SPA-та връща ~6.9 KB празна обвивка: еднакъв title, без canonical, без H1, без
+продуктови данни, без structured data. Решение (по избор на собственика): prerender на сървъра.
+- `backend/prerender.py`: за всеки публичен route връща готов HTML — уникален title/description,
+  self-referencing canonical, 11 hreflang + x-default, OG/Twitter (`og:type=product` на продуктите),
+  JSON-LD (`Product` + `Offer` с реална цена/валута/SKU/наличност, `BreadcrumbList`, `Organization`,
+  `WebSite`, `Article`, `CollectionPage`/`ItemList`, `WebPage`), един H1, име, описание, цена,
+  всички снимки с alt и вътрешни връзки. Обвивката (`index.html`) се тегли от вътрешен nginx listener,
+  за да останат верни хешираните имена на бъндъла. Кеш 5 мин + `bump()` при всеки успешен админ запис
+  (middleware `_drop_prerender_cache`).
+- Покрити: `/`, `/collections`, `/collections/{handle}`, `/products/{handle}`, `/articles/{handle}`,
+  `/pages/{slug}` за всичките 11 езика и 4 домейна. Частните (`/cart`, `/checkout`, `/track`,
+  `/account`, `/admin`) и непознатите URL връщат 404 → nginx подава чистата SPA обвивка.
+- nginx (`nginx-purepeptide.conf.j2`): `try_files $uri $uri/ @prerender;` → `@prerender` към
+  `/api/seo/prerender?path=$request_uri` с `error_page … = @spa` резерва; нов вътрешен server на
+  `{{ frontend_private_ip }}:8080` само за `/index.html`; `FRONTEND_ORIGIN` в `backend.env.j2`.
+  Рендерираният конфиг е проверен с `nginx -t` (успешно).
+- **Един H1 на страница**: `demote()` в prerender и `lib/richText.js::demoteHeadings()` във фронтенда
+  свалят вградените в съдържанието `<h1>` до `<h2>` (продукт, колекция, статия, статична страница).
+- **Открит и поправен пропуск в съдържанието**: статиите показваха само excerpt-а — `body` (14 000
+  знака научен текст) никога не се е рендирал, защото `/api/articles` го изрязва. Добавен
+  `GET /api/articles/{handle}` и `ArticlePage` вече тегли пълната статия (1 H1 + 12 H2 в текста).
+- Тестове: `tests/test_prerender.py` 7/7, `test_deploy_config.py` 78/78 общо със сюитата, тестовият
+  агент — iteration_45: 23/23 backend + всички браузър потоци (статия, /track, админ настройки,
+  BoxNow→Еконт) без грешки.
+- ЗА ПРОДУКЦИЯ: нужен е деплой на бекенда И на nginx (`deploy_nginx.yml` / `site.yml`), иначе
+  prerender-ът не се включва.
