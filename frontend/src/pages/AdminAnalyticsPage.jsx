@@ -133,6 +133,46 @@ export default function AdminAnalyticsPage() {
         </p>
       </section>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6" data-testid="analytics-geo">
+        {[
+          { key: "countries", title: "Посетители по държави", label: (r) => r.country_name, testid: "geo-country" },
+          { key: "cities", title: "Посетители по градове", label: (r) => `${r.city}${r.country ? ` · ${r.country}` : ""}`, testid: "geo-city" },
+        ].map((panel) => {
+          const rows = data?.geo?.[panel.key] || [];
+          const max = Math.max(1, ...rows.map((r) => r.visitors));
+          return (
+            <div key={panel.key} className="bg-white border border-slate-200 rounded-xl p-4" data-testid={`analytics-${panel.key}`}>
+              <p className="text-xs uppercase tracking-wide text-slate-500 mb-3">{panel.title}</p>
+              {rows.length === 0 ? (
+                <p className="text-sm text-slate-400">Няма данни за този период.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {rows.map((r, i) => (
+                    <li key={`${panel.key}-${i}`} className="text-sm" data-testid={`${panel.testid}-row`}>
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="truncate text-slate-800">{panel.label(r)}</span>
+                        <span className="tabular-nums text-slate-500">
+                          {r.visitors} <span className="text-slate-400">({r.sessions} сес.)</span>
+                        </span>
+                      </div>
+                      <div className="h-1.5 mt-1 rounded-full bg-slate-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-sky-500 transition-[width] duration-500"
+                          style={{ width: `${Math.round((r.visitors / max) * 100)}%` }} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-[11px] text-slate-400 mt-3">
+                {panel.key === "cities"
+                  ? "Градът е по регистрация на IP адреса — приблизителен, както в Shopify."
+                  : "Държавата идва от Cloudflare при всяко посещение."}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6" data-testid="analytics-visitor-windows">
         {[
           { label: "Различни посетители (24 часа)", value: data?.visitors?.["24h"] ?? "—" },

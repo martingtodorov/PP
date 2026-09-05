@@ -23,6 +23,7 @@ PHOTON = "https://photon.komoot.io/reverse"
 UA = "purepeptide-store/1.0 (+https://purepeptide.bg)"
 _cache: Dict[str, tuple] = {}
 _places: Dict[str, tuple] = {}
+_ip_places: Dict[str, tuple] = {}
 _client = httpx.AsyncClient(timeout=httpx.Timeout(connect=2.0, read=3.5, write=3.0, pool=2.0))
 
 
@@ -102,6 +103,34 @@ async def geo_country(request: Request):
         log.info("Geo lookup skipped for %s: %s", ip, ex)
     _cache[ip] = (time.time() + 86400, result)
     return result
+
+
+def client_ip(request: Request) -> Optional[str]:
+    """The visitor's IP as seen behind Cloudflare — public helper for the analytics tracker."""
+    return _client_ip(request)
+
+
+async def locate_ip(ip: str) -> Dict[str, str]:
+    """{"country": "BG", "city": "Sofia"} from the IP, cached 24h. Empty dict when unknown.
+
+    The city is the ISP registration, so it is an approximation (Shopify's analytics has the same
+    limitation) — good enough to see which towns the traffic comes from, not a precise location.
+    """
+    hit = _ip_places.get(ip)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    out: Dict[str, str] = {}
+    try:
+        r = await _client.get(f"https://ipwho.is/{ip}",
+                              params={"fields": "success,country_code,city"})
+        data = r.json()
+        if data.get("success") and data.get("country_code"):
+            out = {"country": data["country_code"], "city": (data.get("city") or "")[:60]}
+    except Exception as ex:
+        log.info("Analytics geo lookup skipped for %s: %s", ip, ex)
+    if out:
+        _ip_places[ip] = (time.time() + 86400, out)
+    return out
 
 
 @router.get("/reverse")
