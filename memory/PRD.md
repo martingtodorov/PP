@@ -1226,3 +1226,15 @@ preview данни (23 vs 21 продукта, стари handles преди р�
 - P1 назад: собственикът ще пусне AI превода на колекция „Всички пептиди“ (ro/de са счупени: „Toate“,
   „Alle“) сам на продукшън.
 - P2: Cloudflare origin сертификати; проверка на Apple/iOS autofill в чекаута.
+
+## 2026-06-07 — sitemap форматиране (Shopify parity)
+- Всички XML sitemap-и (`/sitemap.xml`, `/sitemap_{kind}_{n}.xml`, `/sitemap_agentic_discovery.xml`)
+  вече се отдават pretty-printed: нов ред след всеки таг, 2 интервала отстъп, точно като Shopify.
+  Преди бяха един минифициран ред (в браузъра изглеждаше като слята каша без структура).
+- Линковете НЕ са пипани — ротираните `pub_slug`/handle-и се публикуват както са в базата.
+  Изтрит е опасният `POST /admin/pages/restore-urls` (`unrotate_pages`), който масово зануляваше
+  `pub_slug` на страниците (собственикът изрично забрани пипане на линковете).
+- Тестове: `tests/test_brand_titles_and_rotation_404.py` + `tests/test_hreflang_targets_resolve.py` —
+  46 минават (регексът за `<url>` вече е с `re.S`). `scripts/check_sitemap.py`: bg/eu/gr 0 счупени.
+- Известно (само в preview базата): `ro` е `enabled: False` в `locale_routes`, затова host
+  purepeptide.ro връща всички локали → check_sitemap го брои като „foreign domain“. На продукшън ro е активен.

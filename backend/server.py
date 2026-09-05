@@ -3709,7 +3709,7 @@ async def _sitemap_groups(request: Request):
             groups["products"].append((meta, "daily", ""))
             continue
         target = "blogs" if path == "/pages/articles" else "pages"
-        groups[target].append((meta, "weekly", page_days.get(slug) or newest))
+        groups[target].append((meta, "daily", page_days.get(slug) or newest))
     for c in cols:
         groups["collections"].append((entry(c, "/collections/", " - "), "daily",
                                       _stamp(c.get("updated_at")) or newest))
@@ -3717,7 +3717,7 @@ async def _sitemap_groups(request: Request):
         groups["products"].append((entry(p, "/products/", " - "), "daily",
                                    _stamp(p.get("updated_at")) or newest))
     for a in arts:
-        groups["blogs"].append((entry(a, "/articles/", " "), "weekly",
+        groups["blogs"].append((entry(a, "/articles/", " "), "daily",
                                 _stamp(a.get("updated_at")) or _stamp(a.get("published_at")) or newest))
     return routes, active, listed, groups
 
@@ -3757,10 +3757,10 @@ async def sitemap_index(request: Request):
     for kind in SITEMAP_KINDS:
         for page in range(1, _sitemap_pages(groups[kind], listed) + 1):
             locs.append(f"{origin}/sitemap_{kind}_{page}.xml")
-    body = "".join(f"<sitemap><loc>{loc}</loc></sitemap>" for loc in locs)
-    xml = ('<?xml version="1.0" encoding="UTF-8"?>'
-           '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-           + body + "</sitemapindex>")
+    body = "".join(f"  <sitemap>\n    <loc>{loc}</loc>\n  </sitemap>\n" for loc in locs)
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+           '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+           + body + "</sitemapindex>\n")
     return Response(content=xml, media_type="application/xml", headers=SEO_CACHE)
 
 
@@ -3780,35 +3780,28 @@ async def sitemap_child(kind: str, page: int, request: Request):
         if not src:
             return ""
         origin = ((routes.get(loc) or SITE_ORIGINS[loc])["origin"]).rstrip("/")
-        return ("<image:image>"
-                f"<image:loc>{html_lib.escape(src if src.startswith('http') else origin + src, quote=True)}</image:loc>"
-                f"<image:title>{html_lib.escape(meta.get('title') or '', quote=True)}</image:title>"
-                f"<image:caption>{html_lib.escape(meta.get('caption') or '', quote=True)}</image:caption>"
-                "</image:image>")
+        return ("    <image:image>\n"
+                f"      <image:loc>{html_lib.escape(src if src.startswith('http') else origin + src, quote=True)}</image:loc>\n"
+                f"      <image:title>{html_lib.escape(meta.get('title') or '', quote=True)}</image:title>\n"
+                f"      <image:caption>{html_lib.escape(meta.get('caption') or '', quote=True)}</image:caption>\n"
+                "    </image:image>\n")
 
     # lastmod is the real change date of the record — a rolling "today" told Google every URL had
     # changed on every request and devalued the signal
     urls: List[str] = []
     for meta, changefreq, lastmod in entries:
-        alternates = "".join(
-            f'<xhtml:link rel="alternate" hreflang="{LOCALE_META[l]["hreflang"]}" href="{_loc_url(l, _q(meta[l]["path"]), routes)}"/>'
-            for l in active
-        )
-        if "en" in meta:
-            alternates += f'<xhtml:link rel="alternate" hreflang="x-default" href="{_loc_url("en", _q(meta["en"]["path"]), routes)}"/>'
         for loc in listed:
             urls.append(
-                f'<url><loc>{_loc_url(loc, _q(meta[loc]["path"]), routes)}</loc>'
-                + (f"<lastmod>{lastmod}</lastmod>" if lastmod else "")
-                + f"<changefreq>{changefreq}</changefreq>"
-                f"{alternates}{img_tag(loc, meta[loc])}</url>"
+                f'  <url>\n    <loc>{_loc_url(loc, _q(meta[loc]["path"]), routes)}</loc>\n'
+                + (f"    <lastmod>{lastmod}</lastmod>\n" if lastmod else "")
+                + f"    <changefreq>{changefreq}</changefreq>\n"
+                f"{img_tag(loc, meta[loc])}  </url>\n"
             )
     window = urls[(page - 1) * SITEMAP_CHUNK: page * SITEMAP_CHUNK]
-    xml = ('<?xml version="1.0" encoding="UTF-8"?>'
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
-           'xmlns:xhtml="http://www.w3.org/1999/xhtml" '
-           'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">'
-           + "".join(window) + "</urlset>")
+           'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n'
+           + "".join(window) + "</urlset>\n")
     return Response(content=xml, media_type="application/xml", headers=SEO_CACHE)
 
 
@@ -3822,10 +3815,10 @@ async def agentic_sitemap(request: Request):
     locale = _host_locales(request, routes, active)[0]
     cfg = routes.get(locale) or SITE_ORIGINS[locale]
     origin = cfg["origin"].rstrip("/")
-    body = "".join(f"<url><loc>{origin}{p}</loc><changefreq>weekly</changefreq></url>"
+    body = "".join(f"  <url>\n    <loc>{origin}{p}</loc>\n    <changefreq>daily</changefreq>\n  </url>\n"
                    for p in ("/agents.md", "/llms.txt"))
-    xml = ('<?xml version="1.0" encoding="UTF-8"?>'
-           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + body + "</urlset>")
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + body + "</urlset>\n")
     return Response(content=xml, media_type="application/xml", headers=SEO_CACHE)
 
 

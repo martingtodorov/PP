@@ -73,12 +73,12 @@ def test_the_shared_domain_keeps_all_eight_prefixed_languages():
     assert len(set(counts.values())) == 1, counts
 
 
-def test_hreflang_alternates_still_point_at_every_language():
+def test_the_files_stay_as_lean_as_the_shopify_ones():
+    """Owner's call: no hreflang blocks in the sitemap — the HTML head of every page carries them
+    (see test_hreflang_targets_resolve.py), which is what Google reads anyway."""
     xml = sitemap("purepeptide.bg")
-    first = xml.split("</url>")[0]
-    for host in ("purepeptide.bg", "purepeptide.eu", "purepeptide.ro", "purepeptide.gr"):
-        assert host in first
-    assert 'hreflang="x-default"' in first
+    assert "hreflang" not in xml and "xhtml" not in xml
+    assert all(h not in xml for h in ("purepeptide.eu", "purepeptide.ro", "purepeptide.gr"))
 
 
 @pytest.mark.parametrize("host", ["purepeptide.bg", "purepeptide.eu"])
@@ -98,8 +98,7 @@ def child(host: str, kind: str) -> str:
 def test_product_entries_match_the_shopify_shape():
     xml = child("purepeptide.bg", "products")
     assert "<priority>" not in xml                       # Shopify does not emit priority
-    home, first = (re.sub(r"<xhtml:link[^>]*>", "", u)
-                   for u in re.findall(r"<url>.*?</url>", xml)[:2])
+    home, first = re.findall(r"<url>.*?</url>", xml)[:2]
     assert home == "<url><loc>https://purepeptide.bg/</loc><changefreq>daily</changefreq></url>"
     assert "<changefreq>daily</changefreq>" in first
     assert re.search(r"<lastmod>\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+\-]\d\d:\d\d</lastmod>", first), first
@@ -111,7 +110,7 @@ def test_collection_and_page_entries_match_the_shopify_shape():
     cols = child("purepeptide.bg", "collections")
     assert "<changefreq>daily</changefreq>" in cols and "<image:title>" in cols
     pages = child("purepeptide.bg", "pages")
-    assert "<changefreq>weekly</changefreq>" in pages and "<image:image>" not in pages
+    assert "<changefreq>daily</changefreq>" in pages and "<image:image>" not in pages
     # the Cyrillic slug is percent-encoded, exactly like the Shopify export
     assert "/pages/%D0%BA%D0%B0%D0%BA%D0%B2%D0%BE" in pages
 
