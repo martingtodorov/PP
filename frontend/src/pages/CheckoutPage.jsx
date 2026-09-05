@@ -16,7 +16,7 @@ import { useLocaleCtx } from "../i18n/LocaleContext";
 
 export default function CheckoutPage() {
   const { lp, t } = useLocaleCtx();
-  useSeo({ title: `${t("seoCheckoutTitle")} | PurePeptide`, description: t("seoCheckoutDesc"), path: "/checkout", robots: "noindex,nofollow" });
+  useSeo({ title: `${t("seoCheckoutTitle")}`, description: t("seoCheckoutDesc"), path: "/checkout", robots: "noindex,nofollow" });
 
   const { items, subtotal, clear, note, setNote, discount, discountAmount } = useCart();
   const { user } = useAuth();

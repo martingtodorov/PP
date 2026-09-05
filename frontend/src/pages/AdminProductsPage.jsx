@@ -128,7 +128,14 @@ export default function AdminProductsPage() {
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-500">{p.handle}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                    {(p.translations?.bg || {}).handle || p.handle}
+                    {(p.translations?.bg || {}).handle && (p.translations.bg.handle !== p.handle) && (
+                      <span className="block text-[10px] text-slate-400" data-testid={`admin-product-base-handle-${p.handle}`}>
+                        ротиран · оригинал: {p.handle}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">{p.variants?.length || 0}</td>
                   <td className="px-4 py-3 font-semibold">{fmtEUR(minPrice)}</td>
                   <td className="px-4 py-3">{stock <= 0 ? <span className="text-red-600 font-medium">Изчерпан</span> : stock}</td>

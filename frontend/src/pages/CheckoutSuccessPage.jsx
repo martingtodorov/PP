@@ -11,7 +11,7 @@ import CancelOrderButton from "../components/CancelOrderButton";
 
 export default function CheckoutSuccessPage() {
   const { t } = useLocaleCtx();
-  useSeo({ title: `${t("seoThanksTitle")} | PurePeptide`, description: t("seoThanksDesc"), path: "/checkout/success", robots: "noindex,nofollow" });
+  useSeo({ title: `${t("seoThanksTitle")}`, description: t("seoThanksDesc"), path: "/checkout/success", robots: "noindex,nofollow" });
 
   const { orderId } = useParams();
   const [data, setData] = useState(null);

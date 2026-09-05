@@ -39,7 +39,8 @@ export default function ArticlePage() {
   }, [article?.product_handle]);
 
   useSeo({
-    title: article ? (article.seo_title || `${article.title} | PurePeptide`) : "PurePeptide",
+    title: article ? (article.seo_title || `${article.title}`) : "PurePeptide",
+    robots: loaded && !article ? "noindex, follow" : undefined,
     description: article?.seo_description || article?.excerpt || "",
     ogType: "article",
     locale,

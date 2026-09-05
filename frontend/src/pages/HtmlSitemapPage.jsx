@@ -44,7 +44,7 @@ export default function HtmlSitemapPage() {
   const path = section ? `/pages/html-sitemap-${kind}` : "/pages/html-sitemap";
 
   useSeo({
-    title: `${title} | PurePeptide`,
+    title: `${title}`,
     description: t("smDesc"),
     locale,
     path,

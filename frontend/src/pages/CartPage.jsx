@@ -13,7 +13,7 @@ import { toast } from "sonner";
 
 export default function CartPage() {
   const { lp, t } = useLocaleCtx();
-  useSeo({ title: `${t("seoCartTitle")} | PurePeptide`, description: t("seoCartDesc"), path: "/cart", robots: "noindex,follow" });
+  useSeo({ title: `${t("seoCartTitle")}`, description: t("seoCartDesc"), path: "/cart", robots: "noindex,follow" });
 
   const { items, remove, updateQty, subtotal, discount, discountAmount, applyDiscount, removeDiscount } = useCart();
   const [code, setCode] = useState("");

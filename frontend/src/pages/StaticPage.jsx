@@ -106,7 +106,7 @@ export default function StaticPage() {
       || page?.title || (loading ? "" : PAGE_TITLES[baseSlug] || baseSlug);
 
   useSeo({
-    title: remote?.seo_title || `${title} | PurePeptide`,
+    title: remote?.seo_title || `${title}`,
     description:
       remote?.seo_description ||
       (page?.html || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 155),

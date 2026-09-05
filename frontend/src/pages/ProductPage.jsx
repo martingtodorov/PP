@@ -83,7 +83,8 @@ export default function ProductPage() {
   if (p?.handles) LOCALES.forEach((l) => { alternates[l] = `/products/${p.handles[l]}`; });
 
   useSeo({
-    title: p ? (p.seo_title || `${p.title} | PurePeptide`) : "PurePeptide",
+    title: p ? (p.seo_title || `${p.title}`) : "PurePeptide",
+    robots: gone ? "noindex, follow" : undefined,
     description: p
       ? p.seo_description || (p.description || "").replace(/<[^>]+>/g, "").slice(0, 155)
       : "",

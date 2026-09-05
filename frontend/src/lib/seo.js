@@ -24,6 +24,16 @@ const setLink = (rel, href, hreflang) => {
   el.setAttribute("href", href);
 };
 
+const BRAND = "PurePeptide";
+
+/* Shopify parity: every title ends with " - PurePeptide" unless it already names the brand.
+   Mirrored in backend/prerender.py `brand_title` — bots and browsers must see the same <title>. */
+export const brandTitle = (title) => {
+  const text = String(title || "").replace(/\s*\|\s*/g, " | ").trim();
+  if (!text) return BRAND;
+  return text.toLowerCase().includes(BRAND.toLowerCase()) ? text : `${text} - ${BRAND}`;
+};
+
 /**
  * SEO head manager: title, description, canonical, hreflang alternates and JSON-LD.
  * `alternates` maps locale -> path (localised handles), falling back to `path`.
@@ -31,7 +41,7 @@ const setLink = (rel, href, hreflang) => {
 export function useSeo({ title, description, locale = DEFAULT_LOCALE, path = "/", alternates = {}, jsonLd, image, ogType = "website", robots = "index,follow,max-image-preview:large,max-snippet:-1" }) {
   useEffect(() => {
     // one space around the pipe — a missing one ("… GH| цена") was visible in search results
-    const full = (title ? `${title}` : "PurePeptide").replace(/\s*\|\s*/g, " | ").trim();
+    const full = brandTitle(title);
     document.title = full;
     // html lang takes the plain language subtag: cz -> cs, si -> sl, gr -> el
     document.documentElement.lang = (LOCALE_META[locale]?.hreflang || locale).split("-")[0];

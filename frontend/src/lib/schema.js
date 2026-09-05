@@ -73,6 +73,12 @@ const merchantTerms = () => {
       merchantReturnDays: s.return_days || 14,
       returnMethod: "https://schema.org/ReturnByMail",
       returnFees: "https://schema.org/ReturnShippingFees",
+      /* required whenever returnFees is ReturnShippingFees — without it Google discards the policy */
+      returnShippingFeesAmount: {
+        "@type": "MonetaryAmount",
+        value: typeof s.price === "number" ? s.price : 0,
+        currency: s.currency || "EUR",
+      },
     },
     ...(typeof s.price === "number" ? {
       shippingDetails: {
@@ -95,6 +101,10 @@ const merchantTerms = () => {
   };
 };
 
+/* Google wants a validity date on the price; the end of next year is stable, so the rendered page
+   does not change on every deploy (a rolling "today + 365" produced new HTML every day) */
+const priceValidUntil = () => `${new Date().getUTCFullYear() + 1}-12-31`;
+
 export const productLd = ({ product, variant, path }) => {
   const strip = (html) => (html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   const variants = product.variants || [];
@@ -103,15 +113,18 @@ export const productLd = ({ product, variant, path }) => {
   const amount = (eur) => (cur === "EUR" ? eur : nicePrice(eur));
   const prices = variants.map((v) => v.price_eur).filter((n) => typeof n === "number").map(amount);
   const inStock = variants.some((v) => (v.stock || 0) > 0);
+  const imgs = (product.images && product.images.length ? product.images : [product.image])
+    .filter(Boolean)
+    .map((src) => (src.startsWith("/") ? `${ORIGIN()}${src}` : src));
+  const validUntil = priceValidUntil();
   return {
     "@type": "Product",
     "@id": `${ORIGIN()}${path}#product`,
     name: product.title,
     url: `${ORIGIN()}${path}`,
-    image: (product.images && product.images.length ? product.images : [product.image]).map((src) =>
-      src && src.startsWith("/") ? `${ORIGIN()}${src}` : src
-    ),
+    image: imgs,
     description: product.seo_description || strip(product.description).slice(0, 500),
+    productID: variant?.sku || variants[0]?.sku,
     sku: variant?.sku || variants[0]?.sku,
     mpn: variant?.sku || variants[0]?.sku,
     brand: { "@type": "Brand", name: "PurePeptide" },
@@ -134,6 +147,8 @@ export const productLd = ({ product, variant, path }) => {
               sku: v.sku,
               price: amount(v.price_eur),
               priceCurrency: cur,
+              priceValidUntil: validUntil,
+              ...(imgs.length ? { image: imgs[0] } : {}),
               availability: (v.stock || 0) > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
               url: `${ORIGIN()}${path}`,
               itemCondition: "https://schema.org/NewCondition",
@@ -145,6 +160,8 @@ export const productLd = ({ product, variant, path }) => {
             "@type": "Offer",
             price: prices[0] || 0,
             priceCurrency: cur,
+            priceValidUntil: validUntil,
+            ...(imgs.length ? { image: imgs[0] } : {}),
             availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
             url: `${ORIGIN()}${path}`,
             itemCondition: "https://schema.org/NewCondition",

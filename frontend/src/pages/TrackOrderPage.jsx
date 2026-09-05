@@ -12,7 +12,7 @@ import TrackTimeline from "../components/TrackTimeline";
 
 export default function TrackOrderPage() {
   const { t } = useLocaleCtx();
-  useSeo({ title: `${t("trackTitle")} | PurePeptide`, description: t("seoTrackDesc"), path: "/track", robots: "noindex,follow" });
+  useSeo({ title: `${t("trackTitle")}`, description: t("seoTrackDesc"), path: "/track", robots: "noindex,follow" });
 
   const [params] = useSearchParams();
   const [form, setForm] = useState({ order_number: params.get("n") || "", phone: "" });

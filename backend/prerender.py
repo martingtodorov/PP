@@ -11,12 +11,14 @@ import logging
 import os
 import re
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
 from i18n import DEFAULT_LOCALE, LOCALES, LOCALE_META, SITE_ORIGINS, localize_doc, normalize_locale
 from nextcart import shipping_summary
+from pages_seed import LEGACY_PAGE_ALIASES
 
 log = logging.getLogger("purepeptide.prerender")
 
@@ -139,9 +141,22 @@ def _tidy(title: str) -> str:
     return re.sub(r"\s*\|\s*", " | ", title).strip()
 
 
+BRAND = "PurePeptide"
+BRAND_SUFFIX = f" - {BRAND}"
+
+
+def brand_title(title: str) -> str:
+    """Shopify parity: every title ends with " - PurePeptide" unless it already names the brand.
+    Mirrored in frontend/src/lib/seo.js — bots and browsers must see the same <title>."""
+    text = _tidy(str(title or ""))
+    if not text:
+        return BRAND
+    return text if BRAND.lower() in text.lower() else text + BRAND_SUFFIX
+
+
 def _head(locale: str, route: str, title: str, description: str, image: str,
           og_type: str = "website", extra: str = "", robots: str = "") -> str:
-    title = _tidy(title)
+    title = brand_title(title)
     origin = SITE_ORIGINS.get(locale, SITE_ORIGINS[DEFAULT_LOCALE])["origin"]
     canonical = url_for(locale, route)
     alternates = "".join(
@@ -187,12 +202,19 @@ async def _merchant_terms(locale: str) -> Dict[str, Any]:
     country = s.get("country") or "BG"
     handling = s.get("handling_days") or [1, 3]
     transit = s.get("transit_days") or [1, 3]
+    currency = s.get("currency") or "EUR"
+    # returnFees = ReturnShippingFees REQUIRES returnShippingFeesAmount — without it Google drops the
+    # whole return policy and with it the merchant listing (image + "In stock" in the SERP)
     out: Dict[str, Any] = {"hasMerchantReturnPolicy": {
         "@type": "MerchantReturnPolicy", "applicableCountry": country, "returnPolicyCountry": country,
         "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
         "merchantReturnDays": s.get("return_days") or 14,
         "returnMethod": "https://schema.org/ReturnByMail",
-        "returnFees": "https://schema.org/ReturnShippingFees"}}
+        "returnFees": "https://schema.org/ReturnShippingFees",
+        "returnShippingFeesAmount": {
+            "@type": "MonetaryAmount",
+            "value": s["price"] if isinstance(s.get("price"), (int, float)) else 0,
+            "currency": currency}}}
     if isinstance(s.get("price"), (int, float)):
         out["shippingDetails"] = {
             "@type": "OfferShippingDetails",
@@ -262,9 +284,17 @@ def _product_li(locale: str, product: Dict[str, Any]) -> str:
 
 
 def _retired(doc: Dict[str, Any], locale: str, requested: str) -> bool:
-    """A handle rotated away in the admin must 404 for crawlers too, not only in the JSON API."""
-    return any(r.get("locale") == locale and r.get("from") == requested
-               for r in (doc.get("rotations") or []))
+    """A handle rotated away in the admin must 404 for crawlers too, not only in the JSON API.
+
+    Same rule as server.retired_handle: a rotated document serves only its published handle, so no
+    intermediate rotation code can be crawled as a duplicate."""
+    rotations = doc.get("rotations") or []
+    if any(r.get("locale") == locale and r.get("from") == requested for r in rotations):
+        return True
+    if any(r.get("locale") == locale for r in rotations):
+        published = ((doc.get("translations") or {}).get(locale) or {}).get("handle") or doc.get("handle") or ""
+        return requested != published
+    return False
 
 
 async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
@@ -279,12 +309,17 @@ async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
     in_stock = any((v.get("stock") or 0) > 0 for v in variants)
     prices = [float(v.get("price_eur") or 0) for v in variants if v.get("price_eur")]
     images = [_abs(i, origin) for i in (p.get("images") or ([p["image"]] if p.get("image") else []))][:13]
-    title = p.get("seo_title") or f'{p.get("title")} | PurePeptide'
+    title = p.get("seo_title") or f'{p.get("title")}'
     description = p.get("seo_description") or _text(p.get("description"))
     terms = await _merchant_terms(locale)
+    # A validity date is expected on the price, but "today + 365" would rewrite every product page
+    # on every deploy — the end of next year is stable and identical in the React build.
+    price_valid = f"{datetime.now(timezone.utc).year + 1}-12-31"
     offers = [{"@type": "Offer", "name": v.get("name") or "", "url": url_for(locale, route),
                "priceCurrency": "EUR", "price": f'{float(v.get("price_eur") or 0):.2f}',
+               "priceValidUntil": price_valid,
                "sku": v.get("sku") or "",
+               **({"image": images[0]} if images else {}),
                "availability": ("https://schema.org/InStock" if (v.get("stock") or 0) > 0
                                 else "https://schema.org/OutOfStock"),
                "itemCondition": "https://schema.org/NewCondition",
@@ -313,6 +348,7 @@ async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
     ld = _ld(
         {"@type": "Product", "@id": f'{url_for(locale, route)}#product', "name": p.get("title"),
          "description": _text(description, 500), "image": images,
+         "productID": (variants[0].get("sku") if variants else ""),
          "sku": (variants[0].get("sku") if variants else ""),
          "mpn": (variants[0].get("sku") if variants else ""),
          "brand": {"@type": "Brand", "name": "PurePeptide"}, "category": "Research peptides",
@@ -333,7 +369,7 @@ async def _collection(locale: str, handle: str) -> Optional[Dict[str, str]]:
     base_handle = doc.get("handle")
     products = await _db.products.find({"collections": base_handle, "active": True}, {"_id": 0}).to_list(60)
     items = [localize_doc(p, locale) for p in products]
-    title = c.get("seo_title") or f'{c.get("title")} | PurePeptide'
+    title = c.get("seo_title") or f'{c.get("title")}'
     description = c.get("seo_description") or _text(c.get("description"))
     trail = [(_t(locale, "home"), "/"), (c.get("title"), route)]
     body = [
@@ -357,7 +393,7 @@ async def _catalog(locale: str) -> Dict[str, str]:
     collections = await _db.collections_cat.find({}, {"_id": 0}).to_list(50)
     products = await _db.products.find({"active": True}, {"_id": 0}).to_list(200)
     items = [localize_doc(p, locale) for p in products]
-    title = f'{_t(locale, "catalog")} | PurePeptide'
+    title = f'{_t(locale, "catalog")}'
     description = _HOME.get(locale, _HOME["en"])[1]
     trail = [(_t(locale, "home"), "/"), (_t(locale, "catalog"), "/collections")]
     ld = _ld({"@type": "CollectionPage", "@id": f'{url_for(locale, "/collections")}#page',
@@ -380,7 +416,7 @@ async def _article(locale: str, handle: str) -> Optional[Dict[str, str]]:
         return None
     a = localize_doc(doc, locale)
     route = f"/articles/{a.get('handle') or handle}"
-    title = a.get("seo_title") or f'{a.get("title")} | PurePeptide'
+    title = a.get("seo_title") or f'{a.get("title")}'
     description = a.get("seo_description") or _text(a.get("excerpt") or a.get("body"))
     trail = [(_t(locale, "home"), "/"), (_t(locale, "articles"), "/pages/articles"), (a.get("title"), route)]
     origin = SITE_ORIGINS.get(locale, SITE_ORIGINS[DEFAULT_LOCALE])["origin"]
@@ -397,6 +433,8 @@ async def _article(locale: str, handle: str) -> Optional[Dict[str, str]]:
 
 
 async def _page(locale: str, slug: str) -> Optional[Dict[str, str]]:
+    if slug in LEGACY_PAGE_ALIASES:   # imported Shopify duplicate — removed for good
+        return None
     # mirrors GET /api/pages/{slug}: a rotated page lives under `pub_slug` only, the old slug 404s
     doc = await _db.pages.find_one({"slug": slug, "locale": locale, "pub_slug": slug}, {"_id": 0}) \
         or await _db.pages.find_one({"locale": locale, "pub_slug": slug}, {"_id": 0})
@@ -410,7 +448,7 @@ async def _page(locale: str, slug: str) -> Optional[Dict[str, str]]:
     if not doc:
         return None
     route = f"/pages/{slug}"
-    title = doc.get("seo_title") or f'{doc.get("title")} | PurePeptide'
+    title = doc.get("seo_title") or f'{doc.get("title")}'
     description = doc.get("seo_description") or _text(doc.get("html"))
     trail = [(_t(locale, "home"), "/"), (doc.get("title"), route)]
     ld = _ld({"@type": "WebPage", "@id": f'{url_for(locale, route)}#page', "name": doc.get("title"),
@@ -448,7 +486,7 @@ async def _articles_index(locale: str) -> Dict[str, str]:
     ld = _ld({"@type": "CollectionPage", "@id": f"{url_for(locale, route)}#page", "name": heading,
               "url": url_for(locale, route), "hasPart": parts[:50]},
              _breadcrumbs(locale, trail), _organization(locale), _website(locale))
-    return {"head": _head(locale, route, f"{heading} | PurePeptide",
+    return {"head": _head(locale, route, heading,
                           _t(locale, "articlesIndexDesc"), "", extra=ld),
             "body": _crumb_html(locale, trail) + f"<h1>{esc(heading)}</h1><ul>{''.join(items)}</ul>"}
 
@@ -490,7 +528,7 @@ async def _html_sitemap(locale: str, slug: str) -> Optional[Dict[str, str]]:
               "url": url_for(locale, route)},
              _breadcrumbs(locale, trail), _organization(locale), _website(locale))
     body = [_crumb_html(locale, trail), f"<h1>{esc(heading)}</h1>"] + blocks
-    return {"head": _head(locale, route, f"{heading} | PurePeptide", _t(locale, "sitemapDesc"),
+    return {"head": _head(locale, route, heading, _t(locale, "sitemapDesc"),
                           "", extra=ld),
             "body": "".join(body)}
 

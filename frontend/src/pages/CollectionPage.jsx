@@ -31,7 +31,8 @@ export default function CollectionPage() {
   if (c?.handles) LOCALES.forEach((l) => { alternates[l] = `/collections/${c.handles[l]}`; });
 
   useSeo({
-    title: c ? (c.seo_title || `${c.title} | PurePeptide`) : "PurePeptide",
+    title: c ? (c.seo_title || `${c.title}`) : "PurePeptide",
+    robots: gone ? "noindex, follow" : undefined,
     description: c?.seo_description || descText,
     locale,
     path: `/collections/${handle}`,
