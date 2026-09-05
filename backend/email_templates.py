@@ -394,22 +394,13 @@ def _money_of(order: Dict[str, Any]):
 
 
 def seller_lines(settings: Optional[Dict[str, Any]] = None) -> str:
-    """Company details for invoices — name, registration number, VAT and address, from the settings."""
-    s = settings or {}
-    parts = [str(s.get("company_name") or "").strip()]
-    if s.get("company_eik"):
-        parts.append(f'ЕИК/UIC {str(s["company_eik"]).strip()}')
-    if s.get("company_vat"):
-        parts.append(f'ДДС/VAT {str(s["company_vat"]).strip()}')
-    head = " · ".join(p for p in parts if p)
-    address = str(s.get("company_address") or "").strip()
-    if not head and not address:
-        return ""
-    return "<br>".join(x for x in [head, address] if x)
+    """The owner's rule: no company name, registration number or address in any customer e-mail."""
+    return ""
 
 
 def _shell(locale: str, order_label: str, title: str, content: str, contact_email: str,
            seller: str = "") -> str:
+    seller = ""
     base = base_url(locale)
     return f"""<!doctype html>
 <html lang="{locale}"><head><meta charset="utf-8">
@@ -513,8 +504,7 @@ def render_order(order: Dict[str, Any], bank: Optional[Dict[str, Any]], locale: 
             f'border-radius:12px;padding:14px 16px;font-size:13px;color:#334155;">'
             f'<tr><td colspan="2" style="padding-bottom:8px;font-weight:700;color:{DARK};">'
             f'{tr(loc, "bank_details")}</td></tr>'
-            f'<tr><td>{bank.get("name", "")}</td><td align="right">{tr(loc, "holder")}: '
-            f'<strong>{bank.get("holder", "")}</strong></td></tr>'
+            f'<tr><td colspan="2">{bank.get("name", "")}</td></tr>'
             f'<tr><td>{tr(loc, "iban")}: <strong>{bank.get("iban", "")}</strong></td>'
             f'<td align="right">{tr(loc, "bic")}: <strong>{bank.get("bic", "")}</strong></td></tr>'
             f'<tr><td colspan="2" style="padding-top:6px;">{tr(loc, "reference")}: '
