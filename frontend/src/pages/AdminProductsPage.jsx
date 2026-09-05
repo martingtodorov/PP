@@ -55,14 +55,17 @@ export default function AdminProductsPage() {
     } catch (e) { toast.error(formatErr(e)); }
   };
 
-  const filtered = products.filter((p) => p.title.toLowerCase().includes(search.toLowerCase()));
+  // the search also matches the internal tags, so a tag is a way to find products
+  const q = search.trim().toLowerCase();
+  const filtered = products.filter((p) => !q || p.title.toLowerCase().includes(q)
+    || (p.admin_tags || []).some((t) => t.toLowerCase().includes(q)));
   const busyJob = job && ["queued", "running"].includes(job.status);
 
   return (
     <AdminLayout title="Продукти">
       <div className="flex flex-wrap gap-3 mb-6 items-center">
         <input
-          placeholder="Търсене…"
+          placeholder="Търсене по име или вътрешен таг…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="border border-slate-300 rounded-md px-4 py-2 text-sm flex-1 max-w-md"
@@ -123,6 +126,15 @@ export default function AdminProductsPage() {
                         {(p.variants || []).some((v) => v.sku) && (
                           <span className="block text-[11px] font-mono text-slate-400" data-testid={`admin-product-skus-${p.handle}`}>
                             {(p.variants || []).map((v) => v.sku).filter(Boolean).join(" · ")}
+                          </span>
+                        )}
+                        {(p.admin_tags || []).length > 0 && (
+                          <span className="flex flex-wrap gap-1 mt-1" data-testid={`admin-product-tags-${p.handle}`}>
+                            {p.admin_tags.map((t) => (
+                              <span key={t} className="bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 text-[10px] font-semibold">
+                                {t}
+                              </span>
+                            ))}
                           </span>
                         )}
                       </span>

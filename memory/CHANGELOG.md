@@ -632,3 +632,29 @@
   приблизителен (същото ограничение като в Shopify), написано е под панела.
 - Тестове: `tests/test_analytics_geo.py` (2) + `test_analytics_local_day.py` (3) минават.
 - Историческите посещения нямат държава/град — панелите ще се напълнят с новия трафик след деплой.
+
+## 2026-06-08 (втора част) — Анализи+, вътрешни тагове, delist на колекции, 90-дневна сесия
+- **Карта на Европа** в „Анализи“ (`components/admin/EuropeTrafficMap.jsx`, d3-geo + topojson,
+  локален `src/data/europe-50m.json` 194KB, генериран от `backend/scripts/build_europe_topojson.py`)
+  — държавите светят според посетителите, с hover етикет.
+- **Live (5 мин.) и последните 24 часа по локация** — `live_geo` и `day_geo` в
+  `GET /admin/analytics`; нов общ компонент `StatList` за всички класации.
+- **Топ страници и източници** — `_pages_and_sources()`; референърите се групират в четими имена
+  (Google, Facebook, ChatGPT, „Директно“…), нашите домейни не се броят за източник.
+- **Дневен отчет по имейл** — `daily_report_loop()` праща веднъж на локален ден след
+  `DAILY_REPORT_HOUR` (=8, в backend/.env) на `report_email` от настройките или `ADMIN_EMAIL`;
+  записва се в `daily_reports`, за да не дублира след рестарт. Ръчно: бутон „Прати отчета за вчера“
+  → `POST /admin/analytics/report`. Шаблон: `email_templates.render_admin_daily_report`.
+  ⚠️ В preview Resend ключът е невалиден, така че самото изпращане е проверено само до
+  „API key is invalid“ — на продукшън трябва да се потвърди веднъж с бутона.
+- **Вътрешни тагове по продукти** — `admin_tags` в `ProductIn`; редактират се с чипове в
+  админ редактора, показват се в списъка с продукти и **търсенето по таг работи**. Никога не
+  напускат админа: `i18n.localize_doc` ги маха, значи ги няма в публичния API, SSR-а и sitemap-а.
+- **Delist на колекции** — чекбокс „Изтегли от сайта“ (`delisted`) + `PATCH
+  /admin/collections/{id}/delisted`: URL-ът 404-ва, изчезва от менюто, каталога, sitemap-а и SSR-а,
+  но си остава в админа, за да се върне с един клик.
+- **90-дневна админ сесия** — `SESSION_DAYS=90` (backend/.env), cookie `pp_token` с
+  `Max-Age=7776000`. Токенът носи `pv` (отпечатък на паролата), така че смяна на паролата
+  изхвърля всички стари сесии веднага.
+- Тестове: `test_admin_tags_and_delisting.py` (3), `test_session_length.py` (3),
+  `test_analytics_geo.py` (2), `test_analytics_local_day.py` (3) — минават.

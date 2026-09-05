@@ -696,6 +696,65 @@ def render_admin_contact(msg: Dict[str, Any]) -> tuple:
     return subject, html
 
 
+def render_admin_daily_report(data: Dict[str, Any]) -> tuple:
+    """Yesterday in one mail: sessions, orders, sales, plus where the traffic came from."""
+    base = base_url("bg")
+    day = data.get("day", "")
+    cur, prev = data.get("current") or {}, data.get("previous") or {}
+
+    def money(v):
+        return _money(v or 0, "EUR")
+
+    def trend(now_v, prev_v):
+        if not prev_v:
+            return '<span style="color:#94a3b8;">—</span>'
+        pct = round((now_v - prev_v) / prev_v * 100)
+        colour = "#059669" if pct >= 0 else "#dc2626"
+        return f'<span style="color:{colour};">{"+" if pct >= 0 else ""}{pct}% спрямо предния ден</span>'
+
+    tiles = [
+        ("Продажби", money(cur.get("sales")), trend(cur.get("sales") or 0, prev.get("sales") or 0)),
+        ("Поръчки", str(cur.get("orders") or 0), trend(cur.get("orders") or 0, prev.get("orders") or 0)),
+        ("Сесии", str(cur.get("sessions") or 0), trend(cur.get("sessions") or 0, prev.get("sessions") or 0)),
+        ("Посетители", str(cur.get("visitors") or 0), trend(cur.get("visitors") or 0, prev.get("visitors") or 0)),
+    ]
+    tile_html = "".join(
+        f'<td width="50%" style="padding:6px;">'
+        f'<table role="presentation" width="100%" style="background:#f8fafc;border:1px solid #eef2f6;'
+        f'border-radius:12px;"><tr><td style="padding:12px 14px;">'
+        f'<div style="font-size:12px;color:#64748b;">{label}</div>'
+        f'<div style="font-size:20px;font-weight:700;color:{DARK};padding:2px 0;">{value}</div>'
+        f'<div style="font-size:11px;">{delta}</div>'
+        f'</td></tr></table></td>' + ("</tr><tr>" if i % 2 else "")
+        for i, (label, value, delta) in enumerate(tiles))
+
+    def listing(title: str, rows: List[Dict[str, Any]], label_key: str, count_key: str = "visitors"):
+        if not rows:
+            return ""
+        items = "".join(
+            f'<tr><td style="padding:5px 0;border-bottom:1px solid #eef2f6;font-size:13px;color:#334155;">'
+            f'{str(r.get(label_key) or "—")[:48]}</td>'
+            f'<td align="right" style="padding:5px 0;border-bottom:1px solid #eef2f6;font-size:13px;'
+            f'color:#64748b;">{r.get(count_key, 0)}</td></tr>' for r in rows[:5])
+        return (f'<tr><td style="padding:14px 28px 0;">'
+                f'<div style="font-size:12px;font-weight:700;color:{DARK};text-transform:uppercase;'
+                f'letter-spacing:.04em;padding-bottom:4px;">{title}</div>'
+                f'<table role="presentation" width="100%">{items}</table></td></tr>')
+
+    content = (f'<tr><td style="padding:0 22px;"><table role="presentation" width="100%"><tr>'
+               f'{tile_html}</tr></table></td></tr>'
+               + listing("Държави", data.get("countries") or [], "country_name")
+               + listing("Градове", data.get("cities") or [], "city")
+               + listing("Източници", data.get("sources") or [], "source")
+               + listing("Страници", data.get("pages") or [], "path", "views")
+               + f'<tr><td style="padding:16px 28px 22px;font-size:11px;color:#94a3b8;">'
+                 f'Данните са за {day} (софийско време), без ботове.</td></tr>')
+    subject = f"Отчет за {day}: {money(cur.get('sales'))} · {cur.get('orders') or 0} поръчки"
+    html = _admin_shell("ДНЕВЕН ОТЧЕТ", f"Обобщение за {day}", content,
+                        f"{base}/admin/analytics", "Отвори анализите")
+    return subject, html
+
+
 def render_admin_note(badge: str, title: str, body_html: str, cta_url: str = "",
                       cta_label: str = "") -> str:
     """Simple branded admin notice (test emails, system alerts)."""

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { toast } from "sonner";
 import AdminLayout from "../components/AdminLayout";
+import EuropeTrafficMap from "../components/admin/EuropeTrafficMap";
+import StatList from "../components/admin/StatList";
 import { api, fmtEUR } from "../lib/api";
 
 const RANGES = [
@@ -27,6 +30,20 @@ export default function AdminAnalyticsPage() {
   const [to, setTo] = useState(today());
   const [data, setData] = useState(null);
   const [metric, setMetric] = useState("sessions");
+  const [sending, setSending] = useState(false);
+
+  const sendReport = async () => {
+    setSending(true);
+    try {
+      const { data: res } = await api.post("/admin/analytics/report");
+      if (res.sent) toast.success(`Отчетът за ${res.day} е изпратен на ${res.to}`);
+      else toast.error(`Не тръгна: ${res.reason || "проверете Resend ключа в Интеграции"}`);
+    } catch (e) {
+      toast.error("Не успях да изпратя отчета");
+    } finally {
+      setSending(false);
+    }
+  };
 
   const load = useCallback(() => {
     const params = { range };
@@ -70,6 +87,11 @@ export default function AdminAnalyticsPage() {
               className="border border-slate-300 rounded-md px-2 py-1.5" data-testid="analytics-date-to" />
           </span>
         )}
+        <button onClick={sendReport} disabled={sending}
+          className="ml-auto px-4 py-1.5 rounded-full text-sm font-semibold bg-white border border-slate-200 text-slate-700 hover:border-slate-400 disabled:opacity-60"
+          data-testid="send-daily-report">
+          {sending ? "Изпращам…" : "Прати отчета за вчера"}
+        </button>
       </div>
 
       <section className="bg-slate-950 text-white rounded-2xl p-5 sm:p-6" data-testid="analytics-panel">
@@ -133,44 +155,36 @@ export default function AdminAnalyticsPage() {
         </p>
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6" data-testid="analytics-geo">
-        {[
-          { key: "countries", title: "Посетители по държави", label: (r) => r.country_name, testid: "geo-country" },
-          { key: "cities", title: "Посетители по градове", label: (r) => `${r.city}${r.country ? ` · ${r.country}` : ""}`, testid: "geo-city" },
-        ].map((panel) => {
-          const rows = data?.geo?.[panel.key] || [];
-          const max = Math.max(1, ...rows.map((r) => r.visitors));
-          return (
-            <div key={panel.key} className="bg-white border border-slate-200 rounded-xl p-4" data-testid={`analytics-${panel.key}`}>
-              <p className="text-xs uppercase tracking-wide text-slate-500 mb-3">{panel.title}</p>
-              {rows.length === 0 ? (
-                <p className="text-sm text-slate-400">Няма данни за този период.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {rows.map((r, i) => (
-                    <li key={`${panel.key}-${i}`} className="text-sm" data-testid={`${panel.testid}-row`}>
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="truncate text-slate-800">{panel.label(r)}</span>
-                        <span className="tabular-nums text-slate-500">
-                          {r.visitors} <span className="text-slate-400">({r.sessions} сес.)</span>
-                        </span>
-                      </div>
-                      <div className="h-1.5 mt-1 rounded-full bg-slate-100 overflow-hidden">
-                        <div className="h-full rounded-full bg-sky-500 transition-[width] duration-500"
-                          style={{ width: `${Math.round((r.visitors / max) * 100)}%` }} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <p className="text-[11px] text-slate-400 mt-3">
-                {panel.key === "cities"
-                  ? "Градът е по регистрация на IP адреса — приблизителен, както в Shopify."
-                  : "Държавата идва от Cloudflare при всяко посещение."}
-              </p>
-            </div>
-          );
-        })}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
+        <div className="lg:col-span-2">
+          <EuropeTrafficMap rows={data?.geo?.countries || []} title="Карта на посетителите (избран период)" />
+        </div>
+        <div className="space-y-4">
+          <StatList title="На сайта сега (5 мин.)" testid="live-geo" rows={data?.live_geo?.cities || []}
+            label={(r) => `${r.city}${r.country ? ` · ${r.country}` : ""}`}
+            note="Ако е празно — няма активни посетители в момента." empty="Никой на сайта в момента." />
+          <StatList title="Последните 24 часа по локация" testid="day-geo" rows={data?.day_geo?.cities || []}
+            label={(r) => `${r.city}${r.country ? ` · ${r.country}` : ""}`}
+            suffix={(r) => `(${r.sessions} сес.)`} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4" data-testid="analytics-geo">
+        <StatList title="Посетители по държави" testid="geo-country" rows={data?.geo?.countries || []}
+          label={(r) => r.country_name} suffix={(r) => `(${r.sessions} сес.)`}
+          note="Държавата идва от Cloudflare при всяко посещение." />
+        <StatList title="Посетители по градове" testid="geo-city" rows={data?.geo?.cities || []}
+          label={(r) => `${r.city}${r.country ? ` · ${r.country}` : ""}`} suffix={(r) => `(${r.sessions} сес.)`}
+          note="Градът е по регистрация на IP адреса — приблизителен, както в Shopify." />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        <StatList title="Топ страници" testid="top-page" rows={data?.pages || []}
+          label={(r) => r.path} count={(r) => r.views} suffix={(r) => `показв. · ${r.visitors} посет.`}
+          note="Показвания за избрания период, без ботове." />
+        <StatList title="Източници на трафика" testid="source" rows={data?.sources || []}
+          label={(r) => r.source} suffix={(r) => `(${r.views} показв.)`}
+          note="„Директно“ = въведен адрес или запазена страница. Собствените ни страници не се броят." />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6" data-testid="analytics-visitor-windows">

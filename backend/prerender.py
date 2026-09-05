@@ -382,7 +382,7 @@ async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
 async def _collection(locale: str, handle: str) -> Optional[Dict[str, str]]:
     doc = await _db.collections_cat.find_one({"handle": handle}, {"_id": 0}) \
         or await _db.collections_cat.find_one({f"translations.{locale}.handle": handle}, {"_id": 0})
-    if not doc or _retired(doc, locale, handle):
+    if not doc or doc.get("delisted") or _retired(doc, locale, handle):
         return None
     c = localize_doc(doc, locale)
     route = f"/collections/{c.get('handle') or handle}"
@@ -411,7 +411,7 @@ async def _collection(locale: str, handle: str) -> Optional[Dict[str, str]]:
 
 async def _catalog(locale: str) -> Dict[str, str]:
     """/collections — the shop index: every collection and every product, one link each."""
-    collections = await _db.collections_cat.find({}, {"_id": 0}).to_list(50)
+    collections = await _db.collections_cat.find({"delisted": {"$ne": True}}, {"_id": 0}).to_list(50)
     products = await _db.products.find({"active": True}, {"_id": 0}).to_list(200)
     items = [localize_doc(p, locale) for p in products]
     title = f'{_t(locale, "catalog")}'
@@ -601,7 +601,7 @@ async def _home(locale: str) -> Dict[str, str]:
     settings = (s or {}).get("value", {})
     products = await _db.products.find({"active": True}, {"_id": 0}).to_list(24)
     items = [localize_doc(p, locale) for p in products]
-    collections = await _db.collections_cat.find({}, {"_id": 0}).to_list(20)
+    collections = await _db.collections_cat.find({"delisted": {"$ne": True}}, {"_id": 0}).to_list(20)
     title, description, _ = _HOME.get(locale, _HOME["en"])
     origin = SITE_ORIGINS.get(locale, SITE_ORIGINS[DEFAULT_LOCALE])["origin"]
     ld = _ld(_organization(locale),

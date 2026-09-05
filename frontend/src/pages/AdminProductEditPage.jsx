@@ -10,7 +10,7 @@ import { isAllCollection } from "../lib/collections";
 const EMPTY = {
   handle: "", title: "", subtitle: "", description: "", image: "", images: [],
   variants: [{ name: "", price_eur: 0, stock: 0, sku: "" }],
-  collections: [], tags: [], featured: false,
+  collections: [], tags: [], admin_tags: [], featured: false,
   specs: { cas: "", formula: "", mw: "", purity: "" },
   seo_title: "", seo_description: "", translations: {},
 };
@@ -25,6 +25,7 @@ export default function AdminProductEditPage() {
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [tagDraft, setTagDraft] = useState("");
   const [uploading, setUploading] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [tab, setTab] = useState("bg");
@@ -379,6 +380,36 @@ export default function AdminProductEditPage() {
                 onChange={(e) => set({ featured: e.target.checked })} data-testid="field-featured" />
               Показвай като препоръчан
             </label>
+          </section>
+
+          <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-3" data-testid="admin-tags-section">
+            <h2 className="font-bold text-slate-900">Вътрешни тагове</h2>
+            <p className="text-xs text-slate-500">
+              Само за теб — не се показват на клиентите и не излизат в API-то, sitemap-а или Google.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(p.admin_tags || []).map((tag) => (
+                <span key={tag} className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 rounded-full pl-3 pr-1.5 py-1 text-xs font-semibold"
+                  data-testid={`admin-tag-${tag}`}>
+                  {tag}
+                  <button type="button" onClick={() => set({ admin_tags: p.admin_tags.filter((t) => t !== tag) })}
+                    className="h-4 w-4 rounded-full hover:bg-slate-300 text-slate-500 leading-none"
+                    aria-label={`Премахни ${tag}`} data-testid={`admin-tag-remove-${tag}`}>×</button>
+                </span>
+              ))}
+              {(p.admin_tags || []).length === 0 && <span className="text-xs text-slate-400">Няма тагове</span>}
+            </div>
+            <input value={tagDraft} onChange={(e) => setTagDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== ",") return;
+                e.preventDefault();
+                const tag = tagDraft.trim().replace(/,$/, "");
+                if (tag && !(p.admin_tags || []).includes(tag)) set({ admin_tags: [...(p.admin_tags || []), tag] });
+                setTagDraft("");
+              }}
+              placeholder="Нов таг и Enter"
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+              data-testid="admin-tag-input" />
           </section>
 
           <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-3">
