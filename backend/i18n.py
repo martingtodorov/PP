@@ -11,7 +11,8 @@ DEFAULT_LOCALE = "bg"
 # locale -> (language name for the translator, html lang / hreflang code)
 LOCALE_META = {
     "bg": {"name": "Bulgarian", "hreflang": "bg-BG", "label": "Български"},
-    "en": {"name": "English", "hreflang": "en", "label": "English"},
+    # hreflang stays generic English, but og:locale needs a language_TERRITORY pair
+    "en": {"name": "English", "hreflang": "en", "og_locale": "en_GB", "label": "English"},
     "fr": {"name": "French", "hreflang": "fr-FR", "label": "Français"},
     "de": {"name": "German", "hreflang": "de-DE", "label": "Deutsch"},
     "cz": {"name": "Czech", "hreflang": "cs-CZ", "label": "Čeština"},

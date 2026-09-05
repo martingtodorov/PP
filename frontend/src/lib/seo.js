@@ -30,7 +30,8 @@ const setLink = (rel, href, hreflang) => {
  */
 export function useSeo({ title, description, locale = DEFAULT_LOCALE, path = "/", alternates = {}, jsonLd, image, ogType = "website", robots = "index,follow,max-image-preview:large,max-snippet:-1" }) {
   useEffect(() => {
-    const full = title ? `${title}` : "PurePeptide";
+    // one space around the pipe — a missing one ("… GH| цена") was visible in search results
+    const full = (title ? `${title}` : "PurePeptide").replace(/\s*\|\s*/g, " | ").trim();
     document.title = full;
     // html lang takes the plain language subtag: cz -> cs, si -> sl, gr -> el
     document.documentElement.lang = (LOCALE_META[locale]?.hreflang || locale).split("-")[0];
@@ -41,7 +42,9 @@ export function useSeo({ title, description, locale = DEFAULT_LOCALE, path = "/"
     setMeta("property", "og:title", full);
     setMeta("property", "og:description", description);
     setMeta("property", "og:type", ogType);
-    setMeta("property", "og:locale", (LOCALE_META[locale]?.hreflang || locale).replace("-", "_"));
+    // og:locale wants language_TERRITORY, so English declares en_GB rather than a bare "en"
+    setMeta("property", "og:locale",
+      LOCALE_META[locale]?.ogLocale || (LOCALE_META[locale]?.hreflang || locale).replace("-", "_"));
     setMeta("name", "twitter:title", full);
     setMeta("name", "twitter:description", description);
     const origin = window.location.origin;

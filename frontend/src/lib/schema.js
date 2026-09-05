@@ -22,6 +22,13 @@ export const organizationLd = (settings = {}) => ({
   logo: { "@type": "ImageObject", url: asset("icon", "/favicon-512.png"), width: 512, height: 512 },
   image: asset("og", "/og-image.jpg"),
   email: settings.contact_email || "contact@purepeptide.bg",
+  contactPoint: {
+    "@type": "ContactPoint",
+    contactType: "customer service",
+    email: settings.contact_email || "contact@purepeptide.bg",
+    areaServed: "EU",
+    ...(settings.contact_phone ? { telephone: settings.contact_phone } : {}),
+  },
   description: settings.tagline || translate(currentLocale(), "brandDesc"),
 });
 

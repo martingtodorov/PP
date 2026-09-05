@@ -108,10 +108,9 @@ export default function HomePage() {
   }, [location]);
 
   useSeo({
-    title: locale === "bg"
-      ? "PurePeptide – Nº1 пептиди с доказано качество в България"
-      : `PurePeptide – ${t("tagline")}`,
-    description: t("heroSub"),
+    // brand first and the market named, under 60 characters so Google shows the whole title
+    title: t("homeTitle"),
+    description: t("homeDescription"),
     locale,
     path: "/",
     jsonLd: graph(organizationLd(settings), websiteLd(locale), {

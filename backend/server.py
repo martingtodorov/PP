@@ -1667,7 +1667,9 @@ async def admin_products(user=Depends(require_admin)):
 async def admin_create_product(payload: ProductIn, user=Depends(require_admin)):
     if await db.products.find_one({"handle": payload.handle}):
         raise HTTPException(400, "Handle вече съществува")
-    doc = {"id": str(uuid.uuid4()), "created_at": now_utc(), **payload.model_dump()}
+    # an image pasted as a link is downloaded into our storage, never hot-linked
+    fields = await adopt_external_images(payload.model_dump())
+    doc = {"id": str(uuid.uuid4()), "created_at": now_utc(), **fields}
     if not doc.get("images"):
         doc["images"] = [doc["image"]] if doc.get("image") else []
     await db.products.insert_one(doc.copy())
@@ -1677,7 +1679,8 @@ async def admin_create_product(payload: ProductIn, user=Depends(require_admin)):
 
 @api.put("/admin/products/{product_id}")
 async def admin_update_product(product_id: str, payload: ProductIn, user=Depends(require_admin)):
-    res = await db.products.update_one({"id": product_id}, {"$set": payload.model_dump()})
+    fields = await adopt_external_images(payload.model_dump())
+    res = await db.products.update_one({"id": product_id}, {"$set": fields})
     if res.matched_count == 0:
         raise HTTPException(404)
     return {"ok": True}
@@ -1713,6 +1716,7 @@ async def admin_update_article(handle: str, payload: ArticlePatch, user=Depends(
     changes = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not changes:
         raise HTTPException(400, "Няма промени")
+    changes = await adopt_external_images(changes)
     changes["updated_at"] = now_utc()
     res = await db.articles.update_one({"handle": handle}, {"$set": changes})
     if res.matched_count == 0:
@@ -1725,7 +1729,7 @@ async def admin_update_article(handle: str, payload: ArticlePatch, user=Depends(
 async def admin_create_collection(payload: CollectionIn, user=Depends(require_admin)):
     if await db.collections_cat.find_one({"handle": payload.handle}):
         raise HTTPException(400, "Handle вече съществува")
-    doc = {"id": str(uuid.uuid4()), "created_at": now_utc(), **payload.model_dump()}
+    doc = {"id": str(uuid.uuid4()), "created_at": now_utc(), **await adopt_external_images(payload.model_dump())}
     await db.collections_cat.insert_one(doc.copy())
     doc.pop("_id", None)
     return {"collection": doc}
@@ -1745,7 +1749,7 @@ async def admin_get_settings(user=Depends(require_admin)):
 async def admin_update_settings(payload: SettingsIn, user=Depends(require_admin)):
     await db.settings.update_one(
         {"key": "site"},
-        {"$set": {"value": payload.value, "updated_at": now_utc()}},
+        {"$set": {"value": await adopt_external_images(payload.value), "updated_at": now_utc()}},
         upsert=True,
     )
     return {"ok": True}
@@ -1942,7 +1946,8 @@ async def admin_get_product(product_id: str, user=Depends(require_admin)):
 
 @api.put("/admin/collections/{collection_id}")
 async def admin_update_collection(collection_id: str, payload: CollectionIn, user=Depends(require_admin)):
-    res = await db.collections_cat.update_one({"id": collection_id}, {"$set": payload.model_dump()})
+    res = await db.collections_cat.update_one({"id": collection_id},
+                                              {"$set": await adopt_external_images(payload.model_dump())})
     if res.matched_count == 0:
         raise HTTPException(404, "Колекцията не е намерена")
     _links_cache.clear()
@@ -2191,6 +2196,85 @@ def _refetch_image(src: str) -> Optional[Dict[str, Any]]:
     path = f"import/{hashlib.sha1(src.split('?')[0].encode()).hexdigest()[:12]}-{base}"
     stored = storage.put_object(path, resp.content, content_type).get("path", path)
     return {"path": stored, "base": base, "content_type": content_type, "size": len(resp.content)}
+
+
+# ---------- off-site images ----------
+# The lab reports (Janoshik certificates) were still served from the old Shopify store: the day that
+# store lapses, 14 products lose their proof images and their JSON-LD `image` entries at once.
+# Every picture we reference must live in our own storage.
+_URL_IN_TEXT = re.compile(r"https?://[^\s\"'<>)]+", re.I)
+_IMG_EXT = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".svg", ".bmp")
+OWN_HOSTS = ("purepeptide.bg", "purepeptide.eu", "purepeptide.ro", "purepeptide.gr",
+             "purepeptide-labs.bg")
+
+
+def _is_external_image(url: str) -> bool:
+    bare = url.split("?")[0].lower()
+    host = _bare_host(url)
+    if not host or host in OWN_HOSTS or host.endswith(".emergentagent.com"):
+        return False
+    return bare.endswith(_IMG_EXT) or "shopify" in host or "/cdn/shop/" in bare
+
+
+async def _adopt_image(src: str) -> str:
+    """`/api/files/...` URL for an off-site picture, downloading it once and reusing it after."""
+    key = src.split("?")[0]
+    entry = await db.image_map.find_one({"$or": [{"key": key}, {"src": src}]}, {"_id": 0, "path": 1, "url": 1})
+    if entry and entry.get("url") and await run_in_threadpool(_readable, entry.get("path") or ""):
+        return entry["url"]
+    got = await run_in_threadpool(_refetch_image, src)
+    if not got:
+        return ""
+    url = f"/api/files/{got['path']}"
+    await _ensure_file_record(got["path"], "image-rehost")
+    await db.image_map.update_one(
+        {"key": key},
+        {"$set": {"key": key, "src": src, "path": got["path"], "url": url},
+         "$setOnInsert": {"created_at": now_utc()}}, upsert=True)
+    return url
+
+
+async def adopt_external_images(node: Any, report: Dict[str, List] = None) -> Any:
+    """Copy every off-site image the value references into our storage and rewrite the reference."""
+    if isinstance(node, str):
+        out = node
+        for url in dict.fromkeys(_URL_IN_TEXT.findall(node)):
+            if not _is_external_image(url):
+                continue
+            local = await _adopt_image(url)
+            if local:
+                out = out.replace(url, local)
+                if report is not None:
+                    report.setdefault("replaced", []).append({"from": url, "to": local})
+            elif report is not None:
+                report.setdefault("failed", []).append(url)
+        return out
+    if isinstance(node, list):
+        return [await adopt_external_images(x, report) for x in node]
+    if isinstance(node, dict):
+        return {k: await adopt_external_images(v, report) for k, v in node.items()}
+    return node
+
+
+@api.post("/admin/media/rehost")
+async def rehost_media(dry_run: bool = False, user=Depends(require_admin)):
+    """Bring every image we still serve from someone else's domain into our own storage."""
+    report: Dict[str, List] = {}
+    scanned = changed = 0
+    for name in ("products", "collections_cat", "articles", "pages", "settings"):
+        async for doc in db[name].find({}):
+            scanned += 1
+            payload = {k: v for k, v in doc.items() if k != "_id"}
+            adopted = await adopt_external_images(payload, report)
+            if adopted != payload:
+                changed += 1
+                if not dry_run:
+                    await db[name].update_one({"_id": doc["_id"]}, {"$set": adopted})
+    if changed and not dry_run:
+        prerender.bump()
+    return {"scanned": scanned, "documents_changed": changed,
+            "replaced": report.get("replaced", []), "failed": sorted(set(report.get("failed", []))),
+            "dry_run": dry_run}
 
 
 @api.post("/admin/media/repair")
@@ -2460,7 +2544,7 @@ async def admin_update_page(slug: str, locale: str, payload: PageIn, user=Depend
         {
             "$set": {
                 "title": payload.title,
-                "html": payload.html,
+                "html": await adopt_external_images(payload.html),
                 "faq_items": items,
                 "updated_at": now_utc(),
             },
@@ -3647,25 +3731,17 @@ async def llms_txt():
 
 @api.get("/robots.txt", response_class=PlainTextResponse)
 async def robots(request: Request):
+    # ONE group for every crawler: separate per-bot groups replace the "*" group for that bot, so
+    # the AI crawlers used to lose the /admin, /cart, /checkout and /account exclusions. The content
+    # signals state the owner's policy — everything is allowed, training included.
     lines = [
         "User-agent: *",
+        "Content-Signal: search=yes, ai-input=yes, ai-train=yes, use=full",
         "Allow: /",
         "Disallow: /admin",
         "Disallow: /checkout",
         "Disallow: /cart",
         "Disallow: /account",
-        "",
-        "User-agent: GPTBot",
-        "Allow: /",
-        "",
-        "User-agent: ClaudeBot",
-        "Allow: /",
-        "",
-        "User-agent: PerplexityBot",
-        "Allow: /",
-        "",
-        "User-agent: Google-Extended",
-        "Allow: /",
         "",
     ]
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
