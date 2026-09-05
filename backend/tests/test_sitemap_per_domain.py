@@ -23,9 +23,28 @@ HOSTS = {
 
 
 def sitemap(host: str) -> str:
+    """The parent sitemap is an index (like Shopify's) — return the children glued together."""
     r = requests.get(f"{BASE}/api/sitemap.xml", headers={"Host": host}, timeout=30)
     assert r.status_code == 200 and r.headers["content-type"].startswith("application/xml")
-    return r.text
+    assert "<sitemapindex" in r.text
+    out = ""
+    for child in re.findall(r"<loc>([^<]+)</loc>", r.text):
+        path = "/" + child.split("/", 3)[3]
+        if "agentic" in path:                      # the AI entry-point file is checked separately
+            continue
+        c = requests.get(f"{BASE}/api{path}", headers={"Host": host}, timeout=30)
+        assert c.status_code == 200, path
+        out += c.text
+    return out
+
+
+def test_the_index_links_one_file_per_kind():
+    xml = requests.get(f"{BASE}/api/sitemap.xml", headers={"Host": "purepeptide.bg"}, timeout=30).text
+    files = [u.rsplit("/", 1)[-1] for u in re.findall(r"<loc>([^<]+)</loc>", xml)]
+    assert files == ["sitemap_agentic_discovery.xml", "sitemap_products_1.xml",
+                     "sitemap_collections_1.xml", "sitemap_pages_1.xml", "sitemap_blogs_1.xml"]
+    assert all(u.startswith("https://purepeptide.bg/")
+               for u in re.findall(r"<loc>([^<]+)</loc>", xml))
 
 
 def locs(xml: str):

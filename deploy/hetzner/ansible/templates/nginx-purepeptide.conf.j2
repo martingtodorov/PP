@@ -135,17 +135,19 @@ server {
 
     location = /robots.txt   { try_files $uri @backend; }
 
-    # the sitemap is generated per locale by the backend — /sitemap.xml is what crawlers ask for
-    location = /sitemap.xml {
-        proxy_pass http://{{ backend_private_ip }}:8001/api/sitemap.xml;
+    # every sitemap file comes from the backend (index + per-kind children, like Shopify:
+    # /sitemap.xml -> /sitemap_products_1.xml, _collections_, _pages_, _blogs_, _agentic_discovery)
+    location ~ ^/sitemap[a-z0-9_]*\.xml$ {
+        proxy_pass http://{{ backend_private_ip }}:8001/api$uri;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Forwarded-Proto https;
     }
 
     # llms.txt / agents.md must be served as Markdown, never as the SPA shell
     location = /llms.txt {
         # always fresh: generated from the database (handles change when a URL is rotated)
-        proxy_pass http://127.0.0.1:8001/api/llms.txt;
+        proxy_pass http://{{ backend_private_ip }}:8001/api/llms.txt;
         proxy_set_header Host $host;
     }
     location = /agents.md {

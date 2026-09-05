@@ -94,10 +94,21 @@ def test_product_json_ld_completeness():
 
 
 # ---- sitemap ----
+def child_sitemaps(kind: str = "") -> str:
+    """The parent /sitemap.xml is an index (Shopify shape) — glue the children together."""
+    index = requests.get(f"{API}/sitemap.xml", headers=HOST, timeout=60)
+    assert index.status_code == 200 and "<sitemapindex" in index.text
+    out = ""
+    for child in re.findall(r"<loc>([^<]+)</loc>", index.text):
+        name = child.rsplit("/", 1)[-1]
+        if "agentic" in name or (kind and f"_{kind}_" not in name):
+            continue
+        out += requests.get(f"{API}/{name}", headers=HOST, timeout=60).text
+    return out
+
+
 def test_sitemap_image_namespace_and_no_retired():
-    r = requests.get(f"{API}/sitemap.xml", headers=HOST, timeout=60)
-    assert r.status_code == 200
-    xml = r.text
+    xml = child_sitemaps()
     assert 'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"' in xml
     # No retired handles
     assert "/products/21-retatrutide-5<" not in xml

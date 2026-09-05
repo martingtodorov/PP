@@ -483,3 +483,19 @@
 - Известни, НЕсвързани провали: `test_dynamic_links.py::test_storefront_has_no_hardcoded_page_paths`
   и `test_iteration45_prerender.py::test_private_and_unknown_routes_404` (частните маршрути
   умишлено връщат 200 с шела).
+
+## 2026-06-06 (девета част) — sitemap като Shopify (index + деца)
+- `/sitemap.xml` вече е **`<sitemapindex>`** по образеца на Shopify и сочи към
+  `/sitemap_agentic_discovery.xml`, `/sitemap_products_1.xml`, `/sitemap_collections_1.xml`,
+  `/sitemap_pages_1.xml`, `/sitemap_blogs_1.xml` (страниране на всеки 5000 URL-а, само за
+  домейна на заявката). Всяко дете е `<urlset>` с hreflang alternates, `image:image` и реален
+  `lastmod`. Нов маршрут `/api/sitemap_{kind}_{page:int}.xml`.
+- Nginx: една regex локация `^/sitemap[a-z0-9_]*\.xml$` проксира всички sitemap файлове към бекенда
+  (преди само `/sitemap.xml` беше закачен — затова `/sitemap_agentic_discovery.xml` връщаше 404 на
+  продукшън, макар robots.txt да го обявява). Поправен и `/llms.txt`, който сочеше към
+  `127.0.0.1:8001` на фронт машината и връщаше **502**.
+- `sitemap_agentic_discovery.xml` вече изписва публикуваните (ротирани) handle-и и pub_slug-ове —
+  преди сипеше базовите, които са 404; `agents.md` и `llms.txt` вече са без локален префикс
+  (`/en/llms.txt` беше 404).
+- `scripts/check_sitemap.py` следва index-а и проверява и файловете `.md/.txt/.xml` през бекенда.
+  Резултат: purepeptide.bg 105 URL-а, purepeptide.eu 567, purepeptide.ro 105 — 0 счупени.
