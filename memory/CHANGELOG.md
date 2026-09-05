@@ -539,3 +539,22 @@
 - `check_sitemap.py`: 4 домейна, 0 счупени (68 URL-а на .bg/.ro/.gr, 530 на .eu).
 - Тестове: `test_sitemap_per_domain.py` +4 (Shopify формата, агентният файл, agents.md/llms.txt),
   194 теста в SEO пакета минават.
+
+## 2026-06-06 (дванадесета част) — www.* и сертификат за всяка зона
+- **www изобщо не съществуваше в nginx**: и двата блока изброяваха само apex домейните. Добавени са
+  `www.*` имена на :80 и отделен 443 блок за всяка cert група, който прави 301 към apex
+  (`map $host $pp_apex` реже префикса). На споделения `.eu` редиректът е ЕДИН скок — води директно
+  към `/en/...`, за да няма верига www → apex → /en/.
+- **Сертификатите по зона не се използваха**: шаблонът има логиката, но `site_tls_certs` беше празен,
+  затова всички 5 домейна колабираха в една група с `origin.pem` (покрива само
+  `*.purepeptide-labs.bg`). Работеше само защото Cloudflare е на „Full“, а не „Full (strict)“.
+  `deploy_nginx.yml` вече сам открива `/etc/ssl/cloudflare/<домейн>.pem` + `.key` (четирите
+  качени на 3 септември), подава ги като `site_tls_certs` (group_vars има приоритет) и логва кой
+  домейн с какъв сертификат се рендерира. Липсващ сертификат → пада към общия, без счупен деплой.
+- Тестове: `test_nginx_redirects.py` +5 (www → apex за 3 домейна, отделен сертификат за всяка зона,
+  fallback при липсващ) — 62 теста минават. `regex_replace` (Ansible-only филтър) е избегнат, за да
+  се рендерира шаблонът и с чист Jinja2 в тестовете.
+- Проверено на продукшън: `www.purepeptide.bg/.ro/.gr` вече правят 301 към apex, а
+  **`www.purepeptide.eu` дава Cloudflare „Error 1000: DNS points to prohibited IP“** — записът е
+  grey-cloud/DNS-only и сочи към Cloudflare IP. Оправя се само в Cloudflare DNS
+  (CNAME `www` → `purepeptide.eu`, proxied/оранжев облак). `www.purepeptide-labs.bg` няма запис.

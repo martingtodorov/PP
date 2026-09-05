@@ -224,3 +224,40 @@ def test_private_route_lang_is_locale(nginx):
     status, _, body = get("purepeptide.eu", "/en/cart")
     assert status == 200
     assert '<html lang="en"' in body
+
+
+# ---------- www.* and one Origin certificate per Cloudflare zone ----------
+
+@pytest.mark.parametrize("host,expected", [
+    ("www.purepeptide.bg", "https://purepeptide.bg/"),
+    ("www.purepeptide.ro", "https://purepeptide.ro/products/sermorelin"),
+    ("www.purepeptide.eu", "https://purepeptide.eu/en/"),
+])
+def test_www_redirects_to_the_apex(nginx, host, expected):
+    """www was not in any server_name, so it never reached a 301 at the origin."""
+    path = "/products/sermorelin" if "purepeptide.ro" in host else "/"
+    status, location, _ = get(host, path)
+    assert (status, location) == (301, expected)
+
+
+def render(**overrides) -> str:
+    return Template(TEMPLATE.read_text(encoding="utf-8")).render(**{**VARS, **overrides})
+
+
+def test_each_zone_gets_its_own_certificate():
+    certs = {d: {"cert": f"/etc/ssl/cloudflare/{d}.pem", "key": f"/etc/ssl/cloudflare/{d}.key"}
+             for d in VARS["site_domains"]}
+    conf = render(site_tls_certs=certs)
+    for d in VARS["site_domains"]:
+        block = re.search(rf"server_name {re.escape(d)};\n\n    ssl_certificate\s+(\S+);", conf)
+        assert block and block.group(1) == f"/etc/ssl/cloudflare/{d}.pem", d
+        assert f"server_name www.{d};" in conf
+    assert conf.count("listen 443 ssl http2;") == 2 * len(VARS["site_domains"])   # apex + www
+
+
+def test_a_zone_without_its_own_certificate_keeps_the_shared_one():
+    conf = render(site_tls_certs={"purepeptide.bg": {"cert": "/etc/ssl/cloudflare/purepeptide.bg.pem",
+                                                     "key": "/etc/ssl/cloudflare/purepeptide.bg.key"}})
+    assert "ssl_certificate     /etc/ssl/cloudflare/purepeptide.bg.pem;" in conf
+    assert "ssl_certificate     /dev/null;" in conf          # the shared fallback for the rest
+    assert "server_name purepeptide-labs.bg purepeptide.eu purepeptide.ro purepeptide.gr;" in conf
