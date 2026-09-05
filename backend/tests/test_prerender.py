@@ -1,4 +1,5 @@
 """Server-side prerender: every public route must answer with finished, crawlable HTML."""
+import json
 import os
 import re
 
@@ -34,6 +35,20 @@ def test_a_product_page_is_fully_rendered():
     assert html.count("<h1") == 1, "exactly one H1 per page"
     assert title[:12] in head_of(html, r"<h1>(.*?)</h1>")
     assert '"@type": "Product"' in html and '"Offer"' in html and "BreadcrumbList" in html
+    ld = json.loads(re.search(r'data-pp-jsonld="prerender">(.*?)</script>', html, re.S).group(1))
+    product = next(n for n in ld["@graph"] if n["@type"] == "Product")
+    assert product["brand"]["name"] == "PurePeptide" and product["mpn"]
+    offers = product["offers"]
+    assert offers["@type"] in ("Offer", "AggregateOffer")
+    if offers["@type"] == "AggregateOffer":
+        assert offers["offerCount"] == len(offers["offers"]) and offers["lowPrice"] <= offers["highPrice"]
+        offers = offers["offers"][0]
+    # Google merchant listings: the return window and the delivery terms live inside the offer
+    assert offers["hasMerchantReturnPolicy"]["merchantReturnDays"] >= 1
+    assert offers["shippingDetails"]["shippingRate"]["currency"]
+    # only one JSON-LD block server-side, and React drops it on mount (no duplicate brand/offers)
+    assert html.count("application/ld+json") == 1
+    assert 'data-pp-jsonld="prerender"' in html
     assert '"priceCurrency": "EUR"' in html and "schema.org/InStock" in html or "OutOfStock" in html
     assert "<img " in html
     assert html.count("hreflang=") >= 12       # 11 locales + x-default

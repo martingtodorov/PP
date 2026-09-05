@@ -264,3 +264,32 @@
   BoxNow→Еконт) без грешки.
 - ЗА ПРОДУКЦИЯ: нужен е деплой на бекенда И на nginx (`deploy_nginx.yml` / `site.yml`), иначе
   prerender-ът не се включва.
+
+## 2026-06-05 (продължение) — Дублирана Product schema + автоматичен превод на продукция
+- **Rich Results: „Duplicate field brand“ / „Invalid object type for offers“** — след деплоя на
+  prerender-а на страницата имаше ДВА JSON-LD блока с един и същ `@id` (сървърният и този на React),
+  Google ги сливаше и получаваше и `offers` масив, и `AggregateOffer`. Сървърният блок вече носи
+  `data-pp-jsonld="prerender"` и React го премахва при монтиране (`lib/seo.js`), така че рендиращите
+  JS ботове виждат само богатата клиентска schema, а нерендиращите — сървърната. `x-default` вече сочи
+  към английската версия (както в клиента).
+- **Автоматичен превод на продукция**: `auto_translate_watch()` — при стартиране и после на всеки 6 ч
+  проверява дали има продукти/колекции/статии без превод и пуска bulk job (resume-safe, БЕЗ overwrite).
+  Включва се само с `AUTO_TRANSLATE=1`, което е в `backend.env.j2` → работи на прод, изключено е в
+  preview (собственикът не иска да гори бюджет в preview). Пуснатият в preview job е спрян.
+- Тестове: `test_deploy_config.py` + `test_prerender.py` 79/79 зелени.
+
+## 2026-06-05 (продължение 2) — Пълна Product schema и в prerender-а
+- Сървърната schema вече е огледало на клиентската: един `brand`, `mpn`, `category`,
+  `AggregateOffer` с `lowPrice/highPrice/offerCount` при няколко варианта (един `Offer` при един), а
+  всеки `Offer` носи `hasMerchantReturnPolicy` (14 дни, ReturnByMail) и `shippingDetails`
+  (цена, държава, handling/transit дни) — взети от `nextcart.shipping_summary()` за съответния език.
+  Така „Missing field hasMerchantReturnPolicy/shippingDetails“ и „Duplicate field brand“ отпадат и за
+  ботовете, които не изпълняват JS.
+- Проверка на живо (след деплоя на собственика): `purepeptide.bg/products/21-retatrutide-5-lrp` →
+  32.5 KB HTML, 1 H1, canonical, 7 снимки, 12 hreflang, 1 JSON-LD блок. Продукцията още върви със
+  предишния билд на бекенда (LD блокът не е маркиран с `data-pp-jsonld`), затова е нужен нов деплой на
+  бекенда, за да влязат: маркирането (без дублиране на brand/offers), пълните offer полета,
+  `x-default` към EN и `AUTO_TRANSLATE`.
+- Sitemap-и на живо: `/sitemap.xml` (748 URL с hreflang за всички езици),
+  `/sitemap_agentic_discovery.xml` и `/robots.txt` отговарят 200 и на четирите домейна.
+- Тестове: 99 зелени (prerender, deploy конфиг, проследяване, банка/фирма, доставки).

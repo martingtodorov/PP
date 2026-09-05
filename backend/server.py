@@ -423,6 +423,7 @@ async def on_startup():
     except Exception as ex:
         log.error("Heading restore failed: %s", ex)
     await resume_translate_jobs()
+    asyncio.create_task(auto_translate_watch())
 
 
 @app.on_event("shutdown")
@@ -3110,6 +3111,39 @@ async def resume_translate_jobs():
         log.info("Resuming translation job %s (%s/%s)", job["id"], job.get("done"), job.get("total"))
         asyncio.create_task(_run_bulk_translate(job["id"], job.get("resource", "everything"),
                                                 job.get("locales") or [], bool(job.get("overwrite"))))
+
+
+async def _missing_translations(targets: List[str]) -> int:
+    """How many catalogue items still lack a translation in one of the target languages."""
+    missing = 0
+    for coll in (db.products, db.collections_cat, db.articles):
+        for loc in targets:
+            missing += await coll.count_documents({f"translations.{loc}.title": {"$in": [None, ""]}})
+    return missing
+
+
+async def auto_translate_watch():
+    """Production translates itself: new products, collections and articles are picked up without
+    anyone opening the admin panel. Off by default (AUTO_TRANSLATE), never overwrites existing copy."""
+    if (os.environ.get("AUTO_TRANSLATE") or "").strip().lower() not in ("1", "true", "yes"):
+        return
+    targets = [loc for loc in LOCALES if loc != DEFAULT_LOCALE]
+    await asyncio.sleep(90)                       # let the app finish booting first
+    while True:
+        try:
+            active = await db.translate_jobs.find_one({"status": {"$in": ["queued", "running"]}}, {"_id": 0})
+            if not active and await _missing_translations(targets):
+                job_id = str(uuid.uuid4())
+                await db.translate_jobs.insert_one({
+                    "id": job_id, "status": "queued", "resource": "everything", "locales": targets,
+                    "overwrite": False, "completed": [], "total": 0, "done": 0, "failed": [],
+                    "current": "", "created_at": now_utc(), "updated_at": now_utc(), "actor": "auto",
+                })
+                log.info("Auto-translate job %s started for %s", job_id, ", ".join(targets))
+                asyncio.create_task(_run_bulk_translate(job_id, "everything", targets, False))
+        except Exception:
+            log.exception("auto-translate watch failed")
+        await asyncio.sleep(6 * 3600)
 
 
 @api.post("/admin/translate/bulk")
