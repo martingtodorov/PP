@@ -177,6 +177,39 @@
               "location ^~ /api/files/" — re-render it and reload nginx.
       tags: [verify]
 
+    # /sitemap.xml is an index that links child files (products, collections, pages, blogs). Only
+    # /sitemap.xml used to be proxied, so every child answered the SPA's 404 and the index was dead.
+    - name: Every sitemap file in the index must be served by the backend
+      block:
+        - name: Follow the sitemap index through nginx
+          shell: |
+            set -o pipefail
+            target=$(cat /tmp/pp-target 2>/dev/null || echo {{ frontend_public_ip }})
+            base="https://{{ canonical_domain }}"
+            curl_() { curl -ksS --max-time 20 --resolve '{{ canonical_domain }}:443:'"$target" "$@"; }
+            index=$(curl_ "$base/sitemap.xml")
+            echo "$index" | grep -q '<sitemapindex' || { echo "not an index: ${index:0:200}"; exit 1; }
+            rc=0
+            for child in $(echo "$index" | grep -o '<loc>[^<]*</loc>' | sed 's|</\?loc>||g'); do
+              code=$(curl_ -o /dev/null -w '%{http_code}' "$child")
+              echo "$child -> $code"
+              [ "$code" = "200" ] || rc=1
+            done
+            exit $rc
+          args: { executable: /bin/bash }
+          register: sitemap_probe
+          changed_when: false
+      rescue:
+        - name: Report the sitemap routing problem
+          fail:
+            msg: |
+              A sitemap file in the index is not reaching the backend:
+              {{ sitemap_probe.stdout | default('no output') }}
+              The rendered config must contain "location ~ ^/sitemap[a-z0-9_]*\.xml$" proxying to
+              the backend — re-render it and reload nginx.
+      tags: [verify]
+
+
     - name: Which of the domains actually reach this server? (informational)
       shell: |
         for d in {{ site_domains | join(' ') }}; do

@@ -112,7 +112,7 @@ def test_html_is_stable_between_requests():
 
 def test_sitemap_lastmod_is_the_record_date():
     xml = child_sitemaps()
-    days = set(re.findall(r"<lastmod>([\d-]+)</lastmod>", xml))
+    days = set(re.findall(r"<lastmod>([^<]+)</lastmod>", xml))
     assert days and len(days) > 1, "every url carrying today's date is a worthless lastmod signal"
 
 
@@ -156,3 +156,18 @@ def test_rotation_handles_are_globally_unique():
     assert "await next_rotation_handle(kind, base, doc, loc)" in src
     assert 'await next_rotation_handle("pages", base, doc, loc)' in src
     assert "await db.rotation_log.create_index(\"handle\", unique=True)" in src
+
+
+def test_sitemap_skips_deactivated_products():
+    """A de-activated product 404s on the storefront — two of them blocked a production deploy."""
+    from pymongo import MongoClient
+
+    mdb = MongoClient(os.environ["MONGO_URL"])[os.environ["DB_NAME"]]
+    doc = mdb.products.find_one({"active": {"$ne": False}}, {"handle": 1, "translations": 1})
+    handle = ((doc.get("translations") or {}).get("bg") or {}).get("handle") or doc["handle"]
+    mdb.products.update_one({"_id": doc["_id"]}, {"$set": {"active": False}})
+    try:
+        assert f"/products/{handle}</loc>" not in child_sitemaps()
+    finally:
+        mdb.products.update_one({"_id": doc["_id"]}, {"$set": {"active": True}})
+    assert f"/products/{handle}</loc>" in child_sitemaps()

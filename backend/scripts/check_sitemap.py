@@ -12,7 +12,7 @@ import argparse
 import asyncio
 import re
 import sys
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import httpx
 
@@ -40,7 +40,7 @@ async def check_host(client: httpx.AsyncClient, base: str, host: str) -> list:
         if parts.netloc != host:
             bad.append((host, url, "foreign domain"))
             continue
-        path = parts.path or "/"
+        path = unquote(parts.path) or "/"
         if path.endswith((".md", ".txt", ".xml")):     # served by the backend, not prerendered HTML
             res = await client.get(f"{base}/api{path}", headers=headers, timeout=60)
             if res.status_code != 200:

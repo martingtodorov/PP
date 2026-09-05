@@ -515,3 +515,27 @@
   hreflang href и се проверява 200, плюс тест че alternate-ът съдържа handle-а на ДРУГИЯ локал
   (18 теста, всички минават). Обновен и остарелият `test_private_and_unknown_routes_404`
   (частните маршрути умишлено връщат шела; robots.txt ги забранява).
+
+## 2026-06-06 (единадесета част) — деплой гардът хвана 8 мъртви URL-а + Shopify паритет на sitemap-а
+- **Защо се провали деплоят (8 мъртви URL-а)**:
+  1. `.bg` × 2 — `epitalon-epithalon-10mg` и `bacteriostatic-water` са с `active: false`; продуктовият
+     sitemap вземаше ВСИЧКИ продукти, а витрината/prerender-ът им връща 404. Вече се филтрират
+     (`{"active": {"$ne": False}}`).
+  2. `.eu/.ro/.gr` × 2 всеки — `/pages/faq-osr` и `/pages/contact-1-svu`: агентният sitemap
+     изписваше ротираните БЪЛГАРСКИ slug-ове върху всички домейни. Оправено (виж по-долу).
+- **Sitemap 1:1 с Shopify** (по подадените от собственика файлове):
+  - продукти: `changefreq daily`, пълен ISO `lastmod`, ЕДНА featured снимка с `image:title` и
+    `image:caption` („заглавие - PurePeptide“); началната страница е първият запис, само с
+    `changefreq daily`, без `lastmod`.
+  - колекции: `daily` + снимка с title/caption; статии: `weekly` + „заглавие PurePeptide“;
+    страници: `weekly`, без снимки. `<priority>` е премахнат навсякъде (Shopify не го подава).
+  - URL-ите са percent-encoded (кирилският slug), точно като експорта; `/api/seo/prerender`
+    приема и кодирания вариант (`unquote`).
+- **`sitemap_agentic_discovery.xml`** вече е като на Shopify: само `/agents.md` (+ нашия `/llms.txt`)
+  с `changefreq weekly`, вместо да дублира целия каталог.
+- **Нов гард в `deploy_nginx.yml`**: следва sitemap index-а през nginx и вали деплоя, ако някое дете
+  не върне 200 (точно текущото състояние на продукшън, където nginx още не е бил обновен и
+  `/sitemap_products_1.xml` дава 404 → Search Console показва „Couldn't fetch“).
+- `check_sitemap.py`: 4 домейна, 0 счупени (68 URL-а на .bg/.ro/.gr, 530 на .eu).
+- Тестове: `test_sitemap_per_domain.py` +4 (Shopify формата, агентният файл, agents.md/llms.txt),
+  194 теста в SEO пакета минават.

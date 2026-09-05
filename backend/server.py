@@ -21,7 +21,7 @@ import hashlib
 import logging
 import uuid
 import random
-from urllib.parse import urlparse, unquote
+from urllib.parse import quote, urlparse, unquote
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 
@@ -3644,15 +3644,6 @@ def _host_locales(request: Request, routes: Dict[str, Any], active: List[str]) -
     return own or active
 
 
-def _day(value: Any) -> str:
-    """YYYY-MM-DD of a stored timestamp (datetime or ISO string), "" when there is none."""
-    if isinstance(value, datetime):
-        return value.date().isoformat()
-    if isinstance(value, str) and len(value) >= 10:
-        return value[:10]
-    return ""
-
-
 SITEMAP_KINDS = ("products", "collections", "pages", "blogs")
 SITEMAP_CHUNK = 5000          # Shopify splits at 5 000 URLs per file; same limit here
 
@@ -3668,7 +3659,8 @@ async def _sitemap_groups(request: Request):
     active = [l for l in LOCALES if (routes.get(l) or {}).get("enabled", True)]
     listed = _host_locales(request, routes, active)
     cols = await db.collections_cat.find({}, {"_id": 0}).to_list(200)
-    prods = await db.products.find({}, {"_id": 0}).to_list(500)
+    # a de-activated product 404s on the storefront — listing it in a sitemap is a dead link
+    prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0}).to_list(500)
     arts = await db.articles.find({"published": {"$ne": False}}, {"_id": 0}).to_list(200)
     static_pages = [""] + [f"/pages/{s}" for s in PAGE_SLUGS] + [
         "/pages/articles", "/pages/html-sitemap", "/pages/html-sitemap-products",
@@ -3681,7 +3673,7 @@ async def _sitemap_groups(request: Request):
     async for d in db.pages.find({}, {"_id": 0, "slug": 1, "locale": 1, "pub_slug": 1, "updated_at": 1}):
         if d.get("pub_slug"):
             rotated_pages.setdefault(d["locale"], {})[d["slug"]] = d["pub_slug"]
-        day = _day(d.get("updated_at"))
+        day = _stamp(d.get("updated_at"))
         if day and day > page_days.get(d["slug"], ""):
             page_days[d["slug"]] = day
 
@@ -3692,27 +3684,34 @@ async def _sitemap_groups(request: Request):
     def handle_for(doc, loc):
         return ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc.get("handle")
 
-    doc_days = [d for d in (_day(x.get("updated_at")) for x in cols + prods + arts) if d]
+    doc_days = [d for d in (_stamp(x.get("updated_at")) for x in cols + prods + arts) if d]
     newest = max(doc_days) if doc_days else datetime.now(timezone.utc).date().isoformat()
 
     groups: Dict[str, List[tuple]] = {k: [] for k in SITEMAP_KINDS}
     for path in static_pages:
         paths = {loc: (page_path(path, loc) if path else path) for loc in active}
         slug = path.rsplit("/", 1)[-1]
+        if path == "":                       # Shopify lists the home page in the product sitemap
+            groups["products"].append((paths, "daily", [], ""))
+            continue
         target = "blogs" if path == "/pages/articles" else "pages"
-        groups[target].append((paths, "0.9" if path == "" else "0.7", [], page_days.get(slug) or newest))
+        groups[target].append((paths, "weekly", [], page_days.get(slug) or newest))
     for c in cols:
-        groups["collections"].append(({loc: f"/collections/{handle_for(c, loc)}" for loc in active}, "0.8",
-                                      [c.get("image")] if c.get("image") else [],
-                                      _day(c.get("updated_at")) or newest))
+        title = c.get("title") or ""
+        groups["collections"].append(({loc: f"/collections/{handle_for(c, loc)}" for loc in active},
+                                      "daily", _img(c.get("image"), title, f"{title} - PurePeptide"),
+                                      _stamp(c.get("updated_at")) or newest))
     for p in prods:
-        imgs = [i for i in (p.get("images") or ([p.get("image")] if p.get("image") else [])) if i]
-        groups["products"].append(({loc: f"/products/{handle_for(p, loc)}" for loc in active}, "0.9",
-                                   imgs[:10], _day(p.get("updated_at")) or newest))
+        featured = (p.get("images") or [None])[0] or p.get("image")
+        title = p.get("title") or ""
+        groups["products"].append(({loc: f"/products/{handle_for(p, loc)}" for loc in active},
+                                   "daily", _img(featured, title, f"{title} - PurePeptide"),
+                                   _stamp(p.get("updated_at")) or newest))
     for a in arts:
-        groups["blogs"].append(({loc: f"/articles/{handle_for(a, loc)}" for loc in active}, "0.6",
-                                [a.get("image")] if a.get("image") else [],
-                                _day(a.get("updated_at")) or _day(a.get("published_at")) or newest))
+        title = a.get("title") or ""
+        groups["blogs"].append(({loc: f"/articles/{handle_for(a, loc)}" for loc in active},
+                                "weekly", _img(a.get("image"), title, f"{title} PurePeptide"),
+                                _stamp(a.get("updated_at")) or _stamp(a.get("published_at")) or newest))
     return routes, active, listed, groups
 
 
@@ -3724,6 +3723,25 @@ def _host_origin(request: Request, routes: Dict[str, Any], listed: List[str]) ->
 def _sitemap_pages(entries: List[tuple], listed: List[str]) -> int:
     urls = max(len(entries) * max(len(listed), 1), 1)
     return (urls + SITEMAP_CHUNK - 1) // SITEMAP_CHUNK
+
+
+def _stamp(value: Any) -> str:
+    """Full ISO timestamp of a stored value, like Shopify's lastmod (2026-09-05T22:18:39+00:00)."""
+    if isinstance(value, datetime):
+        return value.replace(microsecond=0).astimezone(timezone.utc).isoformat()
+    if isinstance(value, str) and len(value) >= 10:
+        return re.sub(r"\.\d+", "", value)          # stored ISO strings carry microseconds
+    return ""
+
+
+def _q(path: str) -> str:
+    """Sitemap URLs must be percent-encoded (the Cyrillic page slug, like Shopify's export)."""
+    return quote(path, safe="/-_.~") or "/"
+
+
+def _img(src: Optional[str], title: str, caption: str) -> List[Dict[str, str]]:
+    """One featured image per URL, with title and caption — the Shopify sitemap shape."""
+    return [{"src": src, "title": title, "caption": caption}] if src else []
 
 
 @api.get("/sitemap.xml")
@@ -3751,27 +3769,35 @@ async def sitemap_child(kind: str, page: int, request: Request):
     if page > _sitemap_pages(entries, listed):
         raise HTTPException(404, "Sitemap не съществува")
 
-    def img_tags(loc: str, srcs: List[str]) -> str:
-        """Google Images indexes product photos far more reliably when they are declared here."""
+    def img_tags(loc: str, images: List[Dict[str, str]]) -> str:
+        """Same shape as the Shopify product sitemap (loc + title + caption) — Google Images picks
+        product photos up far more reliably when they are declared here."""
         origin = ((routes.get(loc) or SITE_ORIGINS[loc])["origin"]).rstrip("/")
-        return "".join(
-            f"<image:image><image:loc>{html_lib.escape(src if src.startswith('http') else origin + src, quote=True)}"
-            f"</image:loc></image:image>" for src in srcs)
+        out = ""
+        for im in images:
+            src = im["src"]
+            out += ("<image:image>"
+                    f"<image:loc>{html_lib.escape(src if src.startswith('http') else origin + src, quote=True)}</image:loc>"
+                    f"<image:title>{html_lib.escape(im['title'], quote=True)}</image:title>"
+                    f"<image:caption>{html_lib.escape(im['caption'], quote=True)}</image:caption>"
+                    "</image:image>")
+        return out
 
     # lastmod is the real change date of the record — a rolling "today" told Google every URL had
     # changed on every request and devalued the signal
     urls: List[str] = []
-    for paths, prio, imgs, lastmod in entries:
+    for paths, changefreq, imgs, lastmod in entries:
         alternates = "".join(
-            f'<xhtml:link rel="alternate" hreflang="{LOCALE_META[l]["hreflang"]}" href="{_loc_url(l, paths[l], routes)}"/>'
+            f'<xhtml:link rel="alternate" hreflang="{LOCALE_META[l]["hreflang"]}" href="{_loc_url(l, _q(paths[l]), routes)}"/>'
             for l in active
         )
         if "en" in paths:
-            alternates += f'<xhtml:link rel="alternate" hreflang="x-default" href="{_loc_url("en", paths["en"], routes)}"/>'
+            alternates += f'<xhtml:link rel="alternate" hreflang="x-default" href="{_loc_url("en", _q(paths["en"]), routes)}"/>'
         for loc in listed:
             urls.append(
-                f"<url><loc>{_loc_url(loc, paths[loc], routes)}</loc><lastmod>{lastmod}</lastmod>"
-                f"<changefreq>weekly</changefreq><priority>{prio}</priority>"
+                f"<url><loc>{_loc_url(loc, _q(paths[loc]), routes)}</loc>"
+                + (f"<lastmod>{lastmod}</lastmod>" if lastmod else "")
+                + f"<changefreq>{changefreq}</changefreq>"
                 f"{alternates}{img_tags(loc, imgs)}</url>"
             )
     window = urls[(page - 1) * SITEMAP_CHUNK: page * SITEMAP_CHUNK]
@@ -3785,35 +3811,16 @@ async def sitemap_child(kind: str, page: int, request: Request):
 
 @api.get("/sitemap_agentic_discovery.xml")
 async def agentic_sitemap(request: Request):
-    """Compact sitemap for AI agents / LLM crawlers (key entry points only)."""
+    """AI entry point, same as Shopify's: the agent guide, nothing else. The full URL inventory
+    lives in the regular sitemap children, so there is nothing to duplicate here."""
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
     active = [l for l in LOCALES if (routes.get(l) or {}).get("enabled", True)]
     locale = _host_locales(request, routes, active)[0]
     cfg = routes.get(locale) or SITE_ORIGINS[locale]
-    origin = f"{cfg['origin']}{cfg.get('prefix', '')}"
-    cols = await db.collections_cat.find({}, {"_id": 0, "handle": 1, "translations": 1}).to_list(200)
-    prods = await db.products.find({"active": {"$ne": False}},
-                                   {"_id": 0, "handle": 1, "translations": 1}).to_list(500)
-
-    def live(doc):    # the handle published for this domain — a rotated one 404s
-        return ((doc.get("translations") or {}).get(locale) or {}).get("handle") or doc["handle"]
-
-    async def live_page(slug: str) -> str:
-        d = await db.pages.find_one({"slug": slug, "locale": locale}, {"_id": 0, "pub_slug": 1}) \
-            or await db.pages.find_one({"slug": slug, "locale": DEFAULT_LOCALE}, {"_id": 0, "pub_slug": 1})
-        return (d or {}).get("pub_slug") or slug
-
-    paths = ["/", f"/collections/{await catalog_handle(locale)}", "/pages/html-sitemap", "/pages/articles"]
-    paths += [f"/pages/{await live_page(s)}" for s in ("chemical-analysis", "faq", "contact-1")]
-    paths += [f"/collections/{live(c)}" for c in cols]
-    paths += [f"/products/{live(p)}" for p in prods]
-    today = datetime.now(timezone.utc).date().isoformat()
-    # agents.md / llms.txt live at the domain root, never under a locale prefix
-    locs = [f"{cfg['origin']}{p}" for p in ("/agents.md", "/llms.txt")] + [f"{origin}{p}" for p in paths]
-    body = "".join(
-        f"<url><loc>{loc}</loc><lastmod>{today}</lastmod></url>" for loc in dict.fromkeys(locs)
-    )
+    origin = cfg["origin"].rstrip("/")
+    body = "".join(f"<url><loc>{origin}{p}</loc><changefreq>weekly</changefreq></url>"
+                   for p in ("/agents.md", "/llms.txt"))
     xml = ('<?xml version="1.0" encoding="UTF-8"?>'
            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + body + "</urlset>")
     return Response(content=xml, media_type="application/xml")
@@ -3979,7 +3986,8 @@ async def seo_prerender(request: Request, path: str = "/"):
     """Finished HTML for a page request. 404 keeps its status (no soft 404); only a failure here
     (5xx) makes nginx fall back to the static shell."""
     host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
-    result = await prerender.render(path, host)
+    # sitemaps publish percent-encoded URLs (Cyrillic page slugs), so a crawler can ask for either
+    result = await prerender.render(unquote(path), host)
     if not result:
         raise HTTPException(503, "prerender unavailable")
     body, status = result

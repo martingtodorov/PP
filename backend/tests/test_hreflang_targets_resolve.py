@@ -7,7 +7,7 @@ discarded the whole language cluster.
 import os
 import re
 import sys
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import pytest
 import requests
@@ -22,7 +22,8 @@ HOST_LOCALE = {"purepeptide.bg": "bg", "purepeptide.ro": "ro", "purepeptide.gr":
 
 
 def render(host: str, path: str):
-    return requests.get(f"{API}/seo/prerender", params={"path": path},
+    # sitemap URLs are percent-encoded; requests would double-encode them
+    return requests.get(f"{API}/seo/prerender", params={"path": unquote(path)},
                         headers={"Host": host, "X-Forwarded-Host": host}, timeout=30)
 
 
