@@ -2537,10 +2537,40 @@ import analytics_bots  # noqa: E402
 
 # same visitor id in three windows: presence of the cookie means "seen in the last 24h / 7d / 30d"
 VISITOR_COOKIES = (("pp_v24", 60 * 60 * 24), ("pp_v7", 60 * 60 * 24 * 7), ("pp_v30", 60 * 60 * 24 * 30))
+SESSION_COOKIE = "pp_ses"
+SESSION_IDLE = 30 * 60          # Shopify's rule: 30 minutes without a page view ends the session
+SESSION_MAX = 24 * 60 * 60      # ...and a session never lives longer than 24 hours
+
+
+def _session_id(request: Request) -> str:
+    """Sliding 30-minute session, capped at 24 hours — a new browser tab is the SAME session.
+
+    The value is `<id>.<started epoch>`: the cookie's own 30-minute expiry ends an idle session,
+    the timestamp inside it ends a session that has been going on for a day.
+    """
+    raw = request.cookies.get(SESSION_COOKIE) or ""
+    sid, _, started = raw.partition(".")
+    if sid and started.isdigit() and time.time() - int(started) < SESSION_MAX:
+        return raw
+    return f"{uuid.uuid4().hex}.{int(time.time())}"
+
+
+def _cookieless_ids(request: Request, ua: str) -> tuple:
+    """Session/visitor ids for a visitor who has not accepted analytics cookies.
+
+    A daily-salted hash of IP + user agent: it groups the page views of one person into 30-minute
+    windows (so the session count stays honest) without storing anything on their device and
+    without being traceable from one day to the next.
+    """
+    ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() \
+        or (request.client.host if request.client else "?")
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    digest = hashlib.sha256(f"{ip}|{ua}|{day}".encode()).hexdigest()
+    return f"{digest[:24]}-{int(time.time() // SESSION_IDLE)}", digest[:32]
 
 
 class TrackIn(BaseModel):
-    session_id: str
+    session_id: str = ""
     path: str = "/"
     referrer: str = ""
     locale: str = "bg"
@@ -2548,34 +2578,41 @@ class TrackIn(BaseModel):
 
 @api.post("/track")
 async def track_visit(payload: TrackIn, request: Request, response: Response):
-    """One page view. Bots are flagged (and never counted), humans get the visitor cookies.
+    """One page view. Bots are flagged (and never counted), humans get the tracking cookies.
 
-    Three first-party cookies carry the same visitor id with a 24h / 7d / 30d life, so the admin
-    can tell how many DIFFERENT people were in the shop in each window — a `sessionStorage`
-    session id alone counted every new browser tab as a new visitor.
+    With analytics consent the session lives in a cookie with a sliding 30-minute window (Shopify's
+    rule), so a second tab is no longer a second session, and three more cookies carry the same
+    visitor id for 24h / 7d / 30d. Without consent nothing is stored on the device — the same
+    windows are derived from a daily-salted IP+UA hash instead.
     """
-    if not payload.session_id:
-        raise HTTPException(400, "Липсва сесия")
     ua = (request.headers.get("user-agent") or "")[:300]
     bot = analytics_bots.is_bot(ua)
-    visitor_id = request.cookies.get(VISITOR_COOKIES[-1][0]) or request.cookies.get("pp_vid") or ""
-    if not visitor_id:
-        visitor_id = uuid.uuid4().hex
-    fresh = {name: not request.cookies.get(name) for name, _ in VISITOR_COOKIES}
+    # analytics cookies only after the visitor accepted them (pp_consent = "<analytics><marketing>")
+    consented = (request.cookies.get("pp_consent") or "")[:1] == "1"
+    if consented:
+        session = _session_id(request)
+        visitor_id = request.cookies.get(VISITOR_COOKIES[-1][0]) or uuid.uuid4().hex
+        fresh = {name: not request.cookies.get(name) for name, _ in VISITOR_COOKIES}
+    else:
+        session, visitor_id = _cookieless_ids(request, ua)
+        fresh = {name: False for name, _ in VISITOR_COOKIES}
     await db.visits.insert_one({
-        "session_id": payload.session_id[:64],
+        "session_id": session.split(".")[0],
         "visitor_id": visitor_id,
         "path": payload.path[:300],
         "referrer": payload.referrer[:300],
         "locale": normalize_locale(payload.locale),
         "ua": ua,
         "bot": bot,
+        "cookieless": not consented,
         "new_24h": fresh["pp_v24"],
         "new_7d": fresh["pp_v7"],
         "new_30d": fresh["pp_v30"],
         "ts": now_utc(),
     })
-    if not bot:
+    if not bot and consented:
+        response.set_cookie(SESSION_COOKIE, session, max_age=SESSION_IDLE, httponly=True,
+                            samesite="lax", secure=True, path="/")
         for name, max_age in VISITOR_COOKIES:
             response.set_cookie(name, visitor_id, max_age=max_age, httponly=True,
                                 samesite="lax", secure=True, path="/")

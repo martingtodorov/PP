@@ -63,6 +63,46 @@ def test_three_visitor_cookies_with_24h_7d_and_30d():
     assert windows == {"pp_v24": 86400, "pp_v7": 604800, "pp_v30": 2592000}
 
 
+class _Req:
+    def __init__(self, **cookies):
+        self.cookies = cookies
+
+
+def test_a_second_tab_is_the_same_session():
+    first = server._session_id(_Req())
+    again = server._session_id(_Req(pp_ses=first))
+    assert again == first and "." in first
+
+
+def test_an_idle_or_day_old_session_starts_a_new_one():
+    import time
+
+    stale = f"abc.{int(time.time()) - server.SESSION_MAX - 1}"
+    assert server._session_id(_Req(pp_ses=stale)) != stale
+    assert server._session_id(_Req(pp_ses="garbage")) != "garbage"
+    # the cookie itself expires after 30 idle minutes, so an idle visitor arrives without it
+    assert server.SESSION_IDLE == 1800 and server.SESSION_MAX == 86400
+
+
+def test_a_visitor_without_consent_is_grouped_without_any_cookie():
+    class _R:
+        cookies = {}
+        headers = {"x-forwarded-for": "203.0.113.7"}
+        client = None
+
+    a = server._cookieless_ids(_R(), "Mozilla/5.0 Chrome/126")
+    b = server._cookieless_ids(_R(), "Mozilla/5.0 Chrome/126")
+    c = server._cookieless_ids(_R(), "Mozilla/5.0 Firefox/127")
+    assert a == b                      # same person, same 30-minute window → one session
+    assert a[0] != c[0] and a[1] != c[1]
+
+
+def test_cookies_are_only_set_after_analytics_consent():
+    src = open(os.path.join(os.path.dirname(__file__), "..", "server.py"), encoding="utf-8").read()
+    assert 'consented = (request.cookies.get("pp_consent") or "")[:1] == "1"' in src
+    assert "if not bot and consented:" in src
+
+
 def test_the_prerendered_copy_is_hidden_from_a_human_but_visible_without_javascript():
     out = prerender._inject('<html><head></head><body><div id="root"></div></body></html>',
                             "<title>x</title>", "<h1>Продукт</h1>")
