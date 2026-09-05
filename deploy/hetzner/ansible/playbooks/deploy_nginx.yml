@@ -43,12 +43,59 @@
         site_tls_certs: "{{ (pp_zone_certs | default({}, true)) | combine(site_tls_certs | default({}, true)) }}"
       tags: [config]
 
-    - name: Show which certificate each domain will use
+    - name: Report which zones have their own certificate on disk
       debug:
         msg: >-
-          {{ site_domains | zip(site_domains | map('extract', site_tls_certs)
-             | map('default', {'cert': ssl_cert_path}, true) | map(attribute='cert') | list) | list }}
+          found: {{ pp_zone_certs | default({}, true) | list }} |
+          missing (will use {{ ssl_cert_path }}):
+          {{ site_domains | difference(pp_zone_certs | default({}, true) | list) }} |
+          .pem present but no matching .key:
+          {{ zone_pem.results | selectattr('stat.exists') | map(attribute='item') | list
+             | difference(zone_key.results | selectattr('stat.exists') | map(attribute='item') | list) }}
       tags: [config]
+
+    - name: Map each domain to the certificate it will be served with
+      set_fact:
+        pp_cert_by_domain: >-
+          {{ dict(site_domains | zip(site_domains | map('extract', site_tls_certs)
+             | map('default', {'cert': ssl_cert_path}, true) | map(attribute='cert') | list)) }}
+      tags: [config]
+
+    - name: Show which certificate each domain will use
+      debug:
+        msg: "{{ pp_cert_by_domain }}"
+      tags: [config]
+
+    # www.* is served over TLS from the same certificate as the apex, so the Origin cert must carry
+    # both names (Cloudflare issues "zone, *.zone" by default).
+    - name: Every certificate must cover the apex and the www hostname of its zone
+      shell: |
+        python3 - <<'PY'
+        import json, subprocess, sys
+        pairs = json.loads(r'''{{ pp_cert_by_domain | to_json }}''')
+        bad = []
+        for domain, cert in pairs.items():
+            text = subprocess.run(["openssl", "x509", "-in", cert, "-noout", "-text"],
+                                  capture_output=True, text=True).stdout
+            block = text.split("Subject Alternative Name:")[1].split("\n")[1] if \
+                "Subject Alternative Name:" in text else ""
+            sans = [p.strip()[4:] for p in block.split(",") if p.strip().startswith("DNS:")]
+            for host in (domain, "www." + domain):
+                covered = host in sans or any(
+                    s.startswith("*.") and host.endswith(s[1:]) and host.count(".") == s.count(".")
+                    for s in sans)
+                if not covered:
+                    bad.append(f"{cert} does not cover {host} (SANs: {', '.join(sans) or 'none'})")
+        if bad:
+            print("\n".join(bad))
+            sys.exit(1)
+        print("every certificate covers its apex and www hostname")
+        PY
+      args: { executable: /bin/bash }
+      register: cert_coverage
+      changed_when: false
+      failed_when: cert_coverage.rc != 0
+      tags: [config, verify]
 
     - name: Existing Cloudflare Origin certificates must be in place (never generated here)
       stat: { path: "{{ item }}" }
