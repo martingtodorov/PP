@@ -68,7 +68,7 @@ def test_real_ua_sets_all_three_visitor_cookies_with_correct_attributes():
     s = requests.Session()
     r = s.post(f"{BASE}/api/track",
                json={"session_id": sid, "path": "/", "referrer": "", "locale": "bg"},
-               headers={"User-Agent": REAL_UA}, timeout=15)
+               headers={"User-Agent": REAL_UA, "Cookie": "pp_consent=11"}, timeout=15)
     assert r.status_code == 200
     # Parse Set-Cookie headers (raw)
     raws = r.raw.headers.get_all("Set-Cookie") if hasattr(r.raw.headers, "get_all") else \
@@ -86,21 +86,23 @@ def test_real_ua_sets_all_three_visitor_cookies_with_correct_attributes():
     # Second call with cookies preserved: same visitor_id, new_24h/7d/30d all false
     r2 = s.post(f"{BASE}/api/track",
                 json={"session_id": sid, "path": "/again", "referrer": "", "locale": "bg"},
-                headers={"User-Agent": REAL_UA}, timeout=15)
+                headers={"User-Agent": REAL_UA, "Cookie": "pp_consent=11"}, timeout=15)
     assert r2.status_code == 200
     # Now a fresh client (no cookies) -> new_* true
     r3 = requests.post(f"{BASE}/api/track",
                        json={"session_id": "TEST_" + uuid.uuid4().hex[:12], "path": "/",
                              "referrer": "", "locale": "bg"},
-                       headers={"User-Agent": REAL_UA}, timeout=15)
+                       headers={"User-Agent": REAL_UA, "Cookie": "pp_consent=11"}, timeout=15)
     assert r3.status_code == 200
 
 
-def test_track_rejects_empty_session_id():
+def test_track_no_longer_needs_a_client_session_id():
+    """The session comes from the pp_ses cookie now — the client does not send one at all."""
     r = requests.post(f"{BASE}/api/track",
-                      json={"session_id": "", "path": "/", "referrer": "", "locale": "bg"},
-                      headers={"User-Agent": REAL_UA}, timeout=15)
-    assert r.status_code == 400
+                      json={"path": "/", "referrer": "", "locale": "bg"},
+                      headers={"User-Agent": REAL_UA, "Cookie": "pp_consent=11"}, timeout=15)
+    assert r.status_code == 200
+    assert "pp_ses" in r.cookies
 
 
 # ---------- /api/admin/analytics ----------

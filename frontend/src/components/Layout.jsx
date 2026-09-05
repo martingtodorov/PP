@@ -752,12 +752,9 @@ export default function Layout({ children }) {
   }, [locale]);
 
   useEffect(() => {
-    let sid = sessionStorage.getItem("pp_sid");
-    if (!sid) {
-      sid = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random())).slice(0, 36);
-      sessionStorage.setItem("pp_sid", sid);
-    }
-    api.post("/track", { session_id: sid, path: pathname, referrer: document.referrer || "", locale }).catch(() => {});
+    // the session lives in a cookie set by the backend (sliding 30 minutes, like Shopify), so a
+    // second tab is the same session — nothing to keep in sessionStorage any more
+    api.post("/track", { path: pathname, referrer: document.referrer || "", locale }).catch(() => {});
   }, [pathname, locale]);
 
   return (
