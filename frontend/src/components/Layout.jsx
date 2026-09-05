@@ -464,9 +464,11 @@ const Header = ({ collections, settings }) => {
 
   const menuCollections = [...collections].sort((a, b) => (a.menu_order ?? 99) - (b.menu_order ?? 99));
 
-  /* desktop row: five links stay visible, the rest sit in the "More" dropdown */
-  const deskPrimary = topNav.slice(0, 5);
-  const deskMore = topNav.slice(5);
+  /* only the Greek labels are too long for the row: there the logo moves left and the three
+     long-tail links go into a "More" dropdown. Every other language keeps the original header. */
+  const isGreek = locale === "gr";
+  const deskPrimary = isGreek ? topNav.slice(0, 5) : topNav;
+  const deskMore = isGreek ? topNav.slice(5) : [];
 
   const isActive = (item) => {
     const [path] = item.to.split("#");
@@ -537,12 +539,14 @@ const Header = ({ collections, settings }) => {
         </div>
 
         {/* ---------- desktop: one row, logo left of the nav, search next to cart ---------- */}
-        <div className="hidden lg:flex max-w-[1720px] mx-auto px-5 xl:px-8 h-20 items-center gap-6" data-testid="desktop-header">
+        <div className={`hidden lg:flex mx-auto h-20 items-center ${
+          isGreek ? "max-w-[1720px] px-5 xl:px-8 gap-6" : "max-w-7xl px-6 xl:px-8 gap-8"
+        }`} data-testid="desktop-header">
           <Link to={lp("/")} className="flex-shrink-0" aria-label="PurePeptide" data-testid="logo-link-desktop">
             <img src={siteMedia("logo", "/logo-header.png")} alt="PurePeptide" width="240" height="48" className="h-10 w-auto" fetchPriority="high" decoding="async" />
           </Link>
 
-          <nav className="flex items-center gap-6" aria-label="Primary" data-testid="desktop-nav">
+          <nav className={`flex items-center ${isGreek ? "gap-6" : "gap-7"}`} aria-label="Primary" data-testid="desktop-nav">
             {deskPrimary.map((n) =>
               n.dropdown ? (
                 <div key={n.label} className="relative group" data-testid="shop-dropdown-wrap">
@@ -579,7 +583,8 @@ const Header = ({ collections, settings }) => {
               )
             )}
 
-            {/* the long-tail links live in one dropdown, so the row fits in every language */}
+            {/* the long-tail links live in one dropdown, so the Greek row fits */}
+            {deskMore.length > 0 && (
             <div className="relative group" data-testid="more-dropdown-wrap">
               <button
                 type="button"
@@ -602,6 +607,7 @@ const Header = ({ collections, settings }) => {
                 </ul>
               </div>
             </div>
+            )}
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
