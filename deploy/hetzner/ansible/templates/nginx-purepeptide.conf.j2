@@ -212,8 +212,11 @@ server {
     # the home page: without this nginx would serve index.html straight from disk (index directive)
     # and the prerender would never run for "/"
     location = / {
+        # the "#geo" marker (quoted — a bare # would start an nginx comment) tells the app that the
+        # visitor landed here from the bare apex, so the IP check may move him to his own language.
+        # Typing /en/ himself carries no marker and is never redirected. Crawlers drop fragments.
         if ($pp_shared_host) {
-            return 301 https://$host/en/;
+            return 301 "https://$host/en/$is_args$args#geo";
         }
         try_files /prerender-the-home-page @prerender;
     }
@@ -261,6 +264,14 @@ server {
     ssl_certificate     {{ pair.split('|')[0] }};
     ssl_certificate_key {{ pair.split('|')[1] }};
     ssl_protocols TLSv1.2 TLSv1.3;
+
+    # www root: same "#geo" marker as the apex, so the IP check still runs for a bare www visit
+    location = / {
+        if ($pp_needs_en) {
+            return 301 "https://$pp_apex/en/$is_args$args#geo";
+        }
+        return 301 https://$pp_apex/$is_args$args;
+    }
 
     # single hop: on the shared domain the final URL already carries the /en prefix
     location / {
