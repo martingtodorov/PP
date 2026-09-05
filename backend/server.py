@@ -2559,6 +2559,15 @@ def _has_content(doc: Optional[Dict[str, Any]]) -> bool:
     return bool(doc.get("title") or doc.get("html") or doc.get("faq_items"))
 
 
+async def _page_slugs(base_slug: str) -> Dict[str, str]:
+    """The slug this page is published under per locale — a page rotated in one language keeps the
+    base slug in the others, so the hreflang targets differ (they used to all 404)."""
+    published: Dict[str, str] = {}
+    async for d in db.pages.find({"slug": base_slug}, {"_id": 0, "locale": 1, "pub_slug": 1}):
+        published[d["locale"]] = d.get("pub_slug") or base_slug
+    return {loc: published.get(loc, base_slug) for loc in LOCALES}
+
+
 @api.get("/pages/{slug}")
 async def public_page(slug: str, locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
@@ -2570,6 +2579,7 @@ async def public_page(slug: str, locale: str = Query(DEFAULT_LOCALE)):
         out = _page_out(moved)
         out["locale"] = loc
         out["source_locale"] = loc
+        out["slugs"] = await _page_slugs(moved["slug"])
         return {"page": out}
     if await db.pages.find_one({"locale": loc, "rotations.from": slug}, {"_id": 0, "slug": 1}):
         raise HTTPException(404, "Страницата не е намерена")
@@ -2582,6 +2592,7 @@ async def public_page(slug: str, locale: str = Query(DEFAULT_LOCALE)):
             out = _page_out(doc)
             out["locale"] = loc
             out["source_locale"] = candidate
+            out["slugs"] = await _page_slugs(doc["slug"])
             return {"page": out}
     raise HTTPException(404, "Страницата не е намерена")
 

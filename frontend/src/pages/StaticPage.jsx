@@ -6,7 +6,7 @@ import PPCalculator from "../components/PPCalculator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion";
 import { api, img } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
-import { FAQ_ITEMS, pick } from "../i18n/locales";
+import { FAQ_ITEMS, LOCALES, pick } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
 import { ContactForm } from "../components/ContactForm";
 import { ContactInfo } from "../components/ContactInfo";
@@ -105,6 +105,11 @@ export default function StaticPage() {
     : (isFaq && (untranslated || !remote?.title) ? t("faq") : remote?.title)
       || page?.title || (loading ? "" : PAGE_TITLES[baseSlug] || baseSlug);
 
+  /* the slug of a page can differ per language (a rotated page keeps the base slug elsewhere),
+     so hreflang must follow the per-locale slugs the API returns, not the current URL */
+  const alternates = {};
+  if (remote?.slugs) LOCALES.forEach((l) => { alternates[l] = `/pages/${remote.slugs[l]}`; });
+
   useSeo({
     title: remote?.seo_title || `${title}`,
     description:
@@ -112,6 +117,7 @@ export default function StaticPage() {
       (page?.html || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 155),
     locale,
     path: `/pages/${slug}`,
+    alternates,
     jsonLd: graph(
       isFaq && faqItems.length ? faqLd(faqItems) : {
         "@type": "WebPage",

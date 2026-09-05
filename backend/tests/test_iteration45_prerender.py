@@ -162,17 +162,26 @@ def test_per_domain_canonical(host, path, expect_locale):
 
 # ---------- Private / unknown routes must 404 ----------
 @pytest.mark.parametrize("path", [
-    "/cart", "/checkout", "/track",
-    "/account", "/account/orders",
-    "/admin", "/admin/login", "/admin/orders",
     "/products/this-handle-does-not-exist-xyz",
     "/collections/no-such-collection-xyz",
     "/articles/no-such-article-xyz",
     "/pages/no-such-page-xyz",
 ])
-def test_private_and_unknown_routes_404(path):
+def test_unknown_routes_404(path):
     r = _get(path)
     assert r.status_code == 404, f"{path} expected 404 got {r.status_code}"
+
+
+@pytest.mark.parametrize("path", [
+    "/cart", "/checkout", "/track",
+    "/account", "/account/orders",
+    "/admin", "/admin/login", "/admin/orders",
+])
+def test_private_routes_are_left_to_the_app(path):
+    """Nothing is prerendered for them — they carry no SEO value and robots.txt disallows the lot."""
+    r = _get(path)
+    assert r.status_code == 200, f"{path} -> {r.status_code}"
+    assert "pp-prerender" not in r.text or "<h1>" not in r.text
 
 
 # ---------- /api/articles/{handle} ----------
