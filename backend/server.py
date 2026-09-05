@@ -3684,33 +3684,38 @@ async def _sitemap_groups(request: Request):
     def handle_for(doc, loc):
         return ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc.get("handle")
 
+    def entry(doc, prefix: str, brand_sep: str) -> Dict[str, Dict[str, str]]:
+        """Per-locale path, image title and caption — every domain must read in its own language,
+        not in Bulgarian (the cached translations already hold the localised titles)."""
+        out = {}
+        for loc in active:
+            local = localize_doc(doc, loc)
+            title = local.get("title") or ""
+            src = (local.get("images") or [None])[0] or local.get("image")
+            out[loc] = {"path": f"{prefix}{handle_for(doc, loc)}", "src": src or "",
+                        "title": title, "caption": f"{title}{brand_sep}PurePeptide" if title else ""}
+        return out
+
     doc_days = [d for d in (_stamp(x.get("updated_at")) for x in cols + prods + arts) if d]
     newest = max(doc_days) if doc_days else datetime.now(timezone.utc).date().isoformat()
 
     groups: Dict[str, List[tuple]] = {k: [] for k in SITEMAP_KINDS}
     for path in static_pages:
-        paths = {loc: (page_path(path, loc) if path else path) for loc in active}
         slug = path.rsplit("/", 1)[-1]
+        meta = {loc: {"path": (page_path(path, loc) if path else path), "src": ""} for loc in active}
         if path == "":                       # Shopify lists the home page in the product sitemap
-            groups["products"].append((paths, "daily", [], ""))
+            groups["products"].append((meta, "daily", ""))
             continue
         target = "blogs" if path == "/pages/articles" else "pages"
-        groups[target].append((paths, "weekly", [], page_days.get(slug) or newest))
+        groups[target].append((meta, "weekly", page_days.get(slug) or newest))
     for c in cols:
-        title = c.get("title") or ""
-        groups["collections"].append(({loc: f"/collections/{handle_for(c, loc)}" for loc in active},
-                                      "daily", _img(c.get("image"), title, f"{title} - PurePeptide"),
+        groups["collections"].append((entry(c, "/collections/", " - "), "daily",
                                       _stamp(c.get("updated_at")) or newest))
     for p in prods:
-        featured = (p.get("images") or [None])[0] or p.get("image")
-        title = p.get("title") or ""
-        groups["products"].append(({loc: f"/products/{handle_for(p, loc)}" for loc in active},
-                                   "daily", _img(featured, title, f"{title} - PurePeptide"),
+        groups["products"].append((entry(p, "/products/", " - "), "daily",
                                    _stamp(p.get("updated_at")) or newest))
     for a in arts:
-        title = a.get("title") or ""
-        groups["blogs"].append(({loc: f"/articles/{handle_for(a, loc)}" for loc in active},
-                                "weekly", _img(a.get("image"), title, f"{title} PurePeptide"),
+        groups["blogs"].append((entry(a, "/articles/", " "), "weekly",
                                 _stamp(a.get("updated_at")) or _stamp(a.get("published_at")) or newest))
     return routes, active, listed, groups
 
@@ -3739,11 +3744,6 @@ def _q(path: str) -> str:
     return quote(path, safe="/-_.~") or "/"
 
 
-def _img(src: Optional[str], title: str, caption: str) -> List[Dict[str, str]]:
-    """One featured image per URL, with title and caption — the Shopify sitemap shape."""
-    return [{"src": src, "title": title, "caption": caption}] if src else []
-
-
 @api.get("/sitemap.xml")
 async def sitemap_index(request: Request):
     """Parent sitemap, same shape as the Shopify one: one child file per resource kind."""
@@ -3769,36 +3769,35 @@ async def sitemap_child(kind: str, page: int, request: Request):
     if page > _sitemap_pages(entries, listed):
         raise HTTPException(404, "Sitemap не съществува")
 
-    def img_tags(loc: str, images: List[Dict[str, str]]) -> str:
-        """Same shape as the Shopify product sitemap (loc + title + caption) — Google Images picks
-        product photos up far more reliably when they are declared here."""
+    def img_tag(loc: str, meta: Dict[str, str]) -> str:
+        """Same shape as the Shopify product sitemap (loc + title + caption), in the locale's own
+        language — every domain used to repeat the Bulgarian title."""
+        src = meta.get("src") or ""
+        if not src:
+            return ""
         origin = ((routes.get(loc) or SITE_ORIGINS[loc])["origin"]).rstrip("/")
-        out = ""
-        for im in images:
-            src = im["src"]
-            out += ("<image:image>"
-                    f"<image:loc>{html_lib.escape(src if src.startswith('http') else origin + src, quote=True)}</image:loc>"
-                    f"<image:title>{html_lib.escape(im['title'], quote=True)}</image:title>"
-                    f"<image:caption>{html_lib.escape(im['caption'], quote=True)}</image:caption>"
-                    "</image:image>")
-        return out
+        return ("<image:image>"
+                f"<image:loc>{html_lib.escape(src if src.startswith('http') else origin + src, quote=True)}</image:loc>"
+                f"<image:title>{html_lib.escape(meta.get('title') or '', quote=True)}</image:title>"
+                f"<image:caption>{html_lib.escape(meta.get('caption') or '', quote=True)}</image:caption>"
+                "</image:image>")
 
     # lastmod is the real change date of the record — a rolling "today" told Google every URL had
     # changed on every request and devalued the signal
     urls: List[str] = []
-    for paths, changefreq, imgs, lastmod in entries:
+    for meta, changefreq, lastmod in entries:
         alternates = "".join(
-            f'<xhtml:link rel="alternate" hreflang="{LOCALE_META[l]["hreflang"]}" href="{_loc_url(l, _q(paths[l]), routes)}"/>'
+            f'<xhtml:link rel="alternate" hreflang="{LOCALE_META[l]["hreflang"]}" href="{_loc_url(l, _q(meta[l]["path"]), routes)}"/>'
             for l in active
         )
-        if "en" in paths:
-            alternates += f'<xhtml:link rel="alternate" hreflang="x-default" href="{_loc_url("en", _q(paths["en"]), routes)}"/>'
+        if "en" in meta:
+            alternates += f'<xhtml:link rel="alternate" hreflang="x-default" href="{_loc_url("en", _q(meta["en"]["path"]), routes)}"/>'
         for loc in listed:
             urls.append(
-                f"<url><loc>{_loc_url(loc, _q(paths[loc]), routes)}</loc>"
+                f'<url><loc>{_loc_url(loc, _q(meta[loc]["path"]), routes)}</loc>'
                 + (f"<lastmod>{lastmod}</lastmod>" if lastmod else "")
                 + f"<changefreq>{changefreq}</changefreq>"
-                f"{alternates}{img_tags(loc, imgs)}</url>"
+                f"{alternates}{img_tag(loc, meta[loc])}</url>"
             )
     window = urls[(page - 1) * SITEMAP_CHUNK: page * SITEMAP_CHUNK]
     xml = ('<?xml version="1.0" encoding="UTF-8"?>'

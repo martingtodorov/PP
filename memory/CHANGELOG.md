@@ -558,3 +558,16 @@
   **`www.purepeptide.eu` дава Cloudflare „Error 1000: DNS points to prohibited IP“** — записът е
   grey-cloud/DNS-only и сочи към Cloudflare IP. Оправя се само в Cloudflare DNS
   (CNAME `www` → `purepeptide.eu`, proxied/оранжев облак). `www.purepeptide-labs.bg` няма запис.
+
+## 2026-06-06 (тринадесета част) — преведени sitemap-и + гард за покритието на сертификатите
+- **Sitemap-ите вече са на езика на домейна**: `image:title` и `image:caption` (и заглавията, от
+  които се строят) минават през `localize_doc(doc, loc)` за всеки локал, вместо да повтарят
+  българското заглавие на всички домейни. Проверено с продукционните данни: `en` „Retatrutide…“,
+  `de` „Retatrutid…“, `gr` „Ρετατρουτίδη…“, колекции „All Peptides / Alle Peptide / Όλα τα πεπτίδια“.
+  (В preview базата липсват част от преводите, затова там още се вижда fallback към bg — на
+  продукшън преводите ги има.)
+- **Гард в `deploy_nginx.yml`**: за всеки домейн се чете реалният сертификат с `openssl` и се вали
+  деплоят, ако не покрива и apex, и `www.` (wildcard `*.zone` се признава). Плюс debug, който
+  показва кои зони имат собствен сертификат, кои падат към общия и къде има `.pem` без `.key`.
+- Рендерът е проверен: 5 apex + 5 www 443 блока, всеки със сертификата на своята зона
+  (`purepeptide-labs.bg` остава на `origin.pem`), а :80 изброява всички apex + www.
