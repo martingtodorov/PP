@@ -311,3 +311,46 @@
   (/cart, /checkout, /track, /admin) → 200 със чистата React обвивка. На продукцията заработва
   СЛЕД деплой на бекенда и на nginx (`location = /` → `@prerender` вече е в шаблона).
 - Тестове: `backend/tests/test_iteration46.py` (17/17) + frontend e2e — iteration_46.json, 0 проблема.
+
+## 2026-06-06 (втора част) — отказ към NextLevel, ротирани URL-и, ботове в анализите
+**Отказ на поръчка → cancelled в NextLevel** (по искане на собственика)
+- `fulfillment.cancel_order()` е единствената входна точка: при API ключове `POST /orders/{номер}/cancel`,
+  иначе `order.updated` със статус `cancelled` по webhook-а. Праща се САМО когато поръчката има наш
+  `fulfillment.number` (избор на собственика).
+- Ако складът не потвърди → **отказът се блокира изцяло** (HTTP 502, поръчката остава активна,
+  наличностите не се връщат, имейл не се праща). Грешката се пази в `fulfillment.cancel_error` и се
+  показва като червен банер с бутон „Опитай пак“ (`fulfillment-cancel-retry-btn`).
+- `?force=true` (само админ) отказва въпреки отказа на склада — в UI-а излиза допълнително потвърждение.
+- Обратна посока: когато NextLevel маркира поръчката като `cancelled` (WooCommerce PUT или
+  `refresh_order`), поръчката се отказва автоматично и при нас (наличности + имейл), без да се праща
+  нищо обратно — `fulfillment.set_cancel_hook()` / `server._cancel_from_warehouse()`.
+- Тестове: `tests/test_cancel_fulfillment.py` (7).
+
+**Каталожният импорт вече не трие админ данните** (root cause на „/products/21-retatrutide-5 не дава 404“)
+- `import_products/collections/articles` снимат `translations`, `rotations`, `active`, `id`,
+  `product_order`, `coa_image` преди `delete_many` и ги връщат (`KEEP_*` + `existing_by_handle`).
+  Преди това всеки импорт нулираше преводите (на прод всички бяха изтрити!) и връщаше в индекса
+  вече изтеглен URL.
+- Нов `?to=` на `POST /admin/delisted-links/{id}/rotate` + бутон „Върни стар handle“ — публикува точно
+  определен handle без AI пренаписване. `21-retatrutide-5` → `21-retatrutide-5-lrp` е възстановено в preview.
+- Prerender-ът вече уважава ротациите (`_retired()` за продукти/колекции/статии + `pub_slug` за
+  страници) — досега даваше 200 за изтеглен URL, докато JSON API-то даваше 404.
+- Тестове: `tests/test_import_preserves_admin_data.py` (5).
+
+**Анализи: ботове и посетители**
+- Нов `analytics_bots.py` с агресивен списък (търсачки, SEO инструменти, AI индексатори, социални
+  unfurler-и, мониторинг, HTTP библиотеки, headless браузъри, скенери). Измерено в preview:
+  1769 от 2789 посещения (63%) са били ботове, сесиите паднаха от 375 на 71.
+- `/api/track` маркира `bot`, а анализите изключват ботовете навсякъде (+ поле `bots_excluded`).
+- Три бисквитки с един и същ visitor id: `pp_v24` (24ч), `pp_v7` (7 дни), `pp_v30` (30 дни),
+  HttpOnly/Secure/Lax → нови показатели „Посетители“, „Показвания“ и картите „Различни посетители
+  (24 часа / 7 дни / 30 дни)“ в Админ → Анализи.
+- Конверсията вече не смята импортираната Shopify история и е таванирана на 100%.
+- Тестове: `tests/test_analytics_bots.py` (6) + `tests/test_iteration48_analytics_prerender.py` (14).
+
+**Мигащият текст на purepeptide.eu**
+- Prerender копието вече е в `<div id="pp-prerender">` със „visually hidden“ стил, а `<noscript>`
+  правило го връща видимо при изключен JavaScript. Ботовете го четат, човек не вижда неоформен текст.
+- `.eu` остава с пренасочване по IP (изричен избор на собственика — без промяна в кода).
+
+Тестови отчети: `/app/test_reports/iteration_47.json`, `iteration_48.json` (без критични проблеми).

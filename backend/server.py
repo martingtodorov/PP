@@ -739,7 +739,9 @@ async def rotate_page(link: Dict[str, Any], handle: str, loc: str, user_email: s
     return {"kind": "pages", "handle": new_slug, "path": f"/pages/{new_slug}", "rewritten": rewritten}
 
 
-async def rotate_content(kind: str, handle: str, loc: str, user_email: str) -> Dict[str, Any]:
+async def rotate_content(kind: str, handle: str, loc: str, user_email: str, to: str = "") -> Dict[str, Any]:
+    """`to` republishes an exact handle (restoring a rotation a catalog re-import wiped) and then
+    leaves the copy alone — the AI rewrite is only for a genuinely new rotation."""
     coll = db[ROTATABLE[kind][0]]
     doc = await coll.find_one({"$or": [{"handle": handle}, {f"translations.{loc}.handle": handle}]}, {"_id": 0})
     if not doc:
@@ -749,12 +751,14 @@ async def rotate_content(kind: str, handle: str, loc: str, user_email: str) -> D
     entry = dict(tr.get(loc) or {})
     history = [r for r in (doc.get("rotations") or []) if r.get("locale") == loc]
     base = history[0]["from"] if history else (entry.get("handle") or doc["handle"])
-    new_handle = f"{base}-{rotation_code({r.get('code') for r in (doc.get('rotations') or [])})}"
+    new_handle = to.strip() or f"{base}-{rotation_code({r.get('code') for r in (doc.get('rotations') or [])})}"
+    if new_handle == handle:
+        raise HTTPException(400, "Новият handle е същият като стария")
     entry["handle"] = new_handle
 
     rewritten = False
     source_html = entry.get("description") or (doc.get("description") if loc == DEFAULT_LOCALE else "")
-    if source_html and len(source_html) > 40:
+    if not to and source_html and len(source_html) > 40:
         try:
             entry["description"] = await ai_rewrite_html(
                 source_html, loc, context=f"{kind} „{entry.get('title') or doc.get('title')}“ — ротация на съдържание")
@@ -772,13 +776,13 @@ async def rotate_content(kind: str, handle: str, loc: str, user_email: str) -> D
     return {"kind": kind, "handle": new_handle, "path": f"/{kind}/{new_handle}", "rewritten": rewritten}
 
 
-async def rotate_one(link: Dict[str, Any], user_email: str) -> Dict[str, Any]:
+async def rotate_one(link: Dict[str, Any], user_email: str, to: str = "") -> Dict[str, Any]:
     kind, handle = split_url(link["url"])
     if not kind:
         raise HTTPException(400, f"Не мога да ротирам този URL: {link['url']}")
     loc = normalize_locale(link.get("locale") or DEFAULT_LOCALE)
     res = (await rotate_page(link, handle, loc, user_email) if kind == "pages"
-           else await rotate_content(kind, handle, loc, user_email))
+           else await rotate_content(kind, handle, loc, user_email, to=to))
 
     site = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((site or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
@@ -815,11 +819,12 @@ async def create_delisted_links_bulk(payload: BulkLinksIn, user=Depends(require_
 
 
 @api.post("/admin/delisted-links/{link_id}/rotate")
-async def rotate_delisted_link(link_id: str, user=Depends(require_admin)):
+async def rotate_delisted_link(link_id: str, to: str = "", user=Depends(require_admin)):
+    """`?to=` republishes an exact handle — used to restore a rotation a re-import overwrote."""
     link = await db.delisted_links.find_one({"id": link_id}, {"_id": 0})
     if not link:
         raise HTTPException(404, "Линкът не е намерен")
-    return {"rotated": await rotate_one(link, user["email"])}
+    return {"rotated": await rotate_one(link, user["email"], to=to)}
 
 
 @api.post("/admin/delisted-links/rotate-pending")
@@ -1504,25 +1509,43 @@ def cancel_blocker(o: Dict[str, Any]) -> str:
     return ""
 
 
-async def perform_cancel(o: Dict[str, Any], by: str, reason: str = "") -> Dict[str, Any]:
-    """Cancel at the courier, put the stock back, mark the order cancelled and notify both sides."""
+async def perform_cancel(o: Dict[str, Any], by: str, reason: str = "",
+                         notify_courier: bool = True, force: bool = False) -> Dict[str, Any]:
+    """Cancel at the courier, put the stock back, mark the order cancelled and notify both sides.
+
+    The warehouse comes first: if NextLevel does not confirm the cancellation, nothing is changed
+    here (owner's rule — an order must never be "cancelled" in the shop while the warehouse still
+    ships it). `force=True` is the admin's escape hatch, `notify_courier=False` is used when the
+    cancellation came FROM the warehouse.
+    """
     blocker = cancel_blocker(o)
     if blocker:
         raise HTTPException(400, blocker)
 
     courier: Dict[str, Any] = {}
-    if (o.get("fulfillment") or {}).get("number"):
+    if notify_courier and (o.get("fulfillment") or {}).get("number"):
         try:
             courier["fulfillment"] = await fulfillment.cancel_order(o["id"])
+        except HTTPException as exc:
+            log.warning("fulfillment cancel failed for %s: %s", o.get("order_number"), exc.detail)
+            if not force:
+                raise HTTPException(exc.status_code, f"Складът на NextLevel не потвърди отказа: {exc.detail}. "
+                                                     "Поръчката НЕ е отказана, за да не остане активна в склада — "
+                                                     "опитайте пак или я откажете от панела на NextLevel.")
+            courier["fulfillment_error"] = str(exc.detail)
         except Exception as exc:
+            log.warning("fulfillment cancel crashed for %s: %s", o.get("order_number"), exc)
+            if not force:
+                raise HTTPException(502, f"Складът на NextLevel не потвърди отказа: {exc}. Поръчката НЕ е отказана.")
             courier["fulfillment_error"] = str(exc)
-            log.warning("fulfillment cancel failed for %s: %s", o.get("order_number"), exc)
-    if (o.get("shipment") or {}).get("awb"):
+    if notify_courier and (o.get("shipment") or {}).get("awb"):
         try:
             courier["shipment"] = await nextlevel.cancel_shipment(o["id"])
         except Exception as exc:
             courier["shipment_error"] = str(exc)
             log.warning("shipment cancel failed for %s: %s", o.get("order_number"), exc)
+            if not force:
+                raise HTTPException(502, f"Товарителницата не беше анулирана: {exc}. Поръчката НЕ е отказана.")
 
     for li in o.get("items") or []:
         await db.products.update_one(
@@ -1586,11 +1609,21 @@ async def cancel_own_order(order_id: str, payload: CancelIn, request: Request):
 
 
 @api.post("/admin/orders/{order_id}/cancel")
-async def cancel_order(order_id: str, payload: CancelIn = CancelIn(), user=Depends(require_admin)):
+async def cancel_order(order_id: str, payload: CancelIn = CancelIn(), force: bool = False,
+                       user=Depends(require_admin)):
+    """`force=true` cancels in the shop even if NextLevel refused — only the admin may do that."""
     o = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not o:
         raise HTTPException(404, "Поръчката не е намерена")
-    return await perform_cancel(o, f"админ {user['email']}", payload.reason.strip()[:300])
+    return await perform_cancel(o, f"админ {user['email']}", payload.reason.strip()[:300], force=force)
+
+
+async def _cancel_from_warehouse(order_id: str, by: str) -> None:
+    """NextLevel cancelled the order in their panel → mirror it here (stock back + e-mails)."""
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o or o.get("status") == "cancelled":
+        return
+    await perform_cancel(o, by, "Отказана от склада на NextLevel", notify_courier=False)
 
 
 @api.get("/admin/customers")
@@ -2500,6 +2533,12 @@ async def admin_translate_page(slug: str, payload: PageTranslateIn, user=Depends
 
 
 # ---------- Traffic tracking + analytics ----------
+import analytics_bots  # noqa: E402
+
+# same visitor id in three windows: presence of the cookie means "seen in the last 24h / 7d / 30d"
+VISITOR_COOKIES = (("pp_v24", 60 * 60 * 24), ("pp_v7", 60 * 60 * 24 * 7), ("pp_v30", 60 * 60 * 24 * 30))
+
+
 class TrackIn(BaseModel):
     session_id: str
     path: str = "/"
@@ -2508,17 +2547,38 @@ class TrackIn(BaseModel):
 
 
 @api.post("/track")
-async def track_visit(payload: TrackIn, request: Request):
+async def track_visit(payload: TrackIn, request: Request, response: Response):
+    """One page view. Bots are flagged (and never counted), humans get the visitor cookies.
+
+    Three first-party cookies carry the same visitor id with a 24h / 7d / 30d life, so the admin
+    can tell how many DIFFERENT people were in the shop in each window — a `sessionStorage`
+    session id alone counted every new browser tab as a new visitor.
+    """
     if not payload.session_id:
         raise HTTPException(400, "Липсва сесия")
+    ua = (request.headers.get("user-agent") or "")[:300]
+    bot = analytics_bots.is_bot(ua)
+    visitor_id = request.cookies.get(VISITOR_COOKIES[-1][0]) or request.cookies.get("pp_vid") or ""
+    if not visitor_id:
+        visitor_id = uuid.uuid4().hex
+    fresh = {name: not request.cookies.get(name) for name, _ in VISITOR_COOKIES}
     await db.visits.insert_one({
         "session_id": payload.session_id[:64],
+        "visitor_id": visitor_id,
         "path": payload.path[:300],
         "referrer": payload.referrer[:300],
         "locale": normalize_locale(payload.locale),
-        "ua": (request.headers.get("user-agent") or "")[:300],
+        "ua": ua,
+        "bot": bot,
+        "new_24h": fresh["pp_v24"],
+        "new_7d": fresh["pp_v7"],
+        "new_30d": fresh["pp_v30"],
         "ts": now_utc(),
     })
+    if not bot:
+        for name, max_age in VISITOR_COOKIES:
+            response.set_cookie(name, visitor_id, max_age=max_age, httponly=True,
+                                samesite="lax", secure=True, path="/")
     return {"ok": True}
 
 
@@ -2552,14 +2612,17 @@ def _bucket_key(iso: str, bucket: str) -> str:
 async def _period_stats(start: datetime, end: datetime, bucket: str) -> Dict[str, Any]:
     s_iso, e_iso = start.isoformat(), end.isoformat()
     visits = await db.visits.find(
-        {"ts": {"$gte": s_iso, "$lt": e_iso}}, {"_id": 0, "session_id": 1, "ts": 1}
+        {"ts": {"$gte": s_iso, "$lt": e_iso}, **analytics_bots.NOT_BOT},
+        {"_id": 0, "session_id": 1, "visitor_id": 1, "ts": 1},
     ).to_list(200000)
     orders = await db.orders.find(
         {"created_at": {"$gte": s_iso, "$lt": e_iso}, "status": {"$ne": "cancelled"}},
-        {"_id": 0, "created_at": 1, "subtotal_eur": 1, "discount_eur": 1},
+        {"_id": 0, "created_at": 1, "subtotal_eur": 1, "discount_eur": 1, "source": 1},
     ).to_list(50000)
 
     sessions = {v["session_id"] for v in visits}
+    visitors = {v.get("visitor_id") or v["session_id"] for v in visits}
+    own_orders = sum(1 for o in orders if (o.get("source") or "storefront") != "shopify_import")
     sales = sum(max((o.get("subtotal_eur") or 0) - (o.get("discount_eur") or 0), 0) for o in orders)
 
     buckets: Dict[str, Dict[str, float]] = {}
@@ -2568,11 +2631,16 @@ async def _period_stats(start: datetime, end: datetime, bucket: str) -> Dict[str
         sid = v["session_id"]
         if sid not in first_seen or v["ts"] < first_seen[sid]:
             first_seen[sid] = v["ts"]
+        b = buckets.setdefault(_bucket_key(v["ts"], bucket),
+                               {"sessions": 0, "views": 0, "orders": 0, "sales": 0.0})
+        b["views"] += 1
     for sid, ts in first_seen.items():
-        b = buckets.setdefault(_bucket_key(ts, bucket), {"sessions": 0, "orders": 0, "sales": 0.0})
+        b = buckets.setdefault(_bucket_key(ts, bucket),
+                               {"sessions": 0, "views": 0, "orders": 0, "sales": 0.0})
         b["sessions"] += 1
     for o in orders:
-        b = buckets.setdefault(_bucket_key(o["created_at"], bucket), {"sessions": 0, "orders": 0, "sales": 0.0})
+        b = buckets.setdefault(_bucket_key(o["created_at"], bucket),
+                               {"sessions": 0, "views": 0, "orders": 0, "sales": 0.0})
         b["orders"] += 1
         b["sales"] += max((o.get("subtotal_eur") or 0) - (o.get("discount_eur") or 0), 0)
 
@@ -2583,16 +2651,41 @@ async def _period_stats(start: datetime, end: datetime, bucket: str) -> Dict[str
         keys.append(_bucket_key(cursor.isoformat(), bucket))
         cursor += step
     series = [
-        {"t": k, **{m: round(buckets.get(k, {}).get(m, 0), 2) for m in ("sessions", "orders", "sales")}}
+        {"t": k, **{m: round(buckets.get(k, {}).get(m, 0), 2)
+                    for m in ("sessions", "views", "orders", "sales")}}
         for k in keys
     ]
     return {
         "sessions": len(sessions),
+        "visitors": len(visitors),
+        "views": len(visits),
         "orders": len(orders),
         "sales": round(sales, 2),
-        "conversion": round(len(orders) / len(sessions) * 100, 2) if sessions else 0.0,
+        # only orders placed in THIS shop can be related to the sessions we track — the imported
+        # Shopify history has no sessions here and would push the conversion above 100%
+        "conversion": (min(round(own_orders / len(sessions) * 100, 2), 100.0)
+                       if sessions and own_orders else 0.0),
         "series": series,
     }
+
+
+async def _visitor_windows() -> Dict[str, int]:
+    """Different people (visitor cookie) in the last 24h / 7 days / 30 days, bots excluded.
+
+    Visits recorded before the cookies existed only have a session id — they fall back to it, so
+    the windows and the period figures always tell the same story.
+    """
+    now = datetime.now(timezone.utc)
+    out: Dict[str, int] = {}
+    for key, days in (("24h", 1), ("7d", 7), ("30d", 30)):
+        since = (now - timedelta(days=days)).isoformat()
+        rows = await db.visits.aggregate([
+            {"$match": {"ts": {"$gte": since}, **analytics_bots.NOT_BOT}},
+            {"$group": {"_id": {"$ifNull": ["$visitor_id", "$session_id"]}}},
+            {"$count": "n"},
+        ]).to_list(1)
+        out[key] = rows[0]["n"] if rows else 0
+    return out
 
 
 @api.get("/admin/analytics")
@@ -2607,7 +2700,9 @@ async def admin_analytics(
     previous = await _period_stats(prev_start, prev_end, bucket)
 
     live_since = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
-    live = await db.visits.distinct("session_id", {"ts": {"$gte": live_since}})
+    live = await db.visits.distinct("session_id", {"ts": {"$gte": live_since}, **analytics_bots.NOT_BOT})
+    bots = await db.visits.count_documents({"ts": {"$gte": start.isoformat(), "$lt": end.isoformat()},
+                                            "$nor": [analytics_bots.NOT_BOT]})
 
     def delta(now_v: float, prev_v: float) -> Optional[float]:
         if not prev_v:
@@ -2620,10 +2715,14 @@ async def admin_analytics(
         "from": start.isoformat(),
         "to": end.isoformat(),
         "live": len(live),
+        "bots_excluded": bots,
+        "visitors": await _visitor_windows(),
         "current": current,
         "previous": previous,
         "deltas": {
             "sessions": delta(current["sessions"], previous["sessions"]),
+            "visitors": delta(current["visitors"], previous["visitors"]),
+            "views": delta(current["views"], previous["views"]),
             "orders": delta(current["orders"], previous["orders"]),
             "sales": delta(current["sales"], previous["sales"]),
             "conversion": delta(current["conversion"], previous["conversion"]),
@@ -3534,6 +3633,7 @@ import fulfillment  # noqa: E402
 import wc_api  # noqa: E402
 api.include_router(nextlevel.init(db, require_admin))
 api.include_router(fulfillment.init(db, require_admin))
+fulfillment.set_cancel_hook(_cancel_from_warehouse)
 _wc_router = wc_api.init(db, fulfillment.get_config)
 app.add_exception_handler(wc_api.WCError, wc_api.wc_error_handler)
 

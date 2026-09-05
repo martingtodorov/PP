@@ -65,11 +65,30 @@ export default function AdminOrderDetailPage() {
     } catch (e) { toast.error(formatErr(e)); } finally { setBusy(""); }
   };
 
+  const doCancel = async (reason, force) => {
+    setBusy("cancel");
+    try {
+      await api.post(`/admin/orders/${order.id}/cancel${force ? "?force=true" : ""}`, { reason });
+      toast.success(force ? "Поръчката е отказана само при нас" : "Поръчката е отказана");
+      load();
+      return true;
+    } catch (e) {
+      const msg = formatErr(e);
+      toast.error(msg);
+      if (!force && window.confirm(
+        `${msg}\n\nДа откажа ли поръчката САМО при нас? Тогава трябва ти да я откажеш в панела на NextLevel.`)) {
+        setBusy("");
+        return doCancel(reason, true);
+      }
+      return false;
+    } finally { setBusy(""); }
+  };
+
   const cancel = () => {
     const reason = window.prompt(
-      "Отказване на поръчката. Товарителницата се анулира, наличностите се връщат и клиентът получава имейл.\n\nПричина (по избор):", "");
+      "Отказване на поръчката. Отказът се подава и към склада на NextLevel, товарителницата се анулира, наличностите се връщат и клиентът получава имейл.\n\nПричина (по избор):", "");
     if (reason === null) return;
-    act("cancel", `/admin/orders/${order.id}/cancel`, "Поръчката е отказана", { reason });
+    doCancel(reason, false);
   };
 
   if (!order) return <AdminLayout title="Поръчка"><p className="text-sm text-slate-400">Зареждане…</p></AdminLayout>;

@@ -279,32 +279,75 @@ async def _apply_awb(order: Dict[str, Any], ff: Dict[str, Any]) -> None:
 
 
 async def cancel_order(order_id: str) -> Dict[str, Any]:
+    """Tell NextLevel the order is cancelled — one entry point for every cancellation we make.
+
+    It raises unless the warehouse confirms: the owner's rule is that an order must never be
+    cancelled in the shop while it is still active in the warehouse. The failure is stored on the
+    order (`fulfillment.cancel_error`) so the admin sees it and can retry.
+    """
     cfg = await get_config()
-    order = await _db.orders.find_one({"id": order_id}, {"_id": 0, "fulfillment": 1})
-    number = (order or {}).get("fulfillment", {}).get("number")
+    order = await _db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Поръчката не е намерена")
+    ff = order.get("fulfillment") or {}
+    number = ff.get("number")
     if not number:
         raise HTTPException(404, "Няма фулфилмент поръчка")
-    if order["fulfillment"].get("transport") == "woocommerce":
-        import wc_api
+    if ff.get("status") == "cancelled" and ff.get("cancel_confirmed_at"):
+        return {"cancelled": True, "number": number, "already": True}
 
-        full = await _db.orders.find_one({"id": order_id}, {"_id": 0})
-        try:
-            res = await wc_api.push_webhook({**full, "status": "cancelled"}, cfg, "order.updated")
-        except Exception as ex:
-            raise HTTPException(502, f"NextLevel webhook: {ex}")
-        await _db.orders.update_one({"id": order_id}, {"$set": {"fulfillment.status": "cancelled", "fulfillment.cancelled_at": _now(),
-                                                                "fulfillment.updated_at": _now()}})
-        return {"cancelled": True, "number": number, "response": res["response"],
-                "note": "Изпратен е webhook order.updated със статус cancelled — проверете в панела на NextLevel"}
-    if (order["fulfillment"].get("transport") == "webhook") and not cfg.get("has_api"):
-        raise HTTPException(400, "Поръчката е подадена през webhook — откажете я в панела на NextLevel или добавете API ключове")
+    async def confirm() -> tuple:
+        if cfg.get("has_api"):
+            return "api", await _call(cfg, "POST", f"/{number}/cancel")
+        if cfg.get("webhook_url"):
+            import wc_api
+
+            res = await wc_api.push_webhook({**order, "status": "cancelled"}, cfg, "order.updated")
+            if res["status_code"] >= 400:
+                raise NextLevelError(f"NextLevel {res['status_code']}: {res['response']}", res["status_code"])
+            return "webhook", res["response"]
+        raise NextLevelError("Няма app-secret за фулфилмент API-то, нито webhook адрес — въведете ги в "
+                             "Админ → Интеграции, за да стига отказът до склада", 400)
+
     try:
-        res = await _call(cfg, "POST", f"/{number}/cancel")
-    except NextLevelError as ex:
-        raise HTTPException(502, str(ex))
-    await _db.orders.update_one({"id": order_id}, {"$set": {"fulfillment.status": "cancelled", "fulfillment.status_id": 3,
-                                                            "fulfillment.cancelled_at": _now(), "fulfillment.updated_at": _now()}})
-    return {"cancelled": True, "number": number, "response": res}
+        transport, res = await confirm()
+    except (NextLevelError, HTTPException) as ex:
+        detail = ex.detail if isinstance(ex, HTTPException) else str(ex)
+        await _db.orders.update_one({"id": order_id}, {"$set": {
+            "fulfillment.cancel_error": str(detail), "fulfillment.cancel_error_at": _now()}})
+        raise HTTPException(502, str(detail))
+    except Exception as ex:
+        await _db.orders.update_one({"id": order_id}, {"$set": {
+            "fulfillment.cancel_error": str(ex), "fulfillment.cancel_error_at": _now()}})
+        raise HTTPException(502, f"NextLevel: {ex}")
+
+    await _db.orders.update_one({"id": order_id}, {
+        "$set": {"fulfillment.status": "cancelled", "fulfillment.status_id": 3,
+                 "fulfillment.cancelled_at": _now(), "fulfillment.cancel_confirmed_at": _now(),
+                 "fulfillment.cancel_transport": transport, "fulfillment.updated_at": _now()},
+        "$unset": {"fulfillment.cancel_error": "", "fulfillment.cancel_error_at": ""}})
+    log.info("Fulfillment order %s cancelled at NextLevel via %s", number, transport)
+    return {"cancelled": True, "number": number, "transport": transport, "response": res}
+
+
+# The warehouse can cancel on its side too (their panel); cancelling in the shop needs the stock /
+# e-mail logic that lives in server.py, so it registers a hook here.
+_cancel_hook = None
+
+
+def set_cancel_hook(fn) -> None:
+    global _cancel_hook
+    _cancel_hook = fn
+
+
+async def warehouse_cancelled(order_id: str, source: str = "NextLevel") -> None:
+    """NextLevel reported the order as cancelled → cancel it in the shop too (stock back + e-mail)."""
+    if not _cancel_hook:
+        return
+    try:
+        await _cancel_hook(order_id, f"склад {source}")
+    except Exception as ex:
+        log.warning("local cancel after a warehouse cancel failed for %s: %s", order_id, ex)
 
 
 async def refresh_order(order_id: str) -> Dict[str, Any]:
@@ -328,6 +371,8 @@ async def refresh_order(order_id: str) -> Dict[str, Any]:
         await _apply_awb(order, fresh)
     if str(fresh.get("status") or "").lower() == "delivered" or str(fresh.get("shipment_status") or "").lower() == "delivered":
         await nextlevel.notify_delivered(order_id)
+    if str(fresh.get("status") or "").lower() == "cancelled" and order.get("status") != "cancelled":
+        await warehouse_cancelled(order_id)
     return {**ff, **{k: v for k, v in fresh.items() if v is not None}}
 
 

@@ -306,6 +306,10 @@ async def _apply_update(order: Dict[str, Any], payload: Dict[str, Any]) -> Dict[
         await fulfillment._apply_awb(order, {"awb": found["awb"], "courier": found.get("courier") or (order.get("fulfillment") or {}).get("courier"),
                                              "shipment_status": "Shipped"})
     fresh = await _db.orders.find_one({"id": order["id"]}, {"_id": 0})
+    if patch.get("fulfillment.warehouse_cancelled"):
+        # the warehouse cancelled on its side → cancel in the shop too (stock back + e-mail)
+        await fulfillment.warehouse_cancelled(order["id"], "NextLevel (WooCommerce API)")
+        fresh = await _db.orders.find_one({"id": order["id"]}, {"_id": 0})
     return fresh
 
 

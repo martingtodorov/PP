@@ -48,14 +48,22 @@ export default function AdminDelistedLinksPage() {
     } catch (err) { toast.error(formatErr(err)); } finally { setBusy(false); }
   };
 
-  const rotate = async (l) => {
+  const rotate = async (l, to = "") => {
     setRotating(l.id);
     try {
-      const { data } = await api.post(`/admin/delisted-links/${l.id}/rotate`);
+      const { data } = await api.post(`/admin/delisted-links/${l.id}/rotate`, null,
+        to ? { params: { to } } : undefined);
       const r = data.rotated;
       toast.success(`Нов адрес: /${r.kind}/${r.handle}${r.rewritten ? " · описанието е пренаписано" : " · описанието остана същото"}`);
       load();
     } catch (err) { toast.error(formatErr(err)); } finally { setRotating(""); }
+  };
+
+  const restore = (l) => {
+    const to = window.prompt(
+      "Възстановяване на конкретен handle (напр. след повторен каталожен импорт, който е изтрил ротацията).\n\nВъведи handle-а, който трябва да е ЖИВИЯТ адрес — описанието не се пренаписва:", "");
+    if (!to || !to.trim()) return;
+    rotate(l, to.trim());
   };
 
   const rotateAll = async () => {
@@ -241,6 +249,15 @@ export default function AdminDelistedLinksPage() {
                       data-testid={`delisted-rotate-${l.id}`}
                     >
                       {rotating === l.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shuffle className="h-3.5 w-3.5" />} Ротирай
+                    </button>
+                    <button
+                      onClick={() => restore(l)}
+                      disabled={!!rotating}
+                      title="Публикува точно определен handle (възстановява ротация, изтрита от повторен импорт) — без пренаписване"
+                      className="text-slate-600 hover:underline mr-3 inline-flex items-center gap-1 text-xs disabled:opacity-50"
+                      data-testid={`delisted-restore-${l.id}`}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> Върни стар handle
                     </button>
                     {l.status !== "rotated" ? (
                       <button onClick={() => update(l, { status: "rotated" })} className="text-emerald-700 hover:underline mr-3 inline-flex items-center gap-1 text-xs" data-testid={`delisted-mark-rotated-${l.id}`}>
