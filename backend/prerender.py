@@ -430,6 +430,29 @@ _SITEMAP_SECTIONS = {
 }
 
 
+async def _articles_index(locale: str) -> Dict[str, str]:
+    """The article index the header and footer link to — a router page, not a DB page."""
+    route = "/pages/articles"
+    docs = await _db.articles.find({}, {"_id": 0}).sort("published_at", -1).to_list(200)
+    items, parts = [], []
+    for doc in docs:
+        a = localize_doc(doc, locale)
+        handle, title = a.get("handle"), a.get("title") or ""
+        if not (handle and title):
+            continue
+        items.append(_link_li(locale, "/articles/", handle, title))
+        parts.append({"@type": "Article", "headline": title,
+                      "url": url_for(locale, f"/articles/{handle}")})
+    heading = _t(locale, "articles")
+    trail = [(_t(locale, "home"), "/"), (heading, route)]
+    ld = _ld({"@type": "CollectionPage", "@id": f"{url_for(locale, route)}#page", "name": heading,
+              "url": url_for(locale, route), "hasPart": parts[:50]},
+             _breadcrumbs(locale, trail), _organization(locale), _website(locale))
+    return {"head": _head(locale, route, f"{heading} | PurePeptide",
+                          _t(locale, "articlesIndexDesc"), "", extra=ld),
+            "body": _crumb_html(locale, trail) + f"<h1>{esc(heading)}</h1><ul>{''.join(items)}</ul>"}
+
+
 async def _html_sitemap(locale: str, slug: str) -> Optional[Dict[str, str]]:
     """The HTML sitemap pages the app renders (same URLs as the old Shopify theme).
 
@@ -559,6 +582,18 @@ _LABELS = {
     "pages": {"bg": "Страници", "en": "Pages", "fr": "Pages", "de": "Seiten", "cz": "Stránky",
               "hu": "Oldalak", "pl": "Strony", "sk": "Stránky", "si": "Strani",
               "gr": "Σελίδες", "ro": "Pagini"},
+    "articlesIndexDesc": {
+        "bg": "Научни обзори за пептидите: механизъм, изследвания и данни за чистота от независима лаборатория.",
+        "en": "Research reviews on peptides: mechanism, studies and independent laboratory purity data.",
+        "fr": "Revues scientifiques sur les peptides : mécanisme, études et données de pureté indépendantes.",
+        "de": "Wissenschaftliche Übersichten zu Peptiden: Wirkmechanismus, Studien und unabhängige Reinheitsdaten.",
+        "cz": "Odborné přehledy o peptidech: mechanismus, studie a nezávislé laboratorní údaje o čistotě.",
+        "hu": "Tudományos áttekintések a peptidekről: hatásmechanizmus, vizsgálatok és független tisztasági adatok.",
+        "pl": "Przeglądy naukowe o peptydach: mechanizm, badania i niezależne dane o czystości.",
+        "sk": "Odborné prehľady o peptidoch: mechanizmus, štúdie a nezávislé laboratórne údaje o čistote.",
+        "si": "Znanstveni pregledi o peptidih: mehanizem, študije in neodvisni laboratorijski podatki o čistosti.",
+        "gr": "Επιστημονικές ανασκοπήσεις για τα πεπτίδια: μηχανισμός, μελέτες και ανεξάρτητα δεδομένα καθαρότητας.",
+        "ro": "Analize științifice despre peptide: mecanism, studii și date independente de puritate."},
     "sitemapDesc": {"bg": "Пълен списък с всички страници, продукти, категории и статии в сайта.",
                     "en": "A full list of every page, product, collection and article on the site.",
                     "fr": "La liste complète des pages, produits, catégories et articles du site.",
@@ -590,6 +625,8 @@ async def _route(locale: str, route: str) -> Optional[Dict[str, str]]:
     if parts[0] == "articles" and len(parts) > 1:
         return await _article(locale, parts[1])
     if parts[0] == "pages" and len(parts) > 1:
+        if parts[1] == "articles":
+            return await _articles_index(locale)
         if parts[1].startswith("html-sitemap"):
             return await _html_sitemap(locale, parts[1])
         return await _page(locale, parts[1])

@@ -434,6 +434,22 @@
       failed_when: (catalog.json | default([]) | length) == 0
       tags: [verify, publish]
 
+    # A dead URL must never reach a published sitemap — whatever the cause (de-activated product,
+    # rotated handle, deleted page, bad import), this gate catches the whole class before release.
+    - name: Every sitemap URL answers 200
+      command: "{{ app_dir }}/venv/bin/python scripts/check_sitemap.py --base http://127.0.0.1:8001"
+      args: { chdir: "{{ app_dir }}/current/{{ backend_rel_path }}" }
+      become_user: "{{ backend_service_user }}"
+      register: sitemap_check
+      changed_when: false
+      failed_when: sitemap_check.rc != 0
+      tags: [verify, publish]
+
+    - name: Sitemap check result
+      debug: { var: sitemap_check.stdout_lines }
+      when: sitemap_check is defined
+      tags: [verify, publish]
+
   handlers:
     - name: reload systemd
       systemd: { daemon_reload: true }
