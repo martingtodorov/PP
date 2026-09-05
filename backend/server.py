@@ -2758,6 +2758,19 @@ class TrackIn(BaseModel):
     locale: str = "bg"
 
 
+async def _fill_visit_geo(session_id: str, ip: Optional[str]):
+    """Country + city for a session, resolved after the response (the IP itself is never stored)."""
+    if not ip:
+        return
+    import geo as geo_mod
+    place = await geo_mod.locate_ip(ip)
+    if not place:
+        return
+    await db.visits.update_many(
+        {"session_id": session_id, "$or": [{"city": ""}, {"country": ""}]},
+        {"$set": {"country": place.get("country", ""), "city": place.get("city", "")}})
+
+
 @api.post("/track")
 async def track_visit(payload: TrackIn, request: Request, response: Response):
     """One page view. Bots are flagged (and never counted), humans get the tracking cookies.
@@ -2790,8 +2803,14 @@ async def track_visit(payload: TrackIn, request: Request, response: Response):
         "new_24h": fresh["pp_v24"],
         "new_7d": fresh["pp_v7"],
         "new_30d": fresh["pp_v30"],
+        # Cloudflare hands the country over for free; the city needs a lookup, done off the request
+        "country": (request.headers.get("cf-ipcountry") or "").upper()[:2],
+        "city": "",
         "ts": now_utc(),
     })
+    if not bot:
+        import geo as geo_mod
+        asyncio.create_task(_fill_visit_geo(session.split(".")[0], geo_mod.client_ip(request)))
     if not bot and consented:
         response.set_cookie(SESSION_COOKIE, session, max_age=SESSION_IDLE, httponly=True,
                             samesite="lax", secure=True, path="/")
@@ -2923,6 +2942,44 @@ async def _visitor_windows() -> Dict[str, int]:
     return out
 
 
+async def _geo_breakdown(start: datetime, end: datetime) -> Dict[str, List[Dict[str, Any]]]:
+    """Where the visitors are: top countries and top cities of the period, bots excluded.
+
+    The place comes from the IP (Cloudflare's country header, city from the IP registration), so
+    the city is an approximation — the same one Shopify's analytics shows.
+    """
+    from nextcart import COUNTRY_NAME_BG
+    match = {"ts": {"$gte": start.isoformat(), "$lt": end.isoformat()}, **analytics_bots.NOT_BOT}
+
+    async def top(group_id, extra_fields):
+        rows = await db.visits.aggregate([
+            {"$match": match},
+            {"$group": {"_id": group_id,
+                        "visitors": {"$addToSet": {"$ifNull": ["$visitor_id", "$session_id"]}},
+                        "sessions": {"$addToSet": "$session_id"},
+                        "views": {"$sum": 1}}},
+            {"$project": {"visitors": {"$size": "$visitors"}, "sessions": {"$size": "$sessions"},
+                          "views": 1}},
+            {"$sort": {"visitors": -1, "views": -1}},
+            {"$limit": 12},
+        ]).to_list(12)
+        out = []
+        for r in rows:
+            key = r["_id"] if isinstance(r["_id"], dict) else {"country": r["_id"]}
+            code = (key.get("country") or "").upper()
+            if not code and not key.get("city"):
+                continue                      # unresolved yet (older visits, private IPs)
+            if extra_fields and not key.get("city"):
+                continue                      # a country without a city belongs in the other list
+            out.append({**{k: key.get(k, "") for k in extra_fields}, "country": code,
+                        "country_name": COUNTRY_NAME_BG.get(code, code or "—"),
+                        "visitors": r["visitors"], "sessions": r["sessions"], "views": r["views"]})
+        return out
+
+    return {"countries": await top("$country", []),
+            "cities": await top({"city": "$city", "country": "$country"}, ["city"])}
+
+
 @api.get("/admin/analytics")
 async def admin_analytics(
     range: str = Query("today"),
@@ -2954,6 +3011,7 @@ async def admin_analytics(
         "live": len(live),
         "bots_excluded": bots,
         "visitors": await _visitor_windows(),
+        "geo": await _geo_breakdown(start, end),
         "current": current,
         "previous": previous,
         "deltas": {
