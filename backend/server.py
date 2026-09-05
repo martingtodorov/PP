@@ -2276,6 +2276,64 @@ async def media_status(user=Depends(require_admin)):
     return info
 
 
+@api.post("/admin/import/coa-images")
+async def import_coa_images(dry_run: bool = False, user=Depends(require_admin)):
+    """Attach the Shopify chemical-analysis (COA) file of every product to its gallery.
+
+    The report is appended LAST, so the main product photo never changes, and the run is
+    idempotent — a product that already carries its COA image is reported as skipped.
+    """
+    import coa_import
+
+    rows = await run_in_threadpool(coa_import.pairs)
+    added: List[Dict[str, str]] = []
+    skipped: List[Dict[str, str]] = []
+    failed: List[Dict[str, str]] = []
+    for row in rows:
+        handle, filename, src = row["handle"], row["filename"], row["url"]
+        product = await db.products.find_one({"handle": handle}, {"_id": 0, "handle": 1,
+                                                                  "title": 1, "images": 1})
+        if not product:
+            failed.append({"handle": handle, "file": filename, "reason": "няма такъв продукт"})
+            continue
+        if not src:
+            failed.append({"handle": handle, "file": filename, "reason": "липсва линк в експорта"})
+            continue
+        entry = await db.image_map.find_one({"$or": [{"key": src.split("?")[0]}, {"src": src}]},
+                                           {"_id": 0, "path": 1, "url": 1})
+        url = (entry or {}).get("url") or ""
+        if not (url and await run_in_threadpool(_readable, entry.get("path", ""))):
+            got = await run_in_threadpool(_refetch_image, src)
+            if not got:
+                failed.append({"handle": handle, "file": filename, "reason": "неуспешно сваляне"})
+                continue
+            url = f"/api/files/{got['path']}"
+            if not dry_run:
+                await _ensure_file_record(got["path"], "coa-import")
+                await db.image_map.update_one(
+                    {"key": src.split("?")[0]},
+                    {"$set": {"key": src.split("?")[0], "src": src, "path": got["path"], "url": url},
+                     "$setOnInsert": {"created_at": now_utc()}},
+                    upsert=True,
+                )
+        images = product.get("images") or []
+        if url in images:
+            skipped.append({"handle": handle, "title": product.get("title", ""), "url": url})
+            continue
+        if not dry_run:
+            await db.products.update_one(
+                {"handle": handle},
+                {"$set": {"images": images + [url], "coa_image": url,
+                          "updated_at": now_utc()}},
+            )
+        added.append({"handle": handle, "title": product.get("title", ""), "url": url})
+    if added and not dry_run:
+        prerender.bump()
+    return {"scanned": len(rows), "added": added, "skipped": skipped, "failed": failed,
+            "dry_run": dry_run}
+
+
+
 # ---------- Static pages (editable per locale) ----------
 class PageIn(BaseModel):
     title: str = ""
@@ -3498,13 +3556,17 @@ prerender.init(db)
 
 @api.get("/seo/prerender", include_in_schema=False)
 async def seo_prerender(request: Request, path: str = "/"):
-    """Finished HTML for a public route — nginx sends every page request here (404 → SPA shell)."""
+    """Finished HTML for a page request. 404 keeps its status (no soft 404); only a failure here
+    (5xx) makes nginx fall back to the static shell."""
     host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
-    out = await prerender.render(path, host)
-    if not out:
-        raise HTTPException(404, "not prerendered")
-    return HTMLResponse(out, headers={"Cache-Control": "public, max-age=60, s-maxage=300",
-                                      "X-Prerender": "1"})
+    result = await prerender.render(path, host)
+    if not result:
+        raise HTTPException(503, "prerender unavailable")
+    body, status = result
+    headers = {"X-Prerender": "1"}
+    headers["Cache-Control"] = ("public, max-age=60, s-maxage=300" if status == 200
+                                else "no-cache")
+    return HTMLResponse(body, status_code=status, headers=headers)
 
 
 @app.middleware("http")

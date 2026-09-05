@@ -432,6 +432,10 @@ _LABELS = {
                 "de": "Alle Peptide", "cz": "Všechny peptidy", "hu": "Összes peptid",
                 "pl": "Wszystkie peptydy", "sk": "Všetky peptidy", "si": "Vsi peptidi",
                 "gr": "Όλα τα πεπτίδια", "ro": "Toate peptidele"},
+    "notFound": {"bg": "Страницата не е намерена", "en": "Page not found", "fr": "Page introuvable",
+                 "de": "Seite nicht gefunden", "cz": "Stránka nenalezena", "hu": "Az oldal nem található",
+                 "pl": "Strona nie znaleziona", "sk": "Stránka sa nenašla", "si": "Stran ni najdena",
+                 "gr": "Η σελίδα δεν βρέθηκε", "ro": "Pagina nu a fost găsită"},
     "articles": {"bg": "Научни статии", "en": "Articles", "fr": "Articles", "de": "Artikel",
                  "cz": "Články", "hu": "Cikkek", "pl": "Artykuły", "sk": "Články", "si": "Članki",
                  "gr": "Άρθρα", "ro": "Articole"},
@@ -461,32 +465,44 @@ def _inject(shell: str, head: str, body: str) -> str:
     """Our tags win: drop the static title/description/OG of the shell, then add ours."""
     out = re.sub(r"<title>.*?</title>", "", shell, flags=re.S)
     out = re.sub(r'<meta\s+name="description"[^>]*>', "", out)
+    out = re.sub(r'<meta\s+name="robots"[^>]*>', "", out)
     out = re.sub(r'<meta\s+(?:property|name)="(?:og|twitter):[^"]+"[^>]*>', "", out)
     out = out.replace("</head>", f"{head}</head>", 1)
     return re.sub(r'(<div id="root"[^>]*>)', lambda m: m.group(1) + body, out, count=1)
 
 
-async def render(path: str, host: str) -> Optional[str]:
-    """Finished HTML for a public route, or None when the SPA shell should be served as-is."""
+async def render(path: str, host: str) -> Optional[Tuple[str, int]]:
+    """(html, status) for a page request, or None when nginx should serve the static shell.
+
+    Status matters: a URL whose content does not exist must answer 404, otherwise Google files it as
+    a soft 404. Private routes (cart, checkout, account…) get the untouched shell with 200.
+    """
     clean = (path or "/").split("?")[0].split("#")[0]
     route = strip_prefix(clean)
-    if route.startswith(PRIVATE_PREFIXES) or "." in route.rsplit("/", 1)[-1]:
-        return None
+    looks_like_a_file = "." in route.rsplit("/", 1)[-1]
     key = (host or "", clean)
     hit = _pages.get(key)
     if hit and time.time() - hit[0] < PAGE_TTL:
         return hit[1]
-    locale = locale_of(host, clean)
     shell = await _shell()
     if not shell:
         return None
+    if route.startswith(PRIVATE_PREFIXES):
+        return shell, 200
+    if looks_like_a_file:
+        return shell, 404
+    locale = normalize_locale(locale_of(host, clean))
     try:
-        rendered = await _route(normalize_locale(locale), route)
+        rendered = await _route(locale, route)
     except Exception:
         log.exception("prerender failed for %s", clean)
         return None
     if not rendered:
-        return None
-    out = _inject(shell, rendered["head"], rendered["body"])
+        # the route exists in the app but its content does not — a real 404, with the shell so the
+        # visitor still sees the app's own not-found page
+        head = _head(locale, route.lstrip("/"), _t(locale, "notFound"), "", "",
+                     robots="noindex, follow")
+        return _inject(shell, head, f'<h1>{esc(_t(locale, "notFound"))}</h1>'), 404
+    out = (_inject(shell, rendered["head"], rendered["body"]), 200)
     _pages[key] = (time.time(), out)
     return out
