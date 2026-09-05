@@ -776,12 +776,12 @@ async def render(path: str, host: str) -> Optional[Tuple[str, int]]:
     if not rendered:
         # the route exists in the app but its content does not — a real 404, with the shell so the
         # visitor still sees the app's own not-found page
-        # a hard 404 (the status stays 404 for crawlers) that still walks a human to the catalogue
-        # after 3 seconds — a delayed meta refresh is not read as a redirect by search engines
+        # a hard 404 for crawlers (404 + noindex on this URL) that sends a human straight on to
+        # the catalogue instead of a dead end
         catalog = await _catalog_route(locale)
         head = _head(locale, route.lstrip("/"), _t(locale, "notFound"), "", "",
                      robots="noindex, follow",
-                     extra=f'<meta http-equiv="refresh" content="3;url={catalog}">')
+                     extra=f'<meta http-equiv="refresh" content="0;url={catalog}">')
         body = (f'<h1>{esc(_t(locale, "notFound"))}</h1>'
                 f'<p><a href="{catalog}">{esc(_t(locale, "catalog"))}</a></p>')
         return _inject(shell, head, body, locale), 404
