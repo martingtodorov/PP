@@ -32,7 +32,8 @@ export function useSeo({ title, description, locale = DEFAULT_LOCALE, path = "/"
   useEffect(() => {
     const full = title ? `${title}` : "PurePeptide";
     document.title = full;
-    document.documentElement.lang = LOCALE_META[locale]?.hreflang || locale;
+    // html lang takes the plain language subtag: cz -> cs, si -> sl, gr -> el
+    document.documentElement.lang = (LOCALE_META[locale]?.hreflang || locale).split("-")[0];
     const skip = document.getElementById("pp-skip");   // ships in index.html before React
     if (skip) skip.textContent = translate(locale, "skipToContent");
     setMeta("name", "description", description);

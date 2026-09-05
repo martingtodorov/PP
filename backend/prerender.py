@@ -483,7 +483,20 @@ async def _route(locale: str, route: str) -> Optional[Dict[str, str]]:
     return None
 
 
-def _inject(shell: str, head: str, body: str) -> str:
+def _html_lang(locale: str) -> str:
+    """`html lang` carries the plain language subtag: cz -> cs, si -> sl, gr -> el."""
+    return LOCALE_META.get(locale, LOCALE_META[DEFAULT_LOCALE])["hreflang"].split("-")[0]
+
+
+def _set_lang(html: str, locale: str) -> str:
+    """The built shell ships `lang="bg"`; every localised page must state its own language."""
+    lang = _html_lang(locale)
+    if re.search(r"<html[^>]*\slang=", html):
+        return re.sub(r'(<html[^>]*?)\slang="[^"]*"', lambda m: f'{m.group(1)} lang="{lang}"', html, count=1)
+    return re.sub(r"<html\b", f'<html lang="{lang}"', html, count=1)
+
+
+def _inject(shell: str, head: str, body: str, locale: str = DEFAULT_LOCALE) -> str:
     """Our tags win: drop the static title/description/OG of the shell, then add ours.
 
     The prerendered copy is wrapped in a visually-hidden container: crawlers (and anyone with
@@ -491,6 +504,7 @@ def _inject(shell: str, head: str, body: str) -> str:
     unstyled text before React mounts and replaces it.
     """
     out = re.sub(r"<title>.*?</title>", "", shell, flags=re.S)
+    out = _set_lang(out, locale)
     out = re.sub(r'<meta\s+name="description"[^>]*>', "", out)
     out = re.sub(r'<meta\s+name="robots"[^>]*>', "", out)
     out = re.sub(r'<meta\s+(?:property|name)="(?:og|twitter):[^"]+"[^>]*>', "", out)
@@ -515,11 +529,11 @@ async def render(path: str, host: str) -> Optional[Tuple[str, int]]:
     shell = await _shell()
     if not shell:
         return None
-    if route.startswith(PRIVATE_PREFIXES):
-        return shell, 200
-    if looks_like_a_file:
-        return shell, 404
     locale = normalize_locale(locale_of(host, clean))
+    if route.startswith(PRIVATE_PREFIXES):
+        return _set_lang(shell, locale), 200
+    if looks_like_a_file:
+        return _set_lang(shell, locale), 404
     try:
         rendered = await _route(locale, route)
     except Exception:
@@ -530,7 +544,7 @@ async def render(path: str, host: str) -> Optional[Tuple[str, int]]:
         # visitor still sees the app's own not-found page
         head = _head(locale, route.lstrip("/"), _t(locale, "notFound"), "", "",
                      robots="noindex, follow")
-        return _inject(shell, head, f'<h1>{esc(_t(locale, "notFound"))}</h1>'), 404
-    out = (_inject(shell, rendered["head"], rendered["body"]), 200)
+        return _inject(shell, head, f'<h1>{esc(_t(locale, "notFound"))}</h1>', locale), 404
+    out = (_inject(shell, rendered["head"], rendered["body"], locale), 200)
     _pages[key] = (time.time(), out)
     return out

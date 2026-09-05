@@ -51,20 +51,23 @@ export function LocaleProvider({ children }) {
      and a foreign prefix jumps to the domain that owns it */
   useEffect(() => {
     const seg = pathname.split("/")[1];
-    if (host.includes("purepeptide.eu") && !LOCALES.includes(seg)) {
+    // /en and /en/ are where nginx now sends the shared apex, so the IP check has to run there too
+    const atEnglishRoot = pathname === "/en" || pathname === "/en/";
+    if (host.includes("purepeptide.eu") && (!LOCALES.includes(seg) || atEnglishRoot)) {
       let cancelled = false;
-      const go = (target) => {
-        if (cancelled) return;
+      const go = (loc) => {
+        if (cancelled || (atEnglishRoot && loc === "en")) return;   // already on the right page
+        const target = targetForLocale(loc, atEnglishRoot ? "/" : pathname);
         if (target.external) window.location.replace(target.external);
         else nav(target.internal, { replace: true });
       };
       const saved = rememberedLocale();
       if (saved) {
-        go(targetForLocale(saved, pathname));
+        go(saved);
       } else {
         api.get("/geo/country")
-          .then(({ data }) => go(targetForLocale(localeForCountry(data.country), pathname)))
-          .catch(() => go(targetForLocale("en", pathname)));
+          .then(({ data }) => go(localeForCountry(data.country)))
+          .catch(() => go("en"));
       }
       return () => { cancelled = true; };
     }
