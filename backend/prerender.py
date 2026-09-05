@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import httpx
 
 from i18n import DEFAULT_LOCALE, LOCALES, LOCALE_META, SITE_ORIGINS, localize_doc, normalize_locale
+from nextcart import shipping_summary
 
 log = logging.getLogger("purepeptide.prerender")
 
@@ -126,7 +127,7 @@ def _head(locale: str, route: str, title: str, description: str, image: str,
     alternates = "".join(
         f'<link rel="alternate" hreflang="{LOCALE_META[loc]["hreflang"]}" href="{url_for(loc, route)}">'
         for loc in LOCALES
-    ) + f'<link rel="alternate" hreflang="x-default" href="{url_for(DEFAULT_LOCALE, route)}">'
+    ) + f'<link rel="alternate" hreflang="x-default" href="{url_for("en", route)}">'
     return (
         f"<title>{esc(title)}</title>"
         f'<meta name="description" content="{esc(description)}">'
@@ -149,9 +150,41 @@ def _head(locale: str, route: str, title: str, description: str, image: str,
 def _ld(*blocks: Dict[str, Any]) -> str:
     import json
     graph = [b for b in blocks if b]
-    return ('<script type="application/ld+json">'
+    # data-pp-jsonld lets React drop this block on mount (lib/seo.js) — two Product nodes with the
+    # same @id would otherwise merge in Google's eyes and report "duplicate field brand"
+    return ('<script type="application/ld+json" data-pp-jsonld="prerender">'
             + json.dumps({"@context": "https://schema.org", "@graph": graph}, ensure_ascii=False)
             + "</script>")
+
+
+async def _merchant_terms(locale: str) -> Dict[str, Any]:
+    """Google merchant listings want the return window and the delivery terms inside every offer —
+    the same block the storefront JSON-LD builds (frontend/src/lib/schema.js)."""
+    try:
+        s = await shipping_summary(locale) or {}
+    except Exception:
+        return {}
+    country = s.get("country") or "BG"
+    handling = s.get("handling_days") or [1, 3]
+    transit = s.get("transit_days") or [1, 3]
+    out: Dict[str, Any] = {"hasMerchantReturnPolicy": {
+        "@type": "MerchantReturnPolicy", "applicableCountry": country, "returnPolicyCountry": country,
+        "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
+        "merchantReturnDays": s.get("return_days") or 14,
+        "returnMethod": "https://schema.org/ReturnByMail",
+        "returnFees": "https://schema.org/ReturnShippingFees"}}
+    if isinstance(s.get("price"), (int, float)):
+        out["shippingDetails"] = {
+            "@type": "OfferShippingDetails",
+            "shippingRate": {"@type": "MonetaryAmount", "value": s["price"],
+                             "currency": s.get("currency") or "EUR"},
+            "shippingDestination": {"@type": "DefinedRegion", "addressCountry": country},
+            "deliveryTime": {"@type": "ShippingDeliveryTime",
+                             "handlingTime": {"@type": "QuantitativeValue", "unitCode": "DAY",
+                                              "minValue": handling[0], "maxValue": handling[1]},
+                             "transitTime": {"@type": "QuantitativeValue", "unitCode": "DAY",
+                                             "minValue": transit[0], "maxValue": transit[1]}}}
+    return out
 
 
 def _organization(locale: str) -> Dict[str, Any]:
@@ -206,12 +239,23 @@ async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
     images = [_abs(i, origin) for i in (p.get("images") or ([p["image"]] if p.get("image") else []))][:13]
     title = p.get("seo_title") or f'{p.get("title")} | PurePeptide'
     description = p.get("seo_description") or _text(p.get("description"))
-    offers = [{"@type": "Offer", "url": url_for(locale, route), "priceCurrency": "EUR",
-               "price": f'{float(v.get("price_eur") or 0):.2f}', "sku": v.get("sku") or "",
+    terms = await _merchant_terms(locale)
+    offers = [{"@type": "Offer", "name": v.get("name") or "", "url": url_for(locale, route),
+               "priceCurrency": "EUR", "price": f'{float(v.get("price_eur") or 0):.2f}',
+               "sku": v.get("sku") or "",
                "availability": ("https://schema.org/InStock" if (v.get("stock") or 0) > 0
                                 else "https://schema.org/OutOfStock"),
                "itemCondition": "https://schema.org/NewCondition",
-               "seller": {"@id": f"{origin}/#organization"}} for v in variants]
+               "seller": {"@id": f"{origin}/#organization"}, **terms} for v in variants]
+    # one Offer for a single variant, an AggregateOffer with the range for several — exactly what
+    # the storefront renders, so both versions of the page describe the same product
+    offer_node: Any = offers[0] if len(offers) == 1 else {
+        "@type": "AggregateOffer", "priceCurrency": "EUR",
+        "lowPrice": f"{min(prices):.2f}" if prices else "0.00",
+        "highPrice": f"{max(prices):.2f}" if prices else "0.00",
+        "offerCount": len(offers), "url": url_for(locale, route),
+        "availability": ("https://schema.org/InStock" if in_stock else "https://schema.org/OutOfStock"),
+        **terms, "offers": offers}
     trail = [(_t(locale, "home"), "/"), (_t(locale, "catalog"), "/collections"), (p.get("title"), route)]
     body = [
         _crumb_html(locale, trail),
@@ -227,8 +271,10 @@ async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
     ld = _ld(
         {"@type": "Product", "@id": f'{url_for(locale, route)}#product', "name": p.get("title"),
          "description": _text(description, 500), "image": images,
-         "sku": (variants[0].get("sku") if variants else ""), "brand": {"@type": "Brand", "name": "PurePeptide"},
-         "url": url_for(locale, route), "offers": offers if len(offers) != 1 else offers[0]},
+         "sku": (variants[0].get("sku") if variants else ""),
+         "mpn": (variants[0].get("sku") if variants else ""),
+         "brand": {"@type": "Brand", "name": "PurePeptide"}, "category": "Research peptides",
+         "url": url_for(locale, route), "offers": offer_node},
         _breadcrumbs(locale, trail), _organization(locale), _website(locale))
     return {"head": _head(locale, route, title, description, images[0] if images else "",
                           og_type="product", extra=ld),

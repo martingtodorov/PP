@@ -633,3 +633,14 @@ def test_page_requests_go_through_the_prerenderer():
     # the prerenderer reads the built shell from an internal listener, not through Cloudflare
     assert "listen {{ frontend_private_ip }}:8080;" in conf
     assert "FRONTEND_ORIGIN=http://{{ frontend_private_ip }}:8080" in (TEMPLATES / "backend.env.j2").read_text()
+
+
+def test_production_translates_itself():
+    """The owner should not have to click anything: prod keeps the languages up to date on its own."""
+    env = (TEMPLATES / "backend.env.j2").read_text()
+    assert "AUTO_TRANSLATE=1" in env
+    src = (Path(__file__).resolve().parents[1] / "server.py").read_text()
+    assert "async def auto_translate_watch()" in src
+    assert 'os.environ.get("AUTO_TRANSLATE")' in src           # off unless explicitly enabled
+    assert "asyncio.create_task(auto_translate_watch())" in src
+    assert '"overwrite": False' in src                          # never rewrites existing copy
