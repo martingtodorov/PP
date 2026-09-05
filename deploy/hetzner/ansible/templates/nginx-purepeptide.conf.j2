@@ -186,6 +186,16 @@ server {
         try_files /index.html =404;
     }
 
+    # /pages/homepage existed only in the old Shopify theme; the HTML sitemap pages still exist
+    # here, so they are served (and prerendered), not redirected
+    location ~ ^(/(?:en|fr|de|cz|hu|pl|sk|si))?/pages/homepage$ {
+        set $pp_prefix $1;              # `set` before `if`, which would drop the capture
+        if ($pp_needs_en) {
+            set $pp_prefix /en;
+        }
+        return 301 https://$host$pp_prefix/;
+    }
+
     # a locale root must end in a slash — /cz answered 200 with a canonical of /cz/
     location ~ ^/(en|fr|de|cz|hu|pl|sk|si)$ {
         return 301 https://$host/$1/;

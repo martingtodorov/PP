@@ -36,7 +36,7 @@ export const countryForLocale = (locale) => LOCALE_COUNTRY[locale] || "";
 
 export const LOCALE_META = {
   bg: { label: "Български", hreflang: "bg-BG", origin: "https://purepeptide.bg", prefix: "" },
-  en: { label: "English", hreflang: "en", origin: "https://purepeptide.eu", prefix: "/en" },
+  en: { label: "English", hreflang: "en", ogLocale: "en_GB", origin: "https://purepeptide.eu", prefix: "/en" },
   fr: { label: "Français", hreflang: "fr-FR", origin: "https://purepeptide.eu", prefix: "/fr" },
   de: { label: "Deutsch", hreflang: "de-DE", origin: "https://purepeptide.eu", prefix: "/de" },
   cz: { label: "Čeština", hreflang: "cs-CZ", origin: "https://purepeptide.eu", prefix: "/cz" },
@@ -65,6 +65,8 @@ export const applyLocaleRoutes = (routes) => {
 const S = {
   bg: {
     tagline: "Пептиди с лабораторно доказано качество и >99% чистота",
+    homeTitle: "PurePeptide – Nº1 пептиди с доказано качество в България",
+    homeDescription: "Лиофилизирани пептиди за научно-изследователски цели, създадени с фокус върху стабилност, чистота и проследимост. Всеки продукт е придружен от независим анализ от Janoshik Labs.",
     footerDisclaimer: "Информацията на този уебсайт е обобщена от множество научни изследвания и анализи. Тя има изцяло информативен характер. Продуктите са предназначени за лабораторни и научноизследователски цели.",
     policyPrivacy: "Поверителност",
     policyRefund: "Възстановяване на суми",
@@ -109,6 +111,8 @@ const S = {
   },
   en: {
     tagline: "Peptides with laboratory-verified quality and >99% purity",
+    homeTitle: "PurePeptide – Nº1 proven-quality peptides in Europe",
+    homeDescription: "Lyophilised peptides for research use, made with a focus on stability, purity and traceability. Every product comes with an independent Janoshik Labs analysis.",
     footerDisclaimer: "The information on this website is compiled from published scientific research and analyses and is purely informative. All products are intended for laboratory and research use only.",
     policyPrivacy: "Privacy",
     policyRefund: "Refunds",
@@ -153,6 +157,8 @@ const S = {
   },
   fr: {
     tagline: "Peptides de qualité vérifiée en laboratoire, pureté >99 %",
+    homeTitle: "PurePeptide – Nº1 des peptides de qualité prouvée en France",
+    homeDescription: "Peptides lyophilisés pour la recherche, conçus pour la stabilité, la pureté et la traçabilité. Chaque produit est accompagné d'une analyse indépendante de Janoshik Labs.",
     footerDisclaimer: "Les informations de ce site proviennent de recherches scientifiques publiées et sont purement informatives. Tous les produits sont destinés à un usage de laboratoire et de recherche uniquement.",
     policyPrivacy: "Confidentialité",
     policyRefund: "Remboursements",
@@ -191,6 +197,8 @@ const S = {
   },
   de: {
     tagline: "Peptide mit laborgeprüfter Qualität und >99 % Reinheit",
+    homeTitle: "PurePeptide – Nº1 Peptide geprüfter Qualität in Deutschland",
+    homeDescription: "Lyophilisierte Peptide für Forschungszwecke, entwickelt mit Fokus auf Stabilität, Reinheit und Nachverfolgbarkeit. Jedes Produkt enthält eine unabhängige Analyse von Janoshik Labs.",
     footerDisclaimer: "Die Informationen auf dieser Website stammen aus veröffentlichten wissenschaftlichen Studien und sind rein informativ. Alle Produkte sind ausschließlich für Labor- und Forschungszwecke bestimmt.",
     policyPrivacy: "Datenschutz",
     policyRefund: "Rückgabe",
@@ -229,6 +237,8 @@ const S = {
   },
   cz: {
     tagline: "Peptidy s laboratorně ověřenou kvalitou a čistotou >99 %",
+    homeTitle: "PurePeptide – Nº1 peptidy s prokázanou kvalitou v Česku",
+    homeDescription: "Lyofilizované peptidy pro výzkumné účely, vyvinuté s důrazem na stabilitu, čistotu a dohledatelnost. Ke každému produktu patří nezávislá analýza od Janoshik Labs.",
     footerDisclaimer: "Informace na tomto webu vycházejí z publikovaných vědeckých studií a jsou pouze informativní. Všechny produkty jsou určeny výhradně pro laboratorní a výzkumné použití.",
     policyPrivacy: "Ochrana údajů",
     policyRefund: "Vrácení peněz",
@@ -267,6 +277,8 @@ const S = {
   },
   hu: {
     tagline: "Laboratóriumban igazolt minőségű peptidek, >99% tisztaság",
+    homeTitle: "PurePeptide – Nº1 igazolt minőségű peptidek Magyarországon",
+    homeDescription: "Liofilizált peptidek kutatási célra, a stabilitásra, a tisztaságra és a nyomon követhetőségre fókuszálva. Minden termékhez független Janoshik Labs analízis tartozik.",
     footerDisclaimer: "A weboldalon található információk publikált tudományos kutatásokból származnak és kizárólag tájékoztató jellegűek. Minden termék kizárólag laboratóriumi és kutatási célra szolgál.",
     policyPrivacy: "Adatvédelem",
     policyRefund: "Visszatérítés",
@@ -305,6 +317,8 @@ const S = {
   },
   pl: {
     tagline: "Peptydy o laboratoryjnie potwierdzonej jakości i czystości >99%",
+    homeTitle: "PurePeptide – Nº1 peptydy o potwierdzonej jakości w Polsce",
+    homeDescription: "Liofilizowane peptydy do celów badawczych, tworzone z naciskiem na stabilność, czystość i identyfikowalność. Do każdego produktu dołączona jest niezależna analiza Janoshik Labs.",
     footerDisclaimer: "Informacje na tej stronie pochodzą z opublikowanych badań naukowych i mają charakter wyłącznie informacyjny. Wszystkie produkty przeznaczone są tylko do użytku laboratoryjnego i badawczego.",
     policyPrivacy: "Prywatność",
     policyRefund: "Zwroty",
@@ -343,6 +357,8 @@ const S = {
   },
   sk: {
     tagline: "Peptidy s laboratórne overenou kvalitou a čistotou >99 %",
+    homeTitle: "PurePeptide – Nº1 peptidy s overenou kvalitou na Slovensku",
+    homeDescription: "Lyofilizované peptidy na výskumné účely, vyvinuté s dôrazom na stabilitu, čistotu a sledovateľnosť. Ku každému produktu patrí nezávislá analýza od Janoshik Labs.",
     footerDisclaimer: "Informácie na tejto stránke vychádzajú z publikovaných vedeckých štúdií a sú iba informatívne. Všetky produkty sú určené výhradne na laboratórne a výskumné použitie.",
     policyPrivacy: "Ochrana údajov",
     policyRefund: "Vrátenie peňazí",
@@ -381,6 +397,8 @@ const S = {
   },
   si: {
     tagline: "Peptidi z laboratorijsko preverjeno kakovostjo in čistostjo >99 %",
+    homeTitle: "PurePeptide – Nº1 peptidi preverjene kakovosti v Sloveniji",
+    homeDescription: "Liofilizirani peptidi za raziskovalne namene, zasnovani s poudarkom na stabilnosti, čistosti in sledljivosti. Vsak izdelek spremlja neodvisna analiza Janoshik Labs.",
     footerDisclaimer: "Informacije na tem spletnem mestu izhajajo iz objavljenih znanstvenih raziskav in so zgolj informativne. Vsi izdelki so namenjeni izključno laboratorijski in raziskovalni uporabi.",
     policyPrivacy: "Zasebnost",
     policyRefund: "Vračila",
@@ -419,6 +437,8 @@ const S = {
   },
   gr: {
     tagline: "Πεπτίδια με εργαστηριακά επιβεβαιωμένη ποιότητα και καθαρότητα >99%",
+    homeTitle: "PurePeptide – Nº1 πεπτίδια εγγυημένης ποιότητας στην Ελλάδα",
+    homeDescription: "Λυοφιλιωμένα πεπτίδια για ερευνητική χρήση, με έμφαση στη σταθερότητα, την καθαρότητα και την ιχνηλασιμότητα. Κάθε προϊόν συνοδεύεται από ανεξάρτητη ανάλυση Janoshik Labs.",
     footerDisclaimer: "Οι πληροφορίες σε αυτόν τον ιστότοπο προέρχονται από δημοσιευμένες επιστημονικές έρευνες και είναι καθαρά ενημερωτικές. Όλα τα προϊόντα προορίζονται αποκλειστικά για εργαστηριακή και ερευνητική χρήση.",
     policyPrivacy: "Απόρρητο",
     policyRefund: "Επιστροφές",
@@ -457,6 +477,8 @@ const S = {
   },
   ro: {
     tagline: "Peptide cu calitate verificată în laborator și puritate >99%",
+    homeTitle: "PurePeptide – Nº1 peptide de calitate dovedită în România",
+    homeDescription: "Peptide liofilizate pentru cercetare, create cu accent pe stabilitate, puritate și trasabilitate. Fiecare produs este însoțit de o analiză independentă Janoshik Labs.",
     footerDisclaimer: "Informațiile de pe acest site provin din cercetări științifice publicate și au caracter strict informativ. Toate produsele sunt destinate exclusiv utilizării în laborator și în cercetare.",
     policyPrivacy: "Confidențialitate",
     policyRefund: "Returnări",

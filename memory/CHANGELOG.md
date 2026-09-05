@@ -393,3 +393,36 @@
 - `robots.txt` вече обявява само своите sitemap-и, а `sitemap_agentic_discovery.xml` ползва
   origin-а на заявения домейн (досега винаги българския).
 - Тестове: `tests/test_sitemap_per_domain.py` (10).
+
+## 2026-06-06 (шеста част) — външните снимки, robots.txt и SEO текстовете
+- **Нищо не се сервира от чужд домейн**: нов `POST /api/admin/media/rehost` + бутон Админ → Импорт
+  „Прехвърли външните снимки при нас“ — минава продукти, колекции, статии, страници и настройки,
+  сваля всяка външна снимка (Shopify CDN, myshopify.com или друг домейн) в нашето хранилище и
+  презаписва препратките, вкл. вътре в HTML описанията и в JSON-LD `image`. Причина: 14 продукта
+  теглеха сертификатите от Janoshik от стария Shopify магазин.
+- **Снимка, подадена като линк от админа**, вече автоматично се прибира при нас
+  (`adopt_external_images()` при създаване/редакция на продукт, колекция, статия, страница и в
+  настройките на сайта) — край на хотлинкването.
+- **robots.txt** е един `User-agent: *` блок (преди това Cloudflare Managed robots.txt добавяше втори,
+  противоречащ блок) + `Content-Signal: search=yes, ai-input=yes, ai-train=yes, use=full` по решение
+  на собственика. Отделните блокове за AI ботове са премахнати, защото заменяха `*` групата и им
+  отваряха /admin, /cart, /checkout.
+- **Заглавия на началната страница**: „PurePeptide – Nº1 …“ с името на пазара, преведено за всеки
+  език (България, Česko, România, Ελλάδα, Polska, Slovensko, Slovenija, Magyarország, Deutschland,
+  France, Europe) — всички ≤60 знака. Описанието е текстът на собственика (лиофилизирани пептиди,
+  стабилност/чистота/проследимост, независим анализ от Janoshik Labs), преведен на 11 езика.
+  Нови ключове `homeTitle` / `homeDescription` в `locales.js`, за да съвпадат React и prerender.
+- **H1 на началната страница остава „PurePeptide“** (по изрично желание на собственика след опит с
+  локализираното изречение).
+- **HTML sitemap страниците вече не са soft-404**: `/pages/html-sitemap` и вариантите `-products`,
+  `-collections`, `-blogs`, `-articles`, `-pages` се рендират от prerender-а (`_html_sitemap()`),
+  с локализирани заглавия. `/pages/homepage` (само от стария Shopify) → 301 към езиковия корен.
+- **Organization JSON-LD** вече е като в стария магазин: `logo` като `ImageObject` с размери, `image`,
+  `email` и `contactPoint` (customer service, areaServed EU, телефон когато е попълнен).
+- `og:locale` за английския е `en_GB` (hreflang остава `en`); интервалите около „|“ в заглавията се
+  нормализират (CJC-1295).
+- Нов инструмент `backend/scripts/seo_diff_shopify.py` → `/app/memory/seo_diff_shopify.md`:
+  сравнение страница по страница със стария Shopify магазин (64 адреса). Основна разлика, която НЕ е
+  приложена: Shopify добавяше суфикс „ – PurePeptide“ към всяко заглавие (прави ги 80+ знака).
+- Тестове: `tests/test_image_rehost_and_seo_polish.py` (7) + `tests/test_iteration50_seo_polish.py` (49);
+  116/116 бекенд теста зелени. Отчет: iteration_50.json, 0 проблема.

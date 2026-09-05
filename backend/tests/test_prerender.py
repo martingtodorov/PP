@@ -80,7 +80,7 @@ def test_collections_articles_and_pages_are_rendered():
 def test_each_domain_gets_its_own_canonical_and_language():
     for host, canonical, lang in [("purepeptide.ro", "https://purepeptide.ro/", "ro_RO"),
                                   ("purepeptide.gr", "https://purepeptide.gr/", "el_GR"),
-                                  ("purepeptide.eu", "https://purepeptide.eu/en/", "en")]:
+                                  ("purepeptide.eu", "https://purepeptide.eu/en/", "en_GB")]:
         html = get("/en/" if host == "purepeptide.eu" else "/", host=host).text
         assert head_of(html, r'rel="canonical" href="([^"]+)"') == canonical, host
         assert head_of(html, r'og:locale" content="([^"]+)"') == lang, host

@@ -122,6 +122,26 @@ def test_single_language_domains_keep_their_root(nginx, host):
     assert status != 301
 
 
+@pytest.mark.parametrize("host,path,expected", [
+    ("purepeptide.bg", "/pages/homepage", "https://purepeptide.bg/"),
+    ("purepeptide.eu", "/pages/homepage", "https://purepeptide.eu/en/"),
+    ("purepeptide.eu", "/cz/pages/homepage", "https://purepeptide.eu/cz/"),
+])
+def test_the_page_only_the_old_shopify_theme_had_is_redirected(nginx, host, path, expected):
+    status, location, _ = get(host, path)
+    assert (status, location) == (301, expected)
+
+
+@pytest.mark.parametrize("path", ["/pages/html-sitemap", "/pages/html-sitemap-products",
+                                  "/pages/html-sitemap-collections", "/pages/html-sitemap-blogs",
+                                  "/pages/html-sitemap-pages"])
+def test_the_html_sitemap_pages_are_served_not_redirected(nginx, path):
+    """They live in the router, so the prerender has to answer them itself."""
+    status, location, body = get("purepeptide.bg", path)
+    assert status == 200, location
+    assert "HTML sitemap" in body and "<li><a" in body
+
+
 @pytest.mark.parametrize("host,path,lang", [
     ("purepeptide.bg", "/", "bg"),
     ("purepeptide.eu", "/en/", "en"),

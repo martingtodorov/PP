@@ -28,6 +28,8 @@ export default function AdminImportPage() {
   const [repair, setRepair] = useState(null);
   const [coaBusy, setCoaBusy] = useState(false);
   const [coa, setCoa] = useState(null);
+  const [rehosting, setRehosting] = useState(false);
+  const [rehost, setRehost] = useState(null);
   const timer = useRef(null);
 
   const loadJobs = useCallback(() => {
@@ -64,6 +66,17 @@ export default function AdminImportPage() {
       else if (data.unresolved?.length) toast.error(`${data.unresolved.length} снимки не могат да се възстановят`);
       else toast.info("Всички снимки са налични");
     } catch (e) { toast.error(formatErr(e)); } finally { setRepairing(false); }
+  };
+
+  const rehostMedia = async () => {
+    setRehosting(true);
+    try {
+      const { data } = await api.post("/admin/media/rehost");
+      setRehost(data);
+      if (data.replaced.length) toast.success(`Прибрани ${data.replaced.length} външни снимки в нашето хранилище`);
+      else toast.info("Няма външни снимки — всичко се сервира от нас");
+      if (data.failed.length) toast.error(`${data.failed.length} не успяха да се свалят`);
+    } catch (e) { toast.error(formatErr(e)); } finally { setRehosting(false); }
   };
 
   const importCoa = async () => {
@@ -193,6 +206,39 @@ export default function AdminImportPage() {
                   {coa.failed.length > 0 && (
                     <ul className="text-xs text-red-600 space-y-1">
                       {coa.failed.map((f) => <li key={f.handle}>{f.handle} — {f.reason}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="mt-6 border-t border-slate-200 pt-6">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-bold mb-2">Външни снимки</p>
+              <p className="text-sm text-slate-600">
+                Проверява всички продукти, колекции, статии и страници за снимки, които още се теглят
+                от чужд домейн (напр. стария Shopify магазин), сваля ги в нашето хранилище и презаписва
+                всички препратки — включително в описанията и в структурираните данни за Google.
+              </p>
+              <Button onClick={rehostMedia} disabled={rehosting} variant="outline" className="mt-3"
+                data-testid="media-rehost-btn">
+                {rehosting ? "Прибирам…" : "Прехвърли външните снимки при нас"}
+              </Button>
+              {rehost && (
+                <div className="mt-3 text-sm text-slate-700 space-y-2" data-testid="media-rehost-result">
+                  <p>
+                    Проверени записи: {rehost.scanned} · променени <strong>{rehost.documents_changed}</strong> ·
+                    прибрани снимки <strong>{rehost.replaced.length}</strong>
+                    {rehost.failed.length ? <span className="text-red-600"> · неуспешни {rehost.failed.length}</span> : null}
+                  </p>
+                  {rehost.replaced.length > 0 && (
+                    <ul className="text-xs text-slate-600 max-h-40 overflow-y-auto space-y-1">
+                      {rehost.replaced.slice(0, 40).map((r) => (
+                        <li key={r.from} className="truncate">{r.from} → {r.to}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {rehost.failed.length > 0 && (
+                    <ul className="text-xs text-red-600 space-y-1">
+                      {rehost.failed.map((f) => <li key={f} className="truncate">{f}</li>)}
                     </ul>
                   )}
                 </div>

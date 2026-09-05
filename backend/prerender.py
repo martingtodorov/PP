@@ -128,8 +128,20 @@ def esc(value: Any) -> str:
 
 # ---------- head + body building ----------
 
+def _og_locale(locale: str) -> str:
+    """og:locale wants language_TERRITORY — plain `en` is invalid, so English declares en_GB."""
+    meta = LOCALE_META[locale]
+    return meta.get("og_locale") or meta["hreflang"].replace("-", "_")
+
+
+def _tidy(title: str) -> str:
+    """One space around the pipe — a missing one ("… на GH| цена") was visible in the SERP."""
+    return re.sub(r"\s*\|\s*", " | ", title).strip()
+
+
 def _head(locale: str, route: str, title: str, description: str, image: str,
           og_type: str = "website", extra: str = "", robots: str = "") -> str:
+    title = _tidy(title)
     origin = SITE_ORIGINS.get(locale, SITE_ORIGINS[DEFAULT_LOCALE])["origin"]
     canonical = url_for(locale, route)
     alternates = "".join(
@@ -146,7 +158,7 @@ def _head(locale: str, route: str, title: str, description: str, image: str,
         f'<meta property="og:description" content="{esc(description)}">'
         f'<meta property="og:url" content="{canonical}">'
         f'<meta property="og:image" content="{_abs(image, origin)}">'
-        f'<meta property="og:locale" content="{LOCALE_META[locale]["hreflang"].replace("-", "_")}">'
+        f'<meta property="og:locale" content="{_og_locale(locale)}">'
         f'<meta name="twitter:card" content="summary_large_image">'
         f'<meta name="twitter:title" content="{esc(title)}">'
         f'<meta name="twitter:description" content="{esc(description)}">'
@@ -195,10 +207,26 @@ async def _merchant_terms(locale: str) -> Dict[str, Any]:
     return out
 
 
+# site settings, refreshed by _route() — _organization() needs them but stays sync, because it is
+# embedded in every page's JSON-LD graph
+_SITE: Dict[str, Any] = {}
+
+
 def _organization(locale: str) -> Dict[str, Any]:
+    """Same shape as the old Shopify store: logo as an ImageObject plus a contact point."""
     origin = SITE_ORIGINS.get(locale, SITE_ORIGINS[DEFAULT_LOCALE])["origin"]
-    return {"@type": "Organization", "@id": f"{origin}/#organization", "name": "PurePeptide",
-            "url": origin, "logo": f"{origin}/logo-header.png"}
+    email = _SITE.get("contact_email") or "contact@purepeptide.bg"
+    phone = _SITE.get("contact_phone") or ""
+    contact = {"@type": "ContactPoint", "contactType": "customer service", "email": email,
+               "areaServed": "EU",
+               "availableLanguage": [LOCALE_META[loc]["name"] for loc in LOCALES]}
+    if phone:
+        contact["telephone"] = phone
+    return {"@type": "Organization", "@id": f"{origin}/#organization",
+            "name": _SITE.get("site_name") or "PurePeptide", "url": origin,
+            "logo": {"@type": "ImageObject", "url": f"{origin}/favicon-512.png",
+                     "width": 512, "height": 512},
+            "image": f"{origin}/og-image.jpg", "email": email, "contactPoint": contact}
 
 
 def _website(locale: str) -> Dict[str, Any]:
@@ -392,30 +420,94 @@ async def _page(locale: str, slug: str) -> Optional[Dict[str, str]]:
     return {"head": _head(locale, route, title, description, "", extra=ld), "body": "".join(body)}
 
 
+_SITEMAP_SECTIONS = {
+    "": ("products", "collections", "articles", "pages"),
+    "-products": ("products",),
+    "-collections": ("collections",),
+    "-blogs": ("articles",),
+    "-articles": ("articles",),
+    "-pages": ("pages",),
+}
+
+
+async def _html_sitemap(locale: str, slug: str) -> Optional[Dict[str, str]]:
+    """The HTML sitemap pages the app renders (same URLs as the old Shopify theme).
+
+    They live in the router, not in the `pages` collection, so the prerender used to answer 404 for
+    them — a soft 404 on pages that are linked from the footer and were indexed on Shopify.
+    """
+    section = slug[len("html-sitemap"):]
+    kinds = _SITEMAP_SECTIONS.get(section)
+    if kinds is None:
+        return None
+    route = f"/pages/{slug}"
+    label = {"products": _t(locale, "catalog"), "collections": _t(locale, "collections"),
+             "articles": _t(locale, "articles"), "pages": _t(locale, "pages")}
+    heading = "HTML sitemap" if not section else f"HTML sitemap — {label[kinds[0]]}"
+    sources = {"products": (_db.products, "/products/", {"active": True}),
+               "collections": (_db.collections_cat, "/collections/", {}),
+               "articles": (_db.articles, "/articles/", {}),
+               "pages": (_db.pages, "/pages/", {"locale": DEFAULT_LOCALE})}
+    blocks = []
+    for kind in kinds:
+        coll, prefix, query = sources[kind]
+        field = "slug" if kind == "pages" else "handle"
+        docs = await coll.find(query, {"_id": 0, field: 1, "title": 1, "translations": 1,
+                                       "pub_slug": 1}).to_list(500)
+        items = []
+        for doc in docs:
+            local = localize_doc(doc, locale)
+            handle = local.get("pub_slug") or local.get(field)
+            if handle:
+                items.append(_link_li(locale, prefix, handle, local.get("title") or handle))
+        if items:
+            blocks.append(f"<h2>{esc(label[kind])}</h2><ul>{''.join(items)}</ul>")
+    trail = [(_t(locale, "home"), "/"), (heading, route)]
+    ld = _ld({"@type": "WebPage", "@id": f"{url_for(locale, route)}#page", "name": heading,
+              "url": url_for(locale, route)},
+             _breadcrumbs(locale, trail), _organization(locale), _website(locale))
+    body = [_crumb_html(locale, trail), f"<h1>{esc(heading)}</h1>"] + blocks
+    return {"head": _head(locale, route, f"{heading} | PurePeptide", _t(locale, "sitemapDesc"),
+                          "", extra=ld),
+            "body": "".join(body)}
+
+
 # home copy mirrors the storefront (i18n/locales.js) so the prerender and React agree
+# (SERP title <= 60 chars with the purity claim up front, meta description, H1 value proposition)
 _HOME = {
     "bg": ("PurePeptide – Nº1 пептиди с доказано качество в България",
-           "Лиофилизирани пептиди за научно-изследователски цели, създадени с фокус върху стабилност, чистота и проследимост. Всеки продукт е придружен от независим анализ от Janoshik Labs."),
-    "en": ("PurePeptide – Peptides with laboratory-verified quality and >99% purity",
-           "Lyophilised peptides for research purposes, built around stability, purity and traceability. Every product ships with an independent Janoshik Labs analysis."),
-    "fr": ("PurePeptide – Peptides de qualité vérifiée en laboratoire, pureté >99 %",
-           "Peptides lyophilisés destinés à la recherche, conçus pour la stabilité, la pureté et la traçabilité. Chaque produit est accompagné d'une analyse indépendante de Janoshik Labs."),
-    "de": ("PurePeptide – Peptide mit laborgeprüfter Qualität und >99 % Reinheit",
-           "Lyophilisierte Peptide für Forschungszwecke — mit Fokus auf Stabilität, Reinheit und Nachverfolgbarkeit. Jedes Produkt wird von einer unabhängigen Janoshik-Labs-Analyse begleitet."),
-    "cz": ("PurePeptide – Peptidy s laboratorně ověřenou kvalitou a čistotou >99 %",
-           "Lyofilizované peptidy pro výzkumné účely se zaměřením na stabilitu, čistotu a dohledatelnost. Každý produkt je doprovázen nezávislou analýzou Janoshik Labs."),
-    "hu": ("PurePeptide – Laboratóriumban igazolt minőségű peptidek, >99% tisztaság",
-           "Liofilizált peptidek kutatási célra, a stabilitás, tisztaság és nyomonkövethetőség jegyében. Minden termékhez független Janoshik Labs analízis tartozik."),
-    "pl": ("PurePeptide – Peptydy o laboratoryjnie potwierdzonej jakości i czystości >99%",
-           "Liofilizowane peptydy do celów badawczych, tworzone z myślą o stabilności, czystości i identyfikowalności. Każdy produkt posiada niezależną analizę Janoshik Labs."),
-    "sk": ("PurePeptide – Peptidy s laboratórne overenou kvalitou a čistotou >99 %",
-           "Lyofilizované peptidy na výskumné účely so zameraním na stabilitu, čistotu a dohľadateľnosť. Každý produkt má nezávislú analýzu Janoshik Labs."),
-    "si": ("PurePeptide – Peptidi z laboratorijsko preverjeno kakovostjo in čistostjo >99 %",
-           "Liofilizirani peptidi za raziskovalne namene s poudarkom na stabilnosti, čistosti in sledljivosti. Vsak izdelek spremlja neodvisna analiza Janoshik Labs."),
-    "gr": ("PurePeptide – Πεπτίδια με εργαστηριακά επιβεβαιωμένη ποιότητα και καθαρότητα >99%",
-           "Λυοφιλιωμένα πεπτίδια για ερευνητικούς σκοπούς, με έμφαση στη σταθερότητα, την καθαρότητα και την ιχνηλασιμότητα. Κάθε προϊόν συνοδεύεται από ανεξάρτητη ανάλυση Janoshik Labs."),
-    "ro": ("PurePeptide – Peptide cu calitate verificată în laborator și puritate >99%",
-           "Peptide liofilizate pentru scopuri de cercetare, create cu accent pe stabilitate, puritate și trasabilitate. Fiecare produs este însoțit de o analiză independentă Janoshik Labs."),
+           "Лиофилизирани пептиди за научно-изследователски цели, създадени с фокус върху стабилност, чистота и проследимост. Всеки продукт е придружен от независим анализ от Janoshik Labs.",
+           "Пептиди с лабораторно доказано качество и >99% чистота"),
+    "en": ("PurePeptide – Nº1 proven-quality peptides in Europe",
+           "Lyophilised peptides for research use, made with a focus on stability, purity and traceability. Every product comes with an independent Janoshik Labs analysis.",
+           "Peptides with laboratory-verified quality and >99% purity"),
+    "fr": ("PurePeptide – Nº1 des peptides de qualité prouvée en France",
+           "Peptides lyophilisés pour la recherche, conçus pour la stabilité, la pureté et la traçabilité. Chaque produit est accompagné d'une analyse indépendante de Janoshik Labs.",
+           "Peptides de qualité vérifiée en laboratoire, pureté >99 %"),
+    "de": ("PurePeptide – Nº1 Peptide geprüfter Qualität in Deutschland",
+           "Lyophilisierte Peptide für Forschungszwecke, entwickelt mit Fokus auf Stabilität, Reinheit und Nachverfolgbarkeit. Jedes Produkt enthält eine unabhängige Analyse von Janoshik Labs.",
+           "Peptide mit laborgeprüfter Qualität und >99 % Reinheit"),
+    "cz": ("PurePeptide – Nº1 peptidy s prokázanou kvalitou v Česku",
+           "Lyofilizované peptidy pro výzkumné účely, vyvinuté s důrazem na stabilitu, čistotu a dohledatelnost. Ke každému produktu patří nezávislá analýza od Janoshik Labs.",
+           "Peptidy s laboratorně ověřenou kvalitou a čistotou >99 %"),
+    "hu": ("PurePeptide – Nº1 igazolt minőségű peptidek Magyarországon",
+           "Liofilizált peptidek kutatási célra, a stabilitásra, a tisztaságra és a nyomon követhetőségre fókuszálva. Minden termékhez független Janoshik Labs analízis tartozik.",
+           "Laboratóriumban igazolt minőségű peptidek, >99% tisztaság"),
+    "pl": ("PurePeptide – Nº1 peptydy o potwierdzonej jakości w Polsce",
+           "Liofilizowane peptydy do celów badawczych, tworzone z naciskiem na stabilność, czystość i identyfikowalność. Do każdego produktu dołączona jest niezależna analiza Janoshik Labs.",
+           "Peptydy o laboratoryjnie potwierdzonej jakości i czystości >99%"),
+    "sk": ("PurePeptide – Nº1 peptidy s overenou kvalitou na Slovensku",
+           "Lyofilizované peptidy na výskumné účely, vyvinuté s dôrazom na stabilitu, čistotu a sledovateľnosť. Ku každému produktu patrí nezávislá analýza od Janoshik Labs.",
+           "Peptidy s laboratórne overenou kvalitou a čistotou >99 %"),
+    "si": ("PurePeptide – Nº1 peptidi preverjene kakovosti v Sloveniji",
+           "Liofilizirani peptidi za raziskovalne namene, zasnovani s poudarkom na stabilnosti, čistosti in sledljivosti. Vsak izdelek spremlja neodvisna analiza Janoshik Labs.",
+           "Peptidi z laboratorijsko preverjeno kakovostjo in čistostjo >99 %"),
+    "gr": ("PurePeptide – Nº1 πεπτίδια εγγυημένης ποιότητας στην Ελλάδα",
+           "Λυοφιλιωμένα πεπτίδια για ερευνητική χρήση, με έμφαση στη σταθερότητα, την καθαρότητα και την ιχνηλασιμότητα. Κάθε προϊόν συνοδεύεται από ανεξάρτητη ανάλυση Janoshik Labs.",
+           "Πεπτίδια με εργαστηριακά επιβεβαιωμένη ποιότητα και καθαρότητα >99%"),
+    "ro": ("PurePeptide – Nº1 peptide de calitate dovedită în România",
+           "Peptide liofilizate pentru cercetare, create cu accent pe stabilitate, puritate și trasabilitate. Fiecare produs este însoțit de o analiză independentă Janoshik Labs.",
+           "Peptide cu calitate verificată în laborator și puritate >99%"),
 }
 
 
@@ -425,9 +517,7 @@ async def _home(locale: str) -> Dict[str, str]:
     products = await _db.products.find({"active": True}, {"_id": 0}).to_list(24)
     items = [localize_doc(p, locale) for p in products]
     collections = await _db.collections_cat.find({}, {"_id": 0}).to_list(20)
-    default_title, default_description = _HOME.get(locale, _HOME["en"])
-    title = default_title
-    description = default_description
+    title, description, _ = _HOME.get(locale, _HOME["en"])
     origin = SITE_ORIGINS.get(locale, SITE_ORIGINS[DEFAULT_LOCALE])["origin"]
     ld = _ld(_organization(locale),
              {**_website(locale), "potentialAction": {
@@ -437,7 +527,8 @@ async def _home(locale: str) -> Dict[str, str]:
                  {"@type": "ListItem", "position": i + 1, "name": p.get("title"),
                   "url": url_for(locale, f'/products/{p.get("handle")}')} for i, p in enumerate(items[:12])]})
     body = [
-        f'<h1>{esc(settings.get("hero_title") or "PurePeptide")}</h1>',
+        # the hero shows the brand word, so the prerendered H1 must say exactly the same
+        f'<h1>{esc(_SITE.get("hero_title") or "PurePeptide")}</h1>',
         f'<p>{esc(description)}</p>',
         "<ul>" + "".join(_link_li(locale, "/collections/", c.get("handle"),
                                    localize_doc(c, locale).get("title")) for c in collections) + "</ul>",
@@ -461,6 +552,24 @@ _LABELS = {
     "articles": {"bg": "Научни статии", "en": "Articles", "fr": "Articles", "de": "Artikel",
                  "cz": "Články", "hu": "Cikkek", "pl": "Artykuły", "sk": "Články", "si": "Članki",
                  "gr": "Άρθρα", "ro": "Articole"},
+    "collections": {"bg": "Категории", "en": "Collections", "fr": "Collections",
+                    "de": "Kategorien", "cz": "Kategorie", "hu": "Kategóriák",
+                    "pl": "Kategorie", "sk": "Kategórie", "si": "Kategorije",
+                    "gr": "Κατηγορίες", "ro": "Categorii"},
+    "pages": {"bg": "Страници", "en": "Pages", "fr": "Pages", "de": "Seiten", "cz": "Stránky",
+              "hu": "Oldalak", "pl": "Strony", "sk": "Stránky", "si": "Strani",
+              "gr": "Σελίδες", "ro": "Pagini"},
+    "sitemapDesc": {"bg": "Пълен списък с всички страници, продукти, категории и статии в сайта.",
+                    "en": "A full list of every page, product, collection and article on the site.",
+                    "fr": "La liste complète des pages, produits, catégories et articles du site.",
+                    "de": "Vollständige Liste aller Seiten, Produkte, Kategorien und Artikel.",
+                    "cz": "Úplný seznam všech stránek, produktů, kategorií a článků na webu.",
+                    "hu": "Az oldal összes lapjának, termékének, kategóriájának és cikkének listája.",
+                    "pl": "Pełna lista wszystkich stron, produktów, kategorii i artykułów.",
+                    "sk": "Úplný zoznam všetkých stránok, produktov, kategórií a článkov.",
+                    "si": "Popoln seznam vseh strani, izdelkov, kategorij in člankov na spletu.",
+                    "gr": "Πλήρης λίστα με όλες τις σελίδες, τα προϊόντα και τα άρθρα του site.",
+                    "ro": "Lista completă a paginilor, produselor, categoriilor și articolelor."},
 }
 
 
@@ -469,6 +578,8 @@ def _t(locale: str, key: str) -> str:
 
 
 async def _route(locale: str, route: str) -> Optional[Dict[str, str]]:
+    doc = await _db.settings.find_one({"key": "site"}, {"_id": 0, "value": 1})
+    _SITE.update((doc or {}).get("value") or {})
     parts = [p for p in route.strip("/").split("/") if p]
     if not parts:
         return await _home(locale)
@@ -479,6 +590,8 @@ async def _route(locale: str, route: str) -> Optional[Dict[str, str]]:
     if parts[0] == "articles" and len(parts) > 1:
         return await _article(locale, parts[1])
     if parts[0] == "pages" and len(parts) > 1:
+        if parts[1].startswith("html-sitemap"):
+            return await _html_sitemap(locale, parts[1])
         return await _page(locale, parts[1])
     return None
 
