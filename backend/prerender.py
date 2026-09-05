@@ -619,7 +619,11 @@ async def _home(locale: str) -> Dict[str, str]:
                                    localize_doc(c, locale).get("title")) for c in collections) + "</ul>",
         "<ul>" + "".join(_link_li(locale, "/products/", p.get("handle"), p.get("title")) for p in items) + "</ul>",
     ]
-    return {"head": _head(locale, "/", title, description, "", extra=ld), "body": "".join(body)}
+    # the hero is the home page's LCP image, so it is preloaded here and nowhere else — the old
+    # site-wide preload in index.html made every other page warn about an unused preload
+    hero = '<link rel="preload" as="image" href="/hero-home.webp" fetchpriority="high">'
+    return {"head": _head(locale, "/", title, description, "", extra=ld + hero),
+            "body": "".join(body)}
 
 
 _LABELS = {

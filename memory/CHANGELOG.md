@@ -658,3 +658,12 @@
   изхвърля всички стари сесии веднага.
 - Тестове: `test_admin_tags_and_delisting.py` (3), `test_session_length.py` (3),
   `test_analytics_geo.py` (2), `test_analytics_local_day.py` (3) — минават.
+
+## 2026-06-08 (трета част) — Махнат чужд тракер и излишен preload
+- **PostHog е махнат от `frontend/public/index.html`.** Не беше наш — идваше с шаблона, с чужд
+  ключ (`phc_xAvL2Iq...`), пускаше session recording на реални клиенти и биеше CORS грешката
+  `us.i.posthog.com/flags/?v=2`, плюс „Googlebot blocked by robots.txt“ за същия XHR.
+- **`hero-home.webp` вече се preload-ва само на началната страница** (в `prerender.py`, home
+  route), а не site-wide от index.html — това причиняваше „preloaded but not used“ на всяка
+  продуктова страница и хабеше bandwidth преди LCP.
+- Тест: `tests/test_no_third_party_tracker.py` (3 минават). Проверено и в браузър: 0 console грешки.
