@@ -44,8 +44,8 @@ export default function AdminAnalyticsPage() {
   const prev = data?.previous;
   const chart = (cur?.series || []).map((row, i) => ({
     t: data.bucket === "hour" ? `${row.t.slice(11, 13)}:00` : row.t.slice(5),
-    current: row[metric] ?? 0,
-    previous: prev?.series?.[i]?.[metric] ?? 0,
+    current: row[metric] ?? null,
+    previous: prev?.series?.[i]?.[metric] ?? null,
   }));
   const active = METRICS.find((m) => m.key === metric);
 
@@ -115,13 +115,19 @@ export default function AdminAnalyticsPage() {
                 formatter={(v, name) => [active.fmt(v), name === "current" ? "Текущ период" : "Предходен период"]}
               />
               <Line type="monotone" dataKey="previous" stroke="#64748b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-              <Line type="monotone" dataKey="current" stroke="#38bdf8" strokeWidth={2.5} dot={false} />
+              {/* a small dot per bucket: early in the day „Днес“ has a single point, and a line
+                  through one point draws nothing at all */}
+              <Line type="monotone" dataKey="current" stroke="#38bdf8" strokeWidth={2.5}
+                dot={{ r: 2, fill: "#38bdf8", strokeWidth: 0 }} activeDot={{ r: 4 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
 
         <p className="text-[11px] text-slate-500 mt-2">
-          Продажбите не включват цената на доставката. Пунктираната линия е предходният период за сравнение.
+          Часовете са в местно време ({data?.timezone || "Europe/Sofia"}) — „Днес“ започва в 00:00 и
+          показва целите 24 часа, а линията стига до текущия час. Пунктираната линия е същият часови
+          отрязък от предходния период.
+          {" "}Продажбите не включват цената на доставката.
           {" "}Ботовете (Google, AI индексатори, мониторинг) не се броят
           {data?.bots_excluded ? ` — изключени ${data.bots_excluded} посещения от този период` : ""}.
         </p>

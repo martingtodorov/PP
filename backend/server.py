@@ -23,6 +23,7 @@ import uuid
 import random
 from urllib.parse import quote, urlparse, unquote
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from typing import Optional, List, Dict, Any
 
 import bcrypt
@@ -73,6 +74,10 @@ log = logging.getLogger("purepeptide")
 
 
 # ---------- Helpers ----------
+# the shop's own clock: the admin analytics day starts at midnight in Sofia, not at midnight UTC
+SHOP_TZ = ZoneInfo("Europe/Sofia")
+
+
 def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -2797,33 +2802,47 @@ async def track_visit(payload: TrackIn, request: Request, response: Response):
 
 
 def _range_bounds(range_key: str, date_from: Optional[str], date_to: Optional[str]):
-    """Returns (start, end, prev_start, prev_end, bucket) as tz-aware datetimes."""
+    """(start, end, prev_start, prev_end, bucket, axis_end, prev_axis_end), all tz-aware UTC.
+
+    The day is the shop's day: „Днес" starts at midnight in Sofia, not at midnight UTC (which is
+    03:00 here in summer). `axis_end` is where the chart stops — for today that is the end of the
+    local day, so the axis shows all 24 hours while the line stops at the current hour. The previous
+    period is the same clock window one day/period earlier, so morning is compared with morning.
+    """
     now = datetime.now(timezone.utc)
+    local_now = now.astimezone(SHOP_TZ)
     if range_key == "custom" and date_from and date_to:
-        start = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc)
-        end = datetime.fromisoformat(date_to).replace(tzinfo=timezone.utc) + timedelta(days=1)
+        start = datetime.fromisoformat(date_from).replace(tzinfo=SHOP_TZ)
+        end = datetime.fromisoformat(date_to).replace(tzinfo=SHOP_TZ) + timedelta(days=1)
         bucket = "hour" if (end - start) <= timedelta(days=2) else "day"
-    elif range_key == "7d":
+        shift = end - start
+        axis_end = end
+    elif range_key in ("7d", "30d"):
+        days = 7 if range_key == "7d" else 30
         end = now
-        start = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start = (local_now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
         bucket = "day"
-    elif range_key == "30d":
-        end = now
-        start = (now - timedelta(days=29)).replace(hour=0, minute=0, second=0, microsecond=0)
-        bucket = "day"
+        shift = timedelta(days=days)
+        axis_end = end
     else:  # today
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
         end = now
         bucket = "hour"
-    span = end - start
-    return start, end, start - span, start, bucket
+        shift = timedelta(days=1)
+        axis_end = start + timedelta(days=1)
+    return (start.astimezone(timezone.utc), end.astimezone(timezone.utc),
+            (start - shift).astimezone(timezone.utc), (end - shift).astimezone(timezone.utc),
+            bucket, axis_end.astimezone(timezone.utc), (axis_end - shift).astimezone(timezone.utc))
 
 
 def _bucket_key(iso: str, bucket: str) -> str:
-    return iso[:13] if bucket == "hour" else iso[:10]
+    """Bucket a stored UTC timestamp by the shop's local clock, so 09:00 means 09:00 in Sofia."""
+    local = datetime.fromisoformat(iso).astimezone(SHOP_TZ).isoformat()
+    return local[:13] if bucket == "hour" else local[:10]
 
 
-async def _period_stats(start: datetime, end: datetime, bucket: str) -> Dict[str, Any]:
+async def _period_stats(start: datetime, end: datetime, bucket: str,
+                        axis_end: Optional[datetime] = None) -> Dict[str, Any]:
     s_iso, e_iso = start.isoformat(), end.isoformat()
     visits = await db.visits.find(
         {"ts": {"$gte": s_iso, "$lt": e_iso}, **analytics_bots.NOT_BOT},
@@ -2858,17 +2877,19 @@ async def _period_stats(start: datetime, end: datetime, bucket: str) -> Dict[str
         b["orders"] += 1
         b["sales"] += max((o.get("subtotal_eur") or 0) - (o.get("discount_eur") or 0), 0)
 
-    keys: List[str] = []
-    cursor = start
+    # the axis runs to axis_end (the whole local day for „Днес"); buckets that have not happened
+    # yet carry None, so the line stops at the current hour instead of dropping to zero
     step = timedelta(hours=1) if bucket == "hour" else timedelta(days=1)
-    while cursor < end + step:
-        keys.append(_bucket_key(cursor.isoformat(), bucket))
+    series = []
+    cursor = start
+    limit = (axis_end or end) + (timedelta(0) if axis_end else step)
+    last = _bucket_key(end.isoformat(), bucket)
+    while cursor < limit:
+        k = _bucket_key(cursor.isoformat(), bucket)
+        future = k > last
+        series.append({"t": k, **{m: None if future else round(buckets.get(k, {}).get(m, 0), 2)
+                                  for m in ("sessions", "views", "orders", "sales")}})
         cursor += step
-    series = [
-        {"t": k, **{m: round(buckets.get(k, {}).get(m, 0), 2)
-                    for m in ("sessions", "views", "orders", "sales")}}
-        for k in keys
-    ]
     return {
         "sessions": len(sessions),
         "visitors": len(visitors),
@@ -2909,9 +2930,10 @@ async def admin_analytics(
     date_to: Optional[str] = None,
     user=Depends(require_admin),
 ):
-    start, end, prev_start, prev_end, bucket = _range_bounds(range, date_from, date_to)
-    current = await _period_stats(start, end, bucket)
-    previous = await _period_stats(prev_start, prev_end, bucket)
+    start, end, prev_start, prev_end, bucket, axis_end, prev_axis_end = _range_bounds(
+        range, date_from, date_to)
+    current = await _period_stats(start, end, bucket, axis_end)
+    previous = await _period_stats(prev_start, prev_end, bucket, prev_axis_end)
 
     live_since = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
     live = await db.visits.distinct("session_id", {"ts": {"$gte": live_since}, **analytics_bots.NOT_BOT})
@@ -2926,6 +2948,7 @@ async def admin_analytics(
     return {
         "range": range,
         "bucket": bucket,
+        "timezone": str(SHOP_TZ),
         "from": start.isoformat(),
         "to": end.isoformat(),
         "live": len(live),
