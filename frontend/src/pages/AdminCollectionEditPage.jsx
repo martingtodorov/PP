@@ -47,6 +47,7 @@ export default function AdminCollectionEditPage() {
         image: doc.image || "",
         sort_order: Number(doc.sort_order) || 0,
         nav_hidden: !!doc.nav_hidden,
+        delisted: !!doc.delisted,
         seo_title: doc.seo_title || "",
         seo_description: doc.seo_description || "",
         translations: doc.translations || {},
@@ -126,6 +127,17 @@ export default function AdminCollectionEditPage() {
                 onChange={(e) => setDoc({ ...doc, nav_hidden: e.target.checked })}
                 data-testid="collection-nav-hidden" />
               Скрий от менюто и плочките (страницата остава активна)
+            </label>
+            <label className="text-sm text-slate-700 flex items-center gap-2">
+              <input type="checkbox" checked={!!doc.delisted}
+                onChange={(e) => setDoc({ ...doc, delisted: e.target.checked })}
+                data-testid="collection-delisted" />
+              <span>
+                Изтегли от сайта
+                <span className="block text-[11px] text-slate-400">
+                  URL-ът връща 404, изчезва от менюто, каталога и sitemap-а
+                </span>
+              </span>
             </label>
           </div>
         )}

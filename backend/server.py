@@ -23,6 +23,7 @@ import uuid
 import random
 from urllib.parse import quote, urlparse, unquote
 from datetime import datetime, timezone, timedelta
+from datetime import time as dt_time
 from zoneinfo import ZoneInfo
 from typing import Optional, List, Dict, Any
 
@@ -93,12 +94,19 @@ def verify_password(pw: str, hashed: str) -> bool:
         return False
 
 
-def create_token(user_id: str, email: str, role: str, ttl_minutes: int = 60 * 24 * 7) -> str:
+SESSION_DAYS = int(os.environ.get("SESSION_DAYS", "90"))
+
+
+def create_token(user_id: str, email: str, role: str, ttl_minutes: Optional[int] = None,
+                 password_hash: str = "") -> str:
+    """A 90-day session. `pv` pins the token to the current password, so changing the password
+    (or the admin password in .env) logs every old session out immediately."""
     payload = {
         "sub": user_id,
         "email": email,
         "role": role,
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes),
+        "pv": hashlib.sha256((password_hash or "").encode()).hexdigest()[:16],
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes or SESSION_DAYS * 24 * 60),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
@@ -112,9 +120,9 @@ def set_auth_cookie(response: Response, token: str):
         key="pp_token",
         value=token,
         httponly=True,
-        secure=False,
+        secure=False,           # the edge terminates TLS and rewrites this; keep local http usable
         samesite="lax",
-        max_age=60 * 60 * 24 * 7,
+        max_age=SESSION_DAYS * 24 * 60 * 60,
         path="/",
     )
 
@@ -135,7 +143,13 @@ async def get_user_from_request(request: Request) -> Optional[Dict[str, Any]]:
         payload = decode_token(token)
     except jwt.PyJWTError:
         return None
-    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
+    if not user:
+        return None
+    pv = payload.get("pv")
+    if pv and pv != hashlib.sha256((user.get("password_hash") or "").encode()).hexdigest()[:16]:
+        return None                     # the password changed after this token was issued
+    user.pop("password_hash", None)
     return user
 
 
@@ -231,6 +245,8 @@ class ProductIn(BaseModel):
     variants: List[Dict[str, Any]] = []
     collections: List[str] = []
     tags: List[str] = []
+    # internal-only labels for the owner (never leave the admin panel)
+    admin_tags: List[str] = []
     featured: bool = False
     specs: Dict[str, Any] = {}
     seo_title: Optional[str] = ""
@@ -245,6 +261,7 @@ class CollectionIn(BaseModel):
     image: str = ""
     sort_order: int = 0
     nav_hidden: bool = False
+    delisted: bool = False          # off the storefront entirely: no nav, no sitemap, 404
     seo_title: Optional[str] = ""
     seo_description: Optional[str] = ""
     translations: Dict[str, Dict[str, Any]] = {}
@@ -455,6 +472,7 @@ async def on_startup():
         log.error("Heading restore failed: %s", ex)
     await resume_translate_jobs()
     asyncio.create_task(auto_translate_watch())
+    asyncio.create_task(daily_report_loop())
 
 
 @app.on_event("shutdown")
@@ -475,7 +493,8 @@ async def login(payload: LoginIn, response: Response):
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Невалидни данни за вход")
-    token = create_token(user["id"], user["email"], user["role"])
+    token = create_token(user["id"], user["email"], user["role"],
+                         password_hash=user["password_hash"])
     set_auth_cookie(response, token)
     return {"user": public_user(user), "token": token}
 
@@ -513,7 +532,8 @@ def slim(docs: List[Dict[str, Any]], *fields: str) -> List[Dict[str, Any]]:
 @api.get("/collections")
 async def list_collections(locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
-    docs = await db.collections_cat.find({}, {"_id": 0}).sort("sort_order", 1).to_list(100)
+    docs = await db.collections_cat.find({"delisted": {"$ne": True}}, {"_id": 0}) \
+        .sort("sort_order", 1).to_list(100)
     return {"collections": slim(localize_list(docs, loc), "product_order")}
 
 
@@ -562,7 +582,7 @@ async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     query = ({"handle": {"$in": [ALL_COLLECTION, LEGACY_ALL]}} if handle == ALL_COLLECTION
              else {"$or": [{"handle": handle}, {f"translations.{loc}.handle": handle}]})
     col = await db.collections_cat.find_one(query, {"_id": 0})
-    if not col or retired_handle(col, loc, handle):
+    if not col or col.get("delisted") or retired_handle(col, loc, handle):
         raise HTTPException(404, "Колекцията не е намерена")
     base_handle = col["handle"]
     if base_handle in (ALL_COLLECTION, LEGACY_ALL):
@@ -570,7 +590,8 @@ async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     else:
         prods = await db.products.find({"collections": base_handle, "active": {"$ne": False}}, {"_id": 0}).to_list(500)
     siblings = await db.collections_cat.find(
-        {"handle": {"$nin": [base_handle, ALL_COLLECTION, LEGACY_ALL]}, "nav_hidden": {"$ne": True}}, {"_id": 0}
+        {"handle": {"$nin": [base_handle, ALL_COLLECTION, LEGACY_ALL]}, "nav_hidden": {"$ne": True},
+         "delisted": {"$ne": True}}, {"_id": 0}
     ).sort("sort_order", 1).to_list(50)
     prods = _apply_manual_order(prods, col.get("product_order"))
     return {
@@ -2039,6 +2060,18 @@ async def admin_update_collection(collection_id: str, payload: CollectionIn, use
     return {"ok": True}
 
 
+@api.patch("/admin/collections/{collection_id}/delisted")
+async def admin_delist_collection(collection_id: str, payload: Dict[str, bool],
+                                  user=Depends(require_admin)):
+    """Take a collection off the storefront (or put it back): no nav, no sitemap, the URL 404s."""
+    delisted = bool(payload.get("delisted", True))
+    res = await db.collections_cat.update_one({"id": collection_id}, {"$set": {"delisted": delisted}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Колекцията не е намерена")
+    _links_cache.clear()
+    return {"ok": True, "delisted": delisted}
+
+
 @api.get("/admin/collections/{handle}/products")
 async def admin_collection_products(handle: str, user=Depends(require_admin)):
     col = await db.collections_cat.find_one({"handle": handle}, {"_id": 0})
@@ -2942,6 +2975,24 @@ async def _visitor_windows() -> Dict[str, int]:
     return out
 
 
+# country names for the analytics lists only — the checkout keeps its own (shorter) list of
+# countries we actually ship to, so this must not touch it
+ANALYTICS_COUNTRY_NAMES = {
+    "GB": "Великобритания", "IE": "Ирландия", "PT": "Португалия", "AT": "Австрия",
+    "CH": "Швейцария", "SE": "Швеция", "NO": "Норвегия", "DK": "Дания", "FI": "Финландия",
+    "IS": "Исландия", "EE": "Естония", "LV": "Латвия", "LT": "Литва", "PL": "Полша",
+    "UA": "Украйна", "BY": "Беларус", "RU": "Русия", "MD": "Молдова", "RS": "Сърбия",
+    "MK": "Северна Македония", "AL": "Албания", "ME": "Черна гора", "BA": "Босна и Херцеговина",
+    "TR": "Турция", "GE": "Грузия", "AM": "Армения", "AZ": "Азербайджан", "MT": "Малта",
+    "LU": "Люксембург", "MC": "Монако", "LI": "Лихтенщайн", "AD": "Андора", "SM": "Сан Марино",
+    "VA": "Ватикана", "GI": "Гибралтар", "US": "САЩ", "CA": "Канада", "AU": "Австралия",
+    "NZ": "Нова Зеландия", "IL": "Израел", "AE": "ОАЕ", "SA": "Саудитска Арабия",
+    "EG": "Египет", "MA": "Мароко", "TN": "Тунис", "DZ": "Алжир", "ZA": "Южна Африка",
+    "IN": "Индия", "CN": "Китай", "JP": "Япония", "KR": "Южна Корея", "SG": "Сингапур",
+    "BR": "Бразилия", "MX": "Мексико", "AR": "Аржентина", "KZ": "Казахстан",
+}
+
+
 async def _geo_breakdown(start: datetime, end: datetime) -> Dict[str, List[Dict[str, Any]]]:
     """Where the visitors are: top countries and top cities of the period, bots excluded.
 
@@ -2949,6 +3000,7 @@ async def _geo_breakdown(start: datetime, end: datetime) -> Dict[str, List[Dict[
     the city is an approximation — the same one Shopify's analytics shows.
     """
     from nextcart import COUNTRY_NAME_BG
+    names = {**ANALYTICS_COUNTRY_NAMES, **COUNTRY_NAME_BG}
     match = {"ts": {"$gte": start.isoformat(), "$lt": end.isoformat()}, **analytics_bots.NOT_BOT}
 
     async def top(group_id, extra_fields):
@@ -2972,12 +3024,124 @@ async def _geo_breakdown(start: datetime, end: datetime) -> Dict[str, List[Dict[
             if extra_fields and not key.get("city"):
                 continue                      # a country without a city belongs in the other list
             out.append({**{k: key.get(k, "") for k in extra_fields}, "country": code,
-                        "country_name": COUNTRY_NAME_BG.get(code, code or "—"),
+                        "country_name": names.get(code, code or "—"),
                         "visitors": r["visitors"], "sessions": r["sessions"], "views": r["views"]})
         return out
 
     return {"countries": await top("$country", []),
             "cities": await top({"city": "$city", "country": "$country"}, ["city"])}
+
+
+SOURCE_NAMES = {
+    "google": "Google", "bing": "Bing", "duckduckgo": "DuckDuckGo", "yandex": "Yandex",
+    "yahoo": "Yahoo", "ecosia": "Ecosia", "brave": "Brave Search",
+    "facebook": "Facebook", "fb": "Facebook", "instagram": "Instagram", "tiktok": "TikTok",
+    "twitter": "X (Twitter)", "x": "X (Twitter)", "reddit": "Reddit", "youtube": "YouTube",
+    "linkedin": "LinkedIn", "pinterest": "Pinterest", "telegram": "Telegram",
+    "t": "Telegram", "whatsapp": "WhatsApp", "messenger": "Messenger",
+    "chatgpt": "ChatGPT", "openai": "ChatGPT", "perplexity": "Perplexity", "claude": "Claude",
+    "gemini": "Gemini", "copilot": "Copilot",
+}
+
+
+def _source_of(referrer: str) -> str:
+    """A referrer URL grouped into something the owner can read: Google, Facebook, ChatGPT…"""
+    ref = (referrer or "").strip()
+    if not ref:
+        return "Директно"
+    host = urlparse(ref if "//" in ref else f"//{ref}").hostname or ""
+    host = host.lower().removeprefix("www.").removeprefix("m.").removeprefix("l.")
+    if not host or "purepeptide" in host:
+        return ""                                   # our own pages are not a traffic source
+    label = SOURCE_NAMES.get(host.split(".")[0])
+    return label or host
+
+
+async def _pages_and_sources(start: datetime, end: datetime) -> Dict[str, List[Dict[str, Any]]]:
+    """Which pages the period's traffic looked at, and where it came from."""
+    match = {"ts": {"$gte": start.isoformat(), "$lt": end.isoformat()}, **analytics_bots.NOT_BOT}
+    pages = await db.visits.aggregate([
+        {"$match": match},
+        {"$group": {"_id": "$path", "views": {"$sum": 1},
+                    "visitors": {"$addToSet": {"$ifNull": ["$visitor_id", "$session_id"]}}}},
+        {"$project": {"views": 1, "visitors": {"$size": "$visitors"}}},
+        {"$sort": {"views": -1}},
+        {"$limit": 12},
+    ]).to_list(12)
+    refs = await db.visits.aggregate([
+        {"$match": match},
+        {"$group": {"_id": "$referrer", "views": {"$sum": 1},
+                    "visitors": {"$addToSet": {"$ifNull": ["$visitor_id", "$session_id"]}}}},
+        {"$project": {"views": 1, "visitors": {"$size": "$visitors"}}},
+    ]).to_list(2000)
+    grouped: Dict[str, Dict[str, int]] = {}
+    for r in refs:
+        name = _source_of(r["_id"] or "")
+        if not name:
+            continue
+        g = grouped.setdefault(name, {"views": 0, "visitors": 0})
+        g["views"] += r["views"]
+        g["visitors"] += r["visitors"]
+    sources = sorted(({"source": k, **v} for k, v in grouped.items()),
+                     key=lambda r: (-r["visitors"], -r["views"]))[:12]
+    return {"pages": [{"path": p["_id"] or "/", "views": p["views"], "visitors": p["visitors"]}
+                      for p in pages],
+            "sources": sources}
+
+
+DAILY_REPORT_HOUR = int(os.environ.get("DAILY_REPORT_HOUR", "8"))
+
+
+async def _report_payload(day) -> Dict[str, Any]:
+    """Everything the morning mail shows for one local day, plus the day before for the trend."""
+    start = datetime.combine(day, dt_time(0, 0), SHOP_TZ).astimezone(timezone.utc)
+    end = start + timedelta(days=1)
+    prev_start, prev_end = start - timedelta(days=1), start
+    cur = await _period_stats(start, end, "hour", end)
+    prev = await _period_stats(prev_start, prev_end, "hour", prev_end)
+    return {"day": day.strftime("%d.%m.%Y"), "current": cur, "previous": prev,
+            **await _geo_breakdown(start, end), **await _pages_and_sources(start, end)}
+
+
+async def send_daily_report(day=None) -> Dict[str, Any]:
+    """The owner's morning summary: yesterday's sales, orders, traffic and where it came from."""
+    day = day or (datetime.now(SHOP_TZ).date() - timedelta(days=1))
+    settings = ((await db.settings.find_one({"key": "site"}, {"_id": 0})) or {}).get("value") or {}
+    to = (settings.get("report_email") or ADMIN_EMAIL).strip()
+    subject, html = email_templates.render_admin_daily_report(await _report_payload(day))
+    res = await email_service.send_email(to, subject, html, settings)
+    await db.daily_reports.update_one(
+        {"day": day.isoformat()},
+        {"$set": {"day": day.isoformat(), "to": to, "sent": bool(res.get("sent")),
+                  "reason": res.get("reason", ""), "sent_at": now_utc()}}, upsert=True)
+    return {"day": day.isoformat(), "to": to, **res}
+
+
+async def daily_report_loop():
+    """One mail per local day, after DAILY_REPORT_HOUR — survives restarts (the send is recorded)."""
+    await asyncio.sleep(120)
+    while True:
+        try:
+            local_now = datetime.now(SHOP_TZ)
+            yesterday = (local_now.date() - timedelta(days=1)).isoformat()
+            settings = ((await db.settings.find_one({"key": "site"}, {"_id": 0})) or {}).get("value") or {}
+            if (settings.get("daily_report_enabled", True)
+                    and local_now.hour >= DAILY_REPORT_HOUR
+                    and not await db.daily_reports.find_one({"day": yesterday, "sent": True})):
+                out = await send_daily_report()
+                log.info("Daily report for %s: %s", out["day"], out.get("sent"))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Daily report failed")
+        await asyncio.sleep(900)
+
+
+@api.post("/admin/analytics/report")
+async def admin_send_report(day: Optional[str] = None, user=Depends(require_admin)):
+    """Send the daily summary right now (the button in the admin analytics tab)."""
+    target = datetime.fromisoformat(day).date() if day else None
+    return await send_daily_report(target)
 
 
 @api.get("/admin/analytics")
@@ -2992,8 +3156,11 @@ async def admin_analytics(
     current = await _period_stats(start, end, bucket, axis_end)
     previous = await _period_stats(prev_start, prev_end, bucket, prev_axis_end)
 
-    live_since = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
-    live = await db.visits.distinct("session_id", {"ts": {"$gte": live_since}, **analytics_bots.NOT_BOT})
+    now = datetime.now(timezone.utc)
+    live_start = now - timedelta(minutes=5)
+    day_start = now - timedelta(hours=24)
+    live = await db.visits.distinct("session_id", {"ts": {"$gte": live_start.isoformat()},
+                                                  **analytics_bots.NOT_BOT})
     bots = await db.visits.count_documents({"ts": {"$gte": start.isoformat(), "$lt": end.isoformat()},
                                             "$nor": [analytics_bots.NOT_BOT]})
 
@@ -3012,6 +3179,10 @@ async def admin_analytics(
         "bots_excluded": bots,
         "visitors": await _visitor_windows(),
         "geo": await _geo_breakdown(start, end),
+        # the same breakdown for the two windows the owner watches: live now, and the last 24 hours
+        "live_geo": await _geo_breakdown(live_start, now),
+        "day_geo": await _geo_breakdown(day_start, now),
+        **await _pages_and_sources(start, end),
         "current": current,
         "previous": previous,
         "deltas": {
@@ -3684,7 +3855,8 @@ async def resolve_links(locale: str = Query(DEFAULT_LOCALE)):
 async def link_index(locale: str = Query(DEFAULT_LOCALE)):
     """Everything that has a URL — powers the HTML sitemap pages."""
     loc = normalize_locale(locale)
-    cols = await db.collections_cat.find({"nav_hidden": {"$ne": True}}, {"_id": 0}).sort("sort_order", 1).to_list(200)
+    cols = await db.collections_cat.find({"nav_hidden": {"$ne": True}, "delisted": {"$ne": True}},
+                                         {"_id": 0}).sort("sort_order", 1).to_list(200)
     prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0}).to_list(500)
     arts = await db.articles.find({"published": {"$ne": False}}, {"_id": 0, "author": 0}).to_list(200)
     pages = await db.pages.find({"locale": {"$in": [loc, "bg"]}}, {"_id": 0}).to_list(200)
@@ -3744,7 +3916,8 @@ async def _sitemap_groups(request: Request):
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
     active = [l for l in LOCALES if (routes.get(l) or {}).get("enabled", True)]
     listed = _host_locales(request, routes, active)
-    cols = await db.collections_cat.find({}, {"_id": 0}).to_list(200)
+    # a delisted collection 404s on the storefront — it belongs in no sitemap
+    cols = await db.collections_cat.find({"delisted": {"$ne": True}}, {"_id": 0}).to_list(200)
     # a de-activated product 404s on the storefront — listing it in a sitemap is a dead link
     prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0}).to_list(500)
     arts = await db.articles.find({"published": {"$ne": False}}, {"_id": 0, "author": 0}).to_list(200)
@@ -3911,7 +4084,8 @@ async def agents_md():
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
     origin = (routes.get("bg") or SITE_ORIGINS["bg"])["origin"]
-    cols = await db.collections_cat.find({}, {"_id": 0, "handle": 1, "title": 1}).sort("sort_order", 1).to_list(50)
+    cols = await db.collections_cat.find({"delisted": {"$ne": True}},
+                                         {"_id": 0, "handle": 1, "title": 1}).sort("sort_order", 1).to_list(50)
     prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0, "handle": 1, "title": 1, "variants": 1}).to_list(500)
     lines = [
         "# PurePeptide — AI agent guide",
@@ -3956,7 +4130,8 @@ async def llms_txt():
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
     origin = (routes.get("bg") or SITE_ORIGINS["bg"])["origin"]
-    cols = await db.collections_cat.find({"nav_hidden": {"$ne": True}}, {"_id": 0, "handle": 1, "title": 1}).sort("sort_order", 1).to_list(50)
+    cols = await db.collections_cat.find({"nav_hidden": {"$ne": True}, "delisted": {"$ne": True}},
+                                         {"_id": 0, "handle": 1, "title": 1}).sort("sort_order", 1).to_list(50)
     prods = await db.products.find({"active": {"$ne": False}},
                                    {"_id": 0, "handle": 1, "title": 1, "variants": 1, "seo_description": 1}).to_list(500)
     lines = [

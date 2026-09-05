@@ -72,6 +72,7 @@ def localize_doc(doc: Dict[str, Any], locale: str) -> Dict[str, Any]:
                 out[field] = val
                 break
     out.pop("translations", None)
+    out.pop("admin_tags", None)         # internal labels stay in the admin panel
     return out
 
 
