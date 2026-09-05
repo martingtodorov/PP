@@ -383,3 +383,13 @@
 - Тестове: `tests/test_nginx_redirects.py` (49 — истински nginx с рендиран Ansible шаблон, TLS свален,
   бекендът е локалният FastAPI) + `tests/test_iteration49_html_lang.py` (27). Отчет: iteration_49.json,
   0 проблема.
+
+## 2026-06-06 (пета част) — sitemap само със свои страници
+- `GET /api/sitemap.xml` вече е съобразен с домейна (`_host_locales()` по Host/X-Forwarded-Host):
+  `purepeptide.bg` → 66 български адреса, `purepeptide.eu` → 528 (8 префиксни езика × 66),
+  `.ro` и `.gr` → 66 всеки, `purepeptide-labs.bg` (алиас) → българските. Досега всеки домейн
+  връщаше всичките 726 адреса на всички домейни, заради което Search Console отчиташе стотици чужди
+  URL адреси. `hreflang` алтернативите си остават пълни (11 езика + x-default).
+- `robots.txt` вече обявява само своите sitemap-и, а `sitemap_agentic_discovery.xml` ползва
+  origin-а на заявения домейн (досега винаги българския).
+- Тестове: `tests/test_sitemap_per_domain.py` (10).
