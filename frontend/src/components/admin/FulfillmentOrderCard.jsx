@@ -26,7 +26,6 @@ export const FulfillmentOrderCard = ({ order, onChanged }) => {
   const cancel = () => window.confirm(`Отказ на фулфилмент поръчка ${ff.number}?`) &&
     run("cancel", () => api.delete(`/admin/orders/${order.id}/fulfillment`), "Фулфилмент поръчката е отказана");
   const refresh = () => run("refresh", () => api.post(`/admin/orders/${order.id}/fulfillment/refresh`), "Статусът е обновен");
-
   return (
     <section className="bg-white border border-slate-200 rounded-xl p-5" data-testid="order-warehouse-card">
       <div className="flex items-center justify-between mb-3">
@@ -39,6 +38,17 @@ export const FulfillmentOrderCard = ({ order, onChanged }) => {
       {order.fulfillment_error && !active && (
         <p className="mb-3 text-sm text-red-700 flex gap-2 bg-red-50 border border-red-200 rounded-lg p-3" data-testid="fulfillment-error">
           <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" /> {order.fulfillment_error}
+        </p>
+      )}
+
+      {ff?.cancel_error && (
+        <p className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3" data-testid="fulfillment-cancel-error">
+          <span className="flex gap-2 font-medium"><AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" /> Складът не потвърди отказа</span>
+          <span className="block mt-1 text-red-600 text-xs">{ff.cancel_error}</span>
+          <button onClick={cancel} disabled={!!busy} className="mt-2 inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-60"
+            data-testid="fulfillment-cancel-retry-btn">
+            <RefreshCw className={`h-3.5 w-3.5 ${busy === "cancel" ? "animate-spin" : ""}`} /> Опитай пак
+          </button>
         </p>
       )}
 

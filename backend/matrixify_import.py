@@ -257,9 +257,27 @@ def clean_body(html: str, title: str = "", drop_leading_h1: bool = True, keep_h1
 
 
 # ---------- importers ----------
+# Fields the admin owns, not Shopify: a re-import must never reset them. Losing `translations`
+# wiped every AI translation on production, and losing `rotations` republished a delisted URL
+# (the rotated handle lives in translations.<locale>.handle).
+KEEP_PRODUCT = ("id", "translations", "rotations", "active", "featured", "coa_image")
+KEEP_COLLECTION = ("id", "translations", "rotations", "product_order", "menu_order", "sort_order")
+KEEP_ARTICLE = ("id", "translations", "rotations")
+
+
+def existing_by_handle(collection: str, keys: tuple) -> Dict[str, Dict[str, Any]]:
+    """Snapshot of the admin-owned fields per handle, taken before the collection is replaced."""
+    fields = {k: 1 for k in keys}
+    fields["_id"] = 0
+    fields["handle"] = 1
+    return {d["handle"]: {k: v for k, v in d.items() if k in keys}
+            for d in db[collection].find({}, fields) if d.get("handle")}
+
+
 def import_collections() -> Dict[str, str]:
     rows = sheet("Custom Collections")
     groups = group_by(rows, "Handle")
+    kept = existing_by_handle("collections_cat", KEEP_COLLECTION)
     db.collections_cat.delete_many({})
     order_extra = 10
     imported = 0
@@ -292,6 +310,7 @@ def import_collections() -> Dict[str, str]:
             "shopify_id": str(top.get("ID") or ""),
             "translations": {},
             "created_at": now_utc(),
+            **kept.get(our_handle, {}),
         })
         imported += 1
     log.info("collections imported: %d", imported)
@@ -303,6 +322,7 @@ def import_products() -> None:
     seed_specs = {p["handle"]: p.get("specs") or {} for p in SEED_PRODUCTS}
     rows = sheet("Products")
     groups = group_by(rows, "Handle")
+    kept = existing_by_handle("products", KEEP_PRODUCT)
     db.products.delete_many({})
     imported = 0
     for handle, group in groups.items():
@@ -335,6 +355,10 @@ def import_products() -> None:
             })
         if not variants:
             variants = [{"name": "1 бр.", "price_eur": 0.0, "stock": 0, "sku": ""}]
+        keep = kept.get(handle, {})
+        # the chemical-analysis image was attached in the admin, not exported by Shopify — keep it last
+        if keep.get("coa_image") and keep["coa_image"] not in images:
+            images.append(keep["coa_image"])
         cols = []
         for c in str(top.get("Custom Collections") or "").split(","):
             c = c.strip()
@@ -361,6 +385,7 @@ def import_products() -> None:
             "shopify_id": str(top.get("ID") or ""),
             "translations": {},
             "created_at": parse_dt(top.get("Created At")),
+            **keep,
         })
         imported += 1
     log.info("products imported: %d", imported)
@@ -410,6 +435,7 @@ def import_articles() -> None:
     rows = sheet("Blog Posts")
     groups = group_by(rows, "Handle")
     product_handles = [(p["handle"], p["title"]) for p in db.products.find({}, {"handle": 1, "title": 1})]
+    kept = existing_by_handle("articles", KEEP_ARTICLE)
     db.articles.delete_many({})
     imported = 0
     for handle, group in groups.items():
@@ -439,6 +465,7 @@ def import_articles() -> None:
             **seo_pair(top, title, top.get("Summary HTML") or body),
             "published_at": parse_dt(top.get("Published At") or top.get("Created At")),
             "translations": {},
+            **kept.get(handle, {}),
         })
         imported += 1
     log.info("articles imported: %d", imported)

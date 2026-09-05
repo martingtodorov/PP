@@ -12,6 +12,8 @@ const RANGES = [
 
 const METRICS = [
   { key: "sessions", label: "Сесии", fmt: (v) => String(v) },
+  { key: "visitors", label: "Посетители", fmt: (v) => String(v) },
+  { key: "views", label: "Показвания", fmt: (v) => String(v) },
   { key: "sales", label: "Продажби", fmt: (v) => fmtEUR(v) },
   { key: "orders", label: "Поръчки", fmt: (v) => String(v) },
   { key: "conversion", label: "Конверсия", fmt: (v) => `${v}%` },
@@ -71,7 +73,7 @@ export default function AdminAnalyticsPage() {
       </div>
 
       <section className="bg-slate-950 text-white rounded-2xl p-5 sm:p-6" data-testid="analytics-panel">
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 sm:gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 sm:gap-6">
           <div data-testid="analytics-live">
             <p className="text-sm text-slate-400">Live</p>
             <p className="flex items-center gap-2 text-2xl font-bold">
@@ -120,10 +122,25 @@ export default function AdminAnalyticsPage() {
 
         <p className="text-[11px] text-slate-500 mt-2">
           Продажбите не включват цената на доставката. Пунктираната линия е предходният период за сравнение.
+          {" "}Ботовете (Google, AI индексатори, мониторинг) не се броят
+          {data?.bots_excluded ? ` — изключени ${data.bots_excluded} посещения от този период` : ""}.
         </p>
       </section>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6" data-testid="analytics-visitor-windows">
+        {[
+          { label: "Различни посетители (24 часа)", value: data?.visitors?.["24h"] ?? "—" },
+          { label: "Различни посетители (7 дни)", value: data?.visitors?.["7d"] ?? "—" },
+          { label: "Различни посетители (30 дни)", value: data?.visitors?.["30d"] ?? "—" },
+        ].map((c) => (
+          <div key={c.label} className="bg-white border border-slate-200 rounded-xl p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-500">{c.label}</p>
+            <p className="text-xl font-bold text-slate-900 mt-1">{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
         {[
           { label: "Продажби (предходен период)", value: prev ? fmtEUR(prev.sales) : "—" },
           { label: "Поръчки (предходен период)", value: prev ? prev.orders : "—" },

@@ -37,7 +37,8 @@ def test_locker_bank_transfer_payload():
     # NextLevel rejects a shipment without receiver.country, office deliveries included
     assert p["receiver"] == {"name": "TEST QA", "phone": "+359878279269", "email": "qa@example.com",
                              "office_id": 4471, "country": "BG", "place": "Бургас"}
-    assert p["price"] == 118.0 and p["shipping_price"] == 3.39 and p["is_shipping_free"] is False
+    # a bank transfer is prepaid, so the warehouse must see the shipping as free (owner's decision)
+    assert p["price"] == 118.0 and p["shipping_price"] == 0.0 and p["is_shipping_free"] is True
     assert p["is_paid"] is True and p["payment_method"] == "bank_transfer" and "services" not in p
     assert "courier" not in p  # the office decides the courier
     assert p["contents"] == "аминокиселини"    # the waybill never declares the SKUs

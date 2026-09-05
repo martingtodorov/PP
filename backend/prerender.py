@@ -23,6 +23,14 @@ log = logging.getLogger("purepeptide.prerender")
 SHELL_TTL = 300
 PAGE_TTL = 300
 PRIVATE_PREFIXES = ("/cart", "/checkout", "/track", "/account", "/admin")
+# the prerendered copy stays in the DOM for crawlers but is invisible to a human; without
+# JavaScript it becomes a normal, readable page again
+HIDE_STYLE = (
+    "<style>#pp-prerender{position:absolute;width:1px;height:1px;margin:-1px;padding:0;"
+    "overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}</style>"
+    "<noscript><style>#pp-prerender{position:static;width:auto;height:auto;margin:0;"
+    "overflow:visible;clip:auto;white-space:normal;padding:24px;max-width:900px}</style></noscript>"
+)
 
 _db = None
 _shell_cache: Dict[str, Any] = {"html": "", "at": 0.0}
@@ -225,10 +233,16 @@ def _product_li(locale: str, product: Dict[str, Any]) -> str:
     return f'<li><a href="{href}">{esc(product.get("title"))}</a>{tail}</li>'
 
 
+def _retired(doc: Dict[str, Any], locale: str, requested: str) -> bool:
+    """A handle rotated away in the admin must 404 for crawlers too, not only in the JSON API."""
+    return any(r.get("locale") == locale and r.get("from") == requested
+               for r in (doc.get("rotations") or []))
+
+
 async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
     doc = await _db.products.find_one({"handle": handle, "active": True}, {"_id": 0}) \
         or await _db.products.find_one({f"translations.{locale}.handle": handle}, {"_id": 0})
-    if not doc:
+    if not doc or _retired(doc, locale, handle):
         return None
     p = localize_doc(doc, locale)
     route = f"/products/{p.get('handle') or handle}"
@@ -284,7 +298,7 @@ async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
 async def _collection(locale: str, handle: str) -> Optional[Dict[str, str]]:
     doc = await _db.collections_cat.find_one({"handle": handle}, {"_id": 0}) \
         or await _db.collections_cat.find_one({f"translations.{locale}.handle": handle}, {"_id": 0})
-    if not doc:
+    if not doc or _retired(doc, locale, handle):
         return None
     c = localize_doc(doc, locale)
     route = f"/collections/{c.get('handle') or handle}"
@@ -334,7 +348,7 @@ async def _catalog(locale: str) -> Dict[str, str]:
 async def _article(locale: str, handle: str) -> Optional[Dict[str, str]]:
     doc = await _db.articles.find_one({"handle": handle}, {"_id": 0}) \
         or await _db.articles.find_one({f"translations.{locale}.handle": handle}, {"_id": 0})
-    if not doc:
+    if not doc or _retired(doc, locale, handle):
         return None
     a = localize_doc(doc, locale)
     route = f"/articles/{a.get('handle') or handle}"
@@ -355,8 +369,16 @@ async def _article(locale: str, handle: str) -> Optional[Dict[str, str]]:
 
 
 async def _page(locale: str, slug: str) -> Optional[Dict[str, str]]:
-    doc = await _db.pages.find_one({"slug": slug, "locale": locale}, {"_id": 0}) \
-        or await _db.pages.find_one({"slug": slug, "locale": DEFAULT_LOCALE}, {"_id": 0})
+    # mirrors GET /api/pages/{slug}: a rotated page lives under `pub_slug` only, the old slug 404s
+    doc = await _db.pages.find_one({"slug": slug, "locale": locale, "pub_slug": slug}, {"_id": 0}) \
+        or await _db.pages.find_one({"locale": locale, "pub_slug": slug}, {"_id": 0})
+    if not doc:
+        if await _db.pages.find_one({"locale": locale, "rotations.from": slug}, {"_id": 0, "slug": 1}):
+            return None
+        doc = await _db.pages.find_one({"slug": slug, "locale": locale}, {"_id": 0})
+        if doc and doc.get("pub_slug"):
+            return None
+        doc = doc or await _db.pages.find_one({"slug": slug, "locale": DEFAULT_LOCALE}, {"_id": 0})
     if not doc:
         return None
     route = f"/pages/{slug}"
@@ -462,13 +484,19 @@ async def _route(locale: str, route: str) -> Optional[Dict[str, str]]:
 
 
 def _inject(shell: str, head: str, body: str) -> str:
-    """Our tags win: drop the static title/description/OG of the shell, then add ours."""
+    """Our tags win: drop the static title/description/OG of the shell, then add ours.
+
+    The prerendered copy is wrapped in a visually-hidden container: crawlers (and anyone with
+    JavaScript off, see the <noscript> rule) read it, while a normal visitor never sees a second of
+    unstyled text before React mounts and replaces it.
+    """
     out = re.sub(r"<title>.*?</title>", "", shell, flags=re.S)
     out = re.sub(r'<meta\s+name="description"[^>]*>', "", out)
     out = re.sub(r'<meta\s+name="robots"[^>]*>', "", out)
     out = re.sub(r'<meta\s+(?:property|name)="(?:og|twitter):[^"]+"[^>]*>', "", out)
-    out = out.replace("</head>", f"{head}</head>", 1)
-    return re.sub(r'(<div id="root"[^>]*>)', lambda m: m.group(1) + body, out, count=1)
+    out = out.replace("</head>", f"{head}{HIDE_STYLE}</head>", 1)
+    wrapped = f'<div id="pp-prerender">{body}</div>'
+    return re.sub(r'(<div id="root"[^>]*>)', lambda m: m.group(1) + wrapped, out, count=1)
 
 
 async def render(path: str, host: str) -> Optional[Tuple[str, int]]:
