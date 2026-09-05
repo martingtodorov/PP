@@ -83,8 +83,17 @@ def test_live_product_title_and_404s():
     assert '"priceValidUntil"' in html
 
 
+def child_sitemaps() -> str:
+    """The parent /sitemap.xml is an index (Shopify shape) — glue the children together."""
+    index = requests.get(f"{API}/sitemap.xml", headers={"Host": "purepeptide.bg"}, timeout=60)
+    assert "<sitemapindex" in index.text
+    names = [u.rsplit("/", 1)[-1] for u in re.findall(r"<loc>([^<]+)</loc>", index.text)]
+    return "".join(requests.get(f"{API}/{n}", headers={"Host": "purepeptide.bg"}, timeout=60).text
+                   for n in names if "agentic" not in n)
+
+
 def test_sitemap_declares_product_images():
-    xml = requests.get(f"{API}/sitemap.xml", headers={"Host": "purepeptide.bg"}, timeout=60).text
+    xml = child_sitemaps()
     assert 'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"' in xml
     product = [u for u in re.findall(r"<url>.*?</url>", xml) if "/products/" in u]
     assert product and all("<image:loc>" in u for u in product[:5])
@@ -102,7 +111,7 @@ def test_html_is_stable_between_requests():
 
 
 def test_sitemap_lastmod_is_the_record_date():
-    xml = requests.get(f"{API}/sitemap.xml", headers={"Host": "purepeptide.bg"}, timeout=60).text
+    xml = child_sitemaps()
     days = set(re.findall(r"<lastmod>([\d-]+)</lastmod>", xml))
     assert days and len(days) > 1, "every url carrying today's date is a worthless lastmod signal"
 

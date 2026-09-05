@@ -3642,8 +3642,16 @@ def _day(value: Any) -> str:
     return ""
 
 
-@api.get("/sitemap.xml")
-async def sitemap(request: Request):
+SITEMAP_KINDS = ("products", "collections", "pages", "blogs")
+SITEMAP_CHUNK = 5000          # Shopify splits at 5 000 URLs per file; same limit here
+
+
+async def _sitemap_groups(request: Request):
+    """Every URL of the requested domain, grouped like Shopify's child sitemaps.
+
+    Returns (routes, active, listed, groups) where each entry is
+    (path per locale, priority, image srcs, lastmod).
+    """
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
     active = [l for l in LOCALES if (routes.get(l) or {}).get("enabled", True)]
@@ -3676,22 +3684,61 @@ async def sitemap(request: Request):
     doc_days = [d for d in (_day(x.get("updated_at")) for x in cols + prods + arts) if d]
     newest = max(doc_days) if doc_days else datetime.now(timezone.utc).date().isoformat()
 
-    entries: List[tuple] = []  # (path_per_locale dict, priority, image srcs, lastmod)
+    groups: Dict[str, List[tuple]] = {k: [] for k in SITEMAP_KINDS}
     for path in static_pages:
         paths = {loc: (page_path(path, loc) if path else path) for loc in active}
         slug = path.rsplit("/", 1)[-1]
-        entries.append((paths, "0.9" if path == "" else "0.7", [], page_days.get(slug) or newest))
+        target = "blogs" if path == "/pages/articles" else "pages"
+        groups[target].append((paths, "0.9" if path == "" else "0.7", [], page_days.get(slug) or newest))
     for c in cols:
-        entries.append(({loc: f"/collections/{handle_for(c, loc)}" for loc in active}, "0.8",
-                        [c.get("image")] if c.get("image") else [], _day(c.get("updated_at")) or newest))
+        groups["collections"].append(({loc: f"/collections/{handle_for(c, loc)}" for loc in active}, "0.8",
+                                      [c.get("image")] if c.get("image") else [],
+                                      _day(c.get("updated_at")) or newest))
     for p in prods:
         imgs = [i for i in (p.get("images") or ([p.get("image")] if p.get("image") else [])) if i]
-        entries.append(({loc: f"/products/{handle_for(p, loc)}" for loc in active}, "0.9", imgs[:10],
-                        _day(p.get("updated_at")) or newest))
+        groups["products"].append(({loc: f"/products/{handle_for(p, loc)}" for loc in active}, "0.9",
+                                   imgs[:10], _day(p.get("updated_at")) or newest))
     for a in arts:
-        entries.append(({loc: f"/articles/{handle_for(a, loc)}" for loc in active}, "0.6",
-                        [a.get("image")] if a.get("image") else [],
-                        _day(a.get("updated_at")) or _day(a.get("published_at")) or newest))
+        groups["blogs"].append(({loc: f"/articles/{handle_for(a, loc)}" for loc in active}, "0.6",
+                                [a.get("image")] if a.get("image") else [],
+                                _day(a.get("updated_at")) or _day(a.get("published_at")) or newest))
+    return routes, active, listed, groups
+
+
+def _host_origin(request: Request, routes: Dict[str, Any], listed: List[str]) -> str:
+    """The origin the sitemap itself is served from — a sitemap may only list its own host."""
+    return ((routes.get(listed[0]) or SITE_ORIGINS[listed[0]])["origin"]).rstrip("/")
+
+
+def _sitemap_pages(entries: List[tuple], listed: List[str]) -> int:
+    urls = max(len(entries) * max(len(listed), 1), 1)
+    return (urls + SITEMAP_CHUNK - 1) // SITEMAP_CHUNK
+
+
+@api.get("/sitemap.xml")
+async def sitemap_index(request: Request):
+    """Parent sitemap, same shape as the Shopify one: one child file per resource kind."""
+    routes, _active, listed, groups = await _sitemap_groups(request)
+    origin = _host_origin(request, routes, listed)
+    locs = [f"{origin}/sitemap_agentic_discovery.xml"]
+    for kind in SITEMAP_KINDS:
+        for page in range(1, _sitemap_pages(groups[kind], listed) + 1):
+            locs.append(f"{origin}/sitemap_{kind}_{page}.xml")
+    body = "".join(f"<sitemap><loc>{loc}</loc></sitemap>" for loc in locs)
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>'
+           '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+           + body + "</sitemapindex>")
+    return Response(content=xml, media_type="application/xml")
+
+
+@api.get("/sitemap_{kind}_{page:int}.xml")
+async def sitemap_child(kind: str, page: int, request: Request):
+    if kind not in SITEMAP_KINDS or page < 1:
+        raise HTTPException(404, "Sitemap не съществува")
+    routes, active, listed, groups = await _sitemap_groups(request)
+    entries = groups[kind]
+    if page > _sitemap_pages(entries, listed):
+        raise HTTPException(404, "Sitemap не съществува")
 
     def img_tags(loc: str, srcs: List[str]) -> str:
         """Google Images indexes product photos far more reliably when they are declared here."""
@@ -3700,14 +3747,9 @@ async def sitemap(request: Request):
             f"<image:image><image:loc>{html_lib.escape(src if src.startswith('http') else origin + src, quote=True)}"
             f"</image:loc></image:image>" for src in srcs)
 
-    parts = [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
-        'xmlns:xhtml="http://www.w3.org/1999/xhtml" '
-        'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">',
-    ]
     # lastmod is the real change date of the record — a rolling "today" told Google every URL had
     # changed on every request and devalued the signal
+    urls: List[str] = []
     for paths, prio, imgs, lastmod in entries:
         alternates = "".join(
             f'<xhtml:link rel="alternate" hreflang="{LOCALE_META[l]["hreflang"]}" href="{_loc_url(l, paths[l], routes)}"/>'
@@ -3716,13 +3758,18 @@ async def sitemap(request: Request):
         if "en" in paths:
             alternates += f'<xhtml:link rel="alternate" hreflang="x-default" href="{_loc_url("en", paths["en"], routes)}"/>'
         for loc in listed:
-            parts.append(
+            urls.append(
                 f"<url><loc>{_loc_url(loc, paths[loc], routes)}</loc><lastmod>{lastmod}</lastmod>"
                 f"<changefreq>weekly</changefreq><priority>{prio}</priority>"
                 f"{alternates}{img_tags(loc, imgs)}</url>"
             )
-    parts.append("</urlset>")
-    return Response(content="".join(parts), media_type="application/xml")
+    window = urls[(page - 1) * SITEMAP_CHUNK: page * SITEMAP_CHUNK]
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>'
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+           'xmlns:xhtml="http://www.w3.org/1999/xhtml" '
+           'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">'
+           + "".join(window) + "</urlset>")
+    return Response(content=xml, media_type="application/xml")
 
 
 @api.get("/sitemap_agentic_discovery.xml")
@@ -3734,15 +3781,27 @@ async def agentic_sitemap(request: Request):
     locale = _host_locales(request, routes, active)[0]
     cfg = routes.get(locale) or SITE_ORIGINS[locale]
     origin = f"{cfg['origin']}{cfg.get('prefix', '')}"
-    cols = await db.collections_cat.find({}, {"_id": 0, "handle": 1}).to_list(200)
-    prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0, "handle": 1}).to_list(500)
-    paths = ["/", f"/collections/{await catalog_handle()}", "/pages/html-sitemap", "/pages/articles",
-             "/pages/chemical-analysis", "/pages/faq", "/pages/contact-1", "/agents.md", "/llms.txt"]
-    paths += [f"/collections/{c['handle']}" for c in cols]
-    paths += [f"/products/{p['handle']}" for p in prods]
+    cols = await db.collections_cat.find({}, {"_id": 0, "handle": 1, "translations": 1}).to_list(200)
+    prods = await db.products.find({"active": {"$ne": False}},
+                                   {"_id": 0, "handle": 1, "translations": 1}).to_list(500)
+
+    def live(doc):    # the handle published for this domain — a rotated one 404s
+        return ((doc.get("translations") or {}).get(locale) or {}).get("handle") or doc["handle"]
+
+    async def live_page(slug: str) -> str:
+        d = await db.pages.find_one({"slug": slug, "locale": locale}, {"_id": 0, "pub_slug": 1}) \
+            or await db.pages.find_one({"slug": slug, "locale": DEFAULT_LOCALE}, {"_id": 0, "pub_slug": 1})
+        return (d or {}).get("pub_slug") or slug
+
+    paths = ["/", f"/collections/{await catalog_handle(locale)}", "/pages/html-sitemap", "/pages/articles"]
+    paths += [f"/pages/{await live_page(s)}" for s in ("chemical-analysis", "faq", "contact-1")]
+    paths += [f"/collections/{live(c)}" for c in cols]
+    paths += [f"/products/{live(p)}" for p in prods]
     today = datetime.now(timezone.utc).date().isoformat()
+    # agents.md / llms.txt live at the domain root, never under a locale prefix
+    locs = [f"{cfg['origin']}{p}" for p in ("/agents.md", "/llms.txt")] + [f"{origin}{p}" for p in paths]
     body = "".join(
-        f"<url><loc>{origin}{p}</loc><lastmod>{today}</lastmod></url>" for p in dict.fromkeys(paths)
+        f"<url><loc>{loc}</loc><lastmod>{today}</lastmod></url>" for loc in dict.fromkeys(locs)
     )
     xml = ('<?xml version="1.0" encoding="UTF-8"?>'
            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + body + "</urlset>")
