@@ -9,6 +9,47 @@
     - import_tasks: ../tasks/infra_defaults.yml
 
   tasks:
+    # Every Cloudflare zone needs its own Origin certificate (one cert cannot cover another zone).
+    # The four per-zone certs were uploaded by hand, but nothing referenced them, so all five
+    # domains rendered into a single 443 block behind origin.pem — which only covers
+    # *.purepeptide-labs.bg. It survived only because Cloudflare runs in "Full", not "Full (strict)".
+    - name: Look for a per-zone certificate
+      stat: { path: "{{ ssl_cert_path | dirname }}/{{ item }}.pem" }
+      register: zone_pem
+      loop: "{{ site_domains }}"
+      changed_when: false
+      tags: [config]
+
+    - name: Look for a per-zone key
+      stat: { path: "{{ ssl_cert_path | dirname }}/{{ item }}.key" }
+      register: zone_key
+      loop: "{{ site_domains }}"
+      changed_when: false
+      tags: [config]
+
+    - name: A zone with its own certificate uses it; the rest keep the shared one
+      set_fact:
+        pp_zone_certs: >-
+          {{ (pp_zone_certs | default({}, true)) | combine({
+               item.0.item: {'cert': (ssl_cert_path | dirname) ~ '/' ~ item.0.item ~ '.pem',
+                             'key':  (ssl_cert_path | dirname) ~ '/' ~ item.0.item ~ '.key'} }) }}
+      when: item.0.stat.exists and item.1.stat.exists
+      loop: "{{ zone_pem.results | zip(zone_key.results) | list }}"
+      loop_control: { label: "{{ item.0.item }}" }
+      tags: [config]
+
+    - name: Certificate per domain (group_vars wins over what was found on disk)
+      set_fact:
+        site_tls_certs: "{{ (pp_zone_certs | default({}, true)) | combine(site_tls_certs | default({}, true)) }}"
+      tags: [config]
+
+    - name: Show which certificate each domain will use
+      debug:
+        msg: >-
+          {{ site_domains | zip(site_domains | map('extract', site_tls_certs)
+             | map('default', {'cert': ssl_cert_path}, true) | map(attribute='cert') | list) | list }}
+      tags: [config]
+
     - name: Existing Cloudflare Origin certificates must be in place (never generated here)
       stat: { path: "{{ item }}" }
       register: certs

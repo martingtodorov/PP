@@ -28,11 +28,17 @@ map "$pp_shared_host:$pp_reserved" $pp_needs_en {
     "1:0"     1;
 }
 
+# www.* is a separate hostname for Google — it must 301 to the apex, never serve a second copy
+map $host $pp_apex {
+    default                 $host;
+    "~*^www\.(?<apex>.+)$"  $apex;
+}
+
 server {
     listen 80;
     listen [::]:80;
-    server_name {{ site_domains | join(' ') }};
-    return 301 https://$host$request_uri;
+    server_name {{ site_domains | join(' ') }} www.{{ site_domains | join(' www.') }};
+    return 301 https://$pp_apex$request_uri;
 }
 
 {#
@@ -238,6 +244,31 @@ server {
     ssl_certificate     {{ pair.split('|')[0] }};
     ssl_certificate_key {{ pair.split('|')[1] }};
 {{ site_body() }}
+}
+
+# www over TLS: same certificate (the Origin cert covers *.zone), redirect only — no second copy
+server {
+{% if nginx_http2_directive == 'listen' %}
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+{% else %}
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+{% endif %}
+    server_name www.{{ domains | join(' www.') }};
+
+    ssl_certificate     {{ pair.split('|')[0] }};
+    ssl_certificate_key {{ pair.split('|')[1] }};
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    # single hop: on the shared domain the final URL already carries the /en prefix
+    location / {
+        if ($pp_needs_en) {
+            return 301 https://$pp_apex/en$request_uri;
+        }
+        return 301 https://$pp_apex$request_uri;
+    }
 }
 {%- endfor -%}
 
