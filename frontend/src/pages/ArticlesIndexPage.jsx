@@ -17,7 +17,7 @@ export default function ArticlesIndexPage() {
   }, [locale]);
 
   useSeo({
-    title: `${t("articles")} | PurePeptide`,
+    title: `${t("articles")}`,
     description: t("articlesIndexDesc"),
     locale,
     path: "/pages/articles",

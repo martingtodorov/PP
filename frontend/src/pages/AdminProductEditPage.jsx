@@ -215,6 +215,12 @@ export default function AdminProductEditPage() {
               <>
                 <Field label="Заглавие" value={p.title} onChange={(v) => set({ title: v })} testId="field-title" />
                 <Field label="Handle (URL)" value={p.handle} onChange={(v) => set({ handle: v })} mono testId="field-handle" />
+                {(p.translations?.bg || {}).handle && p.translations.bg.handle !== p.handle && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2" data-testid="rotated-handle-note">
+                    Публикуваният български URL е <span className="font-mono">/products/{p.translations.bg.handle}</span> —
+                    handle-ът по-горе е оригиналът и вече не се отваря. Ротацията се управлява в „Изтеглени линкове“.
+                  </p>
+                )}
                 <Field label="Подзаглавие" value={p.subtitle} onChange={(v) => set({ subtitle: v })} testId="field-subtitle" />
                 <TextArea label="Описание (HTML)" value={p.description} onChange={(v) => set({ description: v })} testId="field-description" />
               </>

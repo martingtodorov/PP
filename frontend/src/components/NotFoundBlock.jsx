@@ -1,34 +1,34 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Loader2 } from "lucide-react";
-import { api } from "../lib/api";
-import { link, setLinks } from "../lib/links";
 import { useLocaleCtx } from "../i18n/LocaleContext";
+import { Link } from "react-router-dom";
+import { link } from "../lib/links";
 
-/* A removed or rotated URL sends the visitor straight to "all peptides" instead of a dead end.
-   The catalogue path is re-read from /api/links so a rotated handle can never redirect onto itself. */
+/* A removed or rotated URL is a dead end on purpose: the server answers 404 and the page stays on
+   that URL. No client-side hop to the catalogue — that would turn every retired handle into a
+   soft 200 for crawlers that execute JavaScript. */
 export const NotFoundBlock = () => {
-  const { lp, t, locale } = useLocaleCtx();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    let cancelled = false;
-    const go = (path) => {
-      if (cancelled) return;
-      const target = lp(path);
-      navigate(target === window.location.pathname ? lp("/") : target, { replace: true });
-    };
-    api.get(`/links?locale=${locale}`)
-      .then(({ data }) => { setLinks(data); go(data.catalog || link("catalog")); })
-      .catch(() => go("/"));
-    return () => { cancelled = true; };
-  }, [locale]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const { lp, t } = useLocaleCtx();
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-32 text-center" data-testid="not-found-block">
-      <Loader2 className="h-8 w-8 text-coral-600 mx-auto animate-spin" />
-      <h1 className="text-2xl font-bold text-slate-900 tracking-tight mt-6">{t("notFoundTitle")}</h1>
+      <p className="text-sm font-semibold tracking-[0.2em] text-coral-600">404</p>
+      <h1 className="text-2xl font-bold text-slate-900 tracking-tight mt-4">{t("notFoundTitle")}</h1>
       <p className="text-slate-600 mt-2">{t("notFoundText")}</p>
+      <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <Link
+          to={lp(link("catalog"))}
+          data-testid="not-found-catalog-link"
+          className="inline-flex items-center rounded-md bg-coral-600 px-5 py-3 text-white font-medium shadow-sm transition-transform duration-200 hover:-translate-y-0.5"
+        >
+          {t("allPeptides")}
+        </Link>
+        <Link
+          to={lp("/")}
+          data-testid="not-found-home-link"
+          className="inline-flex items-center rounded-md border border-slate-200 px-5 py-3 text-slate-700 font-medium transition-colors duration-200 hover:bg-slate-50"
+        >
+          {t("home")}
+        </Link>
+      </div>
     </div>
   );
 };

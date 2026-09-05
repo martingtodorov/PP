@@ -29,7 +29,7 @@ const STATUS_KEY = {
 
 export default function AccountPage() {
   const { t, locale } = useLocaleCtx();
-  useSeo({ title: `${t("accountTitle")} | PurePeptide`, description: t("accountTitle"), path: "/account", robots: "noindex,nofollow" });
+  useSeo({ title: `${t("accountTitle")}`, description: t("accountTitle"), path: "/account", robots: "noindex,nofollow" });
 
   const { user, login, logout } = useAuth();
   const [orders, setOrders] = useState([]);

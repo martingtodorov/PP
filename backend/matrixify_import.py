@@ -409,9 +409,10 @@ def _page_upsert(slug: str, title: str, html: str, seo: Dict[str, str],
 def import_pages() -> None:
     """Every page keeps its Shopify handle as the slug — that is what the storefront links to.
 
-    PAGE_MAP handles are additionally published under the app's own slug (an alias carrying
-    canonical_slug, so sitemaps skip it) to keep older internal links alive.
+    The old PAGE_MAP aliases are NOT published any more: they answered 200 in every locale with
+    Bulgarian copy and duplicated the real page (/en/pages/about vs /en/pages/about-1).
     """
+    db.pages.delete_many({"canonical_slug": {"$nin": [None, ""]}})
     for handle, group in group_by(sheet("Pages"), "Handle").items():
         handle = str(handle or "").strip()
         if not handle or handle in SKIP_PAGE_HANDLES or handle.startswith("html-sitemap"):
@@ -425,10 +426,7 @@ def import_pages() -> None:
             continue
         seo = seo_pair(top, title, body)
         _page_upsert(handle, title, html, seo)
-        alias = PAGE_MAP.get(handle)
-        if alias and alias != handle:
-            _page_upsert(alias, title, html, seo, canonical_slug=handle)
-        log.info("page imported: %s%s", handle, f" (+ alias {alias})" if alias else "")
+        log.info("page imported: %s", handle)
 
 
 def import_articles() -> None:

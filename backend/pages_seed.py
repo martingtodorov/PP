@@ -18,6 +18,11 @@ PAGE_SLUGS = [
     "delivery-and-payment",
 ]
 
+# Imported Shopify slug aliases that used to duplicate the real pages (Bulgarian copy on every
+# locale) — they are removed for good, the canonical slug above is the only URL.
+LEGACY_PAGE_ALIASES = ["what-are-peptides", "contacts", "partners", "about",
+                       "terms-of-service", "shipping-policy"]
+
 PAGE_LABELS = {
     "какво-са-пептиди": "Какво са пептидите",
     "faq": "Често задавани въпроси (FAQ)",

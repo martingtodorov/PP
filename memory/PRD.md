@@ -1213,3 +1213,16 @@ preview данни (23 vs 21 продукта, стари handles преди р�
 - **За продукция** (след деплой, по SSH на бекенд сървъра):
   `cd /opt/purepeptide/app && ./venv/bin/python backend/tools/strip_company_details.py --dry`
   и после без `--dry`. Скриптът е идемпотентен.
+
+## 2026-06-06 — състояние (детайлите са в CHANGELOG.md, „осма част“)
+- Заглавията са със суфикс „ - PurePeptide“ навсякъде (сървър + браузър, синхронно).
+- Един URL на ротиран продукт/колекция/страница: всеки предишен handle е твърд 404 (решение на
+  собственика), ротацията никога не преизползва комбинация (`rotation_log`).
+- Дублиращите Shopify alias страници са изтрити (`about`, `contacts`, `what-are-peptides`,
+  `terms-of-service`, `shipping-policy`, `partners`).
+- Продуктовите структурирани данни са пълни за Google merchant listing (снимка, In stock,
+  return policy с `returnShippingFeesAmount`, shipping, `priceValidUntil`); sitemap-ът е и image sitemap.
+- HTML-ът е стабилен между деплойи (без „днес+365“ дати), `lastmod` е реалната дата на записа.
+- P1 назад: собственикът ще пусне AI превода на колекция „Всички пептиди“ (ro/de са счупени: „Toate“,
+  „Alle“) сам на продукшън.
+- P2: Cloudflare origin сертификати; проверка на Apple/iOS autofill в чекаута.

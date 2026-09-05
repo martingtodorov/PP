@@ -40,7 +40,7 @@ from i18n import (
     normalize_locale, localize_doc, localize_list, ai_translate, ai_translate_chunked, ai_translate_page,
     ai_rewrite_html,
 )
-from pages_seed import PAGE_SLUGS, PAGE_LABELS, DEFAULT_PAGES
+from pages_seed import PAGE_SLUGS, PAGE_LABELS, DEFAULT_PAGES, LEGACY_PAGE_ALIASES
 import storage
 import email_service
 from starlette.concurrency import run_in_threadpool
@@ -373,6 +373,12 @@ async def seed_catalog():
 
 async def seed_pages():
     """Insert the default Bulgarian/English static page content once."""
+    # the imported Shopify slug aliases answered 200 in every locale with Bulgarian copy and
+    # duplicated the real page — they are gone for good (owner's decision: hard 404)
+    dropped = await db.pages.delete_many({"$or": [{"canonical_slug": {"$nin": [None, ""]}},
+                                                  {"slug": {"$in": LEGACY_PAGE_ALIASES}}]})
+    if dropped.deleted_count:
+        log.info("removed %s duplicate page aliases", dropped.deleted_count)
     for slug, per_locale in DEFAULT_PAGES.items():
         for locale, content in per_locale.items():
             existing = await db.pages.find_one({"slug": slug, "locale": locale})
@@ -398,6 +404,25 @@ async def ensure_indexes():
     await db.orders.create_index("id", unique=True)
     await db.orders.create_index("order_number", unique=True)
     await db.pages.create_index([("slug", 1), ("locale", 1)], unique=True)
+    await db.rotation_log.create_index("handle", unique=True)
+
+
+async def backfill_rotation_log():
+    """Every handle a rotation has ever produced is remembered, so a catalog re-import (which wipes
+    `rotations`) cannot hand the same combination out twice."""
+    ops = []
+    for name, kind in (("products", "products"), ("collections_cat", "collections"),
+                       ("articles", "articles"), ("pages", "pages")):
+        async for d in db[name].find({"rotations.0": {"$exists": True}}, {"_id": 0, "rotations": 1}):
+            for r in d.get("rotations") or []:
+                for handle in (r.get("to"), r.get("from")):
+                    if handle:
+                        ops.append((handle, kind, r.get("locale") or DEFAULT_LOCALE))
+    for handle, kind, loc in ops:
+        await db.rotation_log.update_one(
+            {"handle": handle},
+            {"$setOnInsert": {"handle": handle, "kind": kind, "locale": loc, "at": now_utc()}},
+            upsert=True)
 
 
 @app.on_event("startup")
@@ -407,6 +432,7 @@ async def on_startup():
     await seed_catalog()
     await backfill_settings()
     await seed_pages()
+    await backfill_rotation_log()
     try:
         storage.init_storage()
         log.info("Object storage initialized")
@@ -494,9 +520,24 @@ def _apply_manual_order(prods: List[Dict[str, Any]], order: Optional[List[str]])
     return sorted(prods, key=lambda p: (index.get(p.get("handle"), len(index)), p.get("title", "")))
 
 
+def published_handle(doc: Dict[str, Any], loc: str) -> str:
+    """The handle this document is published under right now for that locale."""
+    return ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc.get("handle") or ""
+
+
 def retired_handle(doc: Dict[str, Any], loc: str, requested: str) -> bool:
-    """A handle that was deliberately rotated away must 404 for that locale (delisted URL)."""
-    return any(r.get("locale") == loc and r.get("from") == requested for r in (doc.get("rotations") or []))
+    """A handle that was rotated away must 404 for that locale (delisted URL).
+
+    Once a document has been rotated in a locale it serves exactly ONE url there: the published
+    handle. Every earlier code in the chain 404s — otherwise an intermediate rotation
+    (…-lrp next to the live …-brk) stays online as a duplicate of the same product.
+    """
+    rotations = doc.get("rotations") or []
+    if any(r.get("locale") == loc and r.get("from") == requested for r in rotations):
+        return True
+    if any(r.get("locale") == loc for r in rotations):
+        return requested != published_handle(doc, loc)
+    return False
 
 
 async def catalog_handle(loc: str = DEFAULT_LOCALE) -> str:
@@ -704,6 +745,38 @@ def rotation_code(taken: set) -> str:
             return code
 
 
+async def _handle_ever_used(kind: str, handle: str) -> bool:
+    """True when this exact URL has ever been published anywhere — a rotation must never reuse one."""
+    if await db.rotation_log.find_one({"handle": handle}, {"_id": 1}):
+        return True
+    if kind == "pages":
+        return bool(await db.pages.find_one(
+            {"$or": [{"slug": handle}, {"pub_slug": handle}, {"rotations.to": handle},
+                     {"rotations.from": handle}]}, {"_id": 1}))
+    for name in ("products", "collections_cat", "articles"):
+        clauses = [{"handle": handle}, {"rotations.to": handle}, {"rotations.from": handle}]
+        clauses += [{f"translations.{loc}.handle": handle} for loc in LOCALES]
+        if await db[name].find_one({"$or": clauses}, {"_id": 1}):
+            return True
+    return False
+
+
+async def next_rotation_handle(kind: str, base: str, doc: Dict[str, Any], loc: str) -> str:
+    """A fresh 3-letter code that was never used for ANY url of the shop, logged so a later
+    re-import (which wipes `rotations`) cannot hand out the same combination again."""
+    taken = {r.get("code") for r in (doc.get("rotations") or [])}
+    for _ in range(200):
+        candidate = f"{base}-{rotation_code(taken)}"
+        taken.add(candidate.rsplit("-", 1)[-1])
+        if not await _handle_ever_used(kind, candidate):
+            await db.rotation_log.update_one(
+                {"handle": candidate},
+                {"$setOnInsert": {"handle": candidate, "kind": kind, "locale": loc, "at": now_utc()}},
+                upsert=True)
+            return candidate
+    raise HTTPException(500, f"Няма свободна комбинация за „{base}“")
+
+
 async def rotate_page(link: Dict[str, Any], handle: str, loc: str, user_email: str) -> Dict[str, Any]:
     """Rotate a static page URL for one locale: /pages/faq -> /pages/faq-xyz.
 
@@ -718,7 +791,7 @@ async def rotate_page(link: Dict[str, Any], handle: str, loc: str, user_email: s
 
     rotations = list(doc.get("rotations") or [])
     base = rotations[0]["from"] if rotations else (doc.get("pub_slug") or doc["slug"])
-    new_slug = f"{base}-{rotation_code({r.get('code') for r in rotations})}"
+    new_slug = await next_rotation_handle("pages", base, doc, loc)
 
     rewritten = False
     html = doc.get("html") or ""
@@ -751,7 +824,7 @@ async def rotate_content(kind: str, handle: str, loc: str, user_email: str, to: 
     entry = dict(tr.get(loc) or {})
     history = [r for r in (doc.get("rotations") or []) if r.get("locale") == loc]
     base = history[0]["from"] if history else (entry.get("handle") or doc["handle"])
-    new_handle = to.strip() or f"{base}-{rotation_code({r.get('code') for r in (doc.get('rotations') or [])})}"
+    new_handle = to.strip() or await next_rotation_handle(kind, base, doc, loc)
     if new_handle == handle:
         raise HTTPException(400, "Новият handle е същият като стария")
     entry["handle"] = new_handle
@@ -767,8 +840,12 @@ async def rotate_content(kind: str, handle: str, loc: str, user_email: str, to: 
             log.warning("rotation rewrite failed for %s: %s", handle, exc)
     tr[loc] = entry
 
-    rotations = list(doc.get("rotations") or [])
-    rotations.append({"locale": loc, "from": handle, "to": new_handle, "code": new_handle.split("-")[-1],
+    # the entry retires the handle that WAS published (not the delisted url the board still shows),
+    # so a second rotation cannot leave the previous code online
+    previous = published_handle(doc, loc) or handle
+    rotations = [r for r in (doc.get("rotations") or [])
+                 if not (r.get("locale") == loc and r.get("from") == previous)]
+    rotations.append({"locale": loc, "from": previous, "to": new_handle, "code": new_handle.split("-")[-1],
                       "rewritten": rewritten, "at": now_utc(), "by": user_email})
     await coll.update_one({"handle": doc["handle"]}, {"$set": {"translations": tr, "rotations": rotations,
                                                               "updated_at": now_utc()}})
@@ -2485,6 +2562,8 @@ def _has_content(doc: Optional[Dict[str, Any]]) -> bool:
 @api.get("/pages/{slug}")
 async def public_page(slug: str, locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
+    if slug in LEGACY_PAGE_ALIASES:          # imported Shopify duplicate — removed for good
+        raise HTTPException(404, "Страницата не е намерена")
     # a rotated page is published under its new slug only; the old one must 404 for that locale
     moved = await db.pages.find_one({"locale": loc, "pub_slug": slug}, {"_id": 0})
     if moved:
@@ -2497,7 +2576,7 @@ async def public_page(slug: str, locale: str = Query(DEFAULT_LOCALE)):
     chain = [loc] + [l for l in ("en", "bg") if l != loc]
     for candidate in chain:
         doc = await db.pages.find_one({"slug": slug, "locale": candidate}, {"_id": 0})
-        if _has_content(doc):
+        if _has_content(doc) and not doc.get("canonical_slug"):
             if candidate == loc and doc.get("pub_slug"):
                 raise HTTPException(404, "Страницата не е намерена")
             out = _page_out(doc)
@@ -3554,6 +3633,15 @@ def _host_locales(request: Request, routes: Dict[str, Any], active: List[str]) -
     return own or active
 
 
+def _day(value: Any) -> str:
+    """YYYY-MM-DD of a stored timestamp (datetime or ISO string), "" when there is none."""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, str) and len(value) >= 10:
+        return value[:10]
+    return ""
+
+
 @api.get("/sitemap.xml")
 async def sitemap(request: Request):
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
@@ -3570,8 +3658,13 @@ async def sitemap(request: Request):
     ]
     # rotated pages are published per locale under a new slug
     rotated_pages: Dict[str, Dict[str, str]] = {}
-    async for d in db.pages.find({"pub_slug": {"$nin": [None, ""]}}, {"_id": 0, "slug": 1, "locale": 1, "pub_slug": 1}):
-        rotated_pages.setdefault(d["locale"], {})[d["slug"]] = d["pub_slug"]
+    page_days: Dict[str, str] = {}
+    async for d in db.pages.find({}, {"_id": 0, "slug": 1, "locale": 1, "pub_slug": 1, "updated_at": 1}):
+        if d.get("pub_slug"):
+            rotated_pages.setdefault(d["locale"], {})[d["slug"]] = d["pub_slug"]
+        day = _day(d.get("updated_at"))
+        if day and day > page_days.get(d["slug"], ""):
+            page_days[d["slug"]] = day
 
     def page_path(path: str, loc: str) -> str:
         slug = path.rsplit("/", 1)[-1]
@@ -3580,24 +3673,42 @@ async def sitemap(request: Request):
     def handle_for(doc, loc):
         return ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc.get("handle")
 
-    entries: List[tuple] = []  # (path_per_locale dict, priority)
+    doc_days = [d for d in (_day(x.get("updated_at")) for x in cols + prods + arts) if d]
+    newest = max(doc_days) if doc_days else datetime.now(timezone.utc).date().isoformat()
+
+    entries: List[tuple] = []  # (path_per_locale dict, priority, image srcs, lastmod)
     for path in static_pages:
         paths = {loc: (page_path(path, loc) if path else path) for loc in active}
-        entries.append((paths, "0.9" if path == "" else "0.7"))
+        slug = path.rsplit("/", 1)[-1]
+        entries.append((paths, "0.9" if path == "" else "0.7", [], page_days.get(slug) or newest))
     for c in cols:
-        entries.append(({loc: f"/collections/{handle_for(c, loc)}" for loc in active}, "0.8"))
+        entries.append(({loc: f"/collections/{handle_for(c, loc)}" for loc in active}, "0.8",
+                        [c.get("image")] if c.get("image") else [], _day(c.get("updated_at")) or newest))
     for p in prods:
-        entries.append(({loc: f"/products/{handle_for(p, loc)}" for loc in active}, "0.9"))
+        imgs = [i for i in (p.get("images") or ([p.get("image")] if p.get("image") else [])) if i]
+        entries.append(({loc: f"/products/{handle_for(p, loc)}" for loc in active}, "0.9", imgs[:10],
+                        _day(p.get("updated_at")) or newest))
     for a in arts:
-        entries.append(({loc: f"/articles/{handle_for(a, loc)}" for loc in active}, "0.6"))
+        entries.append(({loc: f"/articles/{handle_for(a, loc)}" for loc in active}, "0.6",
+                        [a.get("image")] if a.get("image") else [],
+                        _day(a.get("updated_at")) or _day(a.get("published_at")) or newest))
 
-    today = datetime.now(timezone.utc).date().isoformat()
+    def img_tags(loc: str, srcs: List[str]) -> str:
+        """Google Images indexes product photos far more reliably when they are declared here."""
+        origin = ((routes.get(loc) or SITE_ORIGINS[loc])["origin"]).rstrip("/")
+        return "".join(
+            f"<image:image><image:loc>{html_lib.escape(src if src.startswith('http') else origin + src, quote=True)}"
+            f"</image:loc></image:image>" for src in srcs)
+
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
-        'xmlns:xhtml="http://www.w3.org/1999/xhtml">',
+        'xmlns:xhtml="http://www.w3.org/1999/xhtml" '
+        'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">',
     ]
-    for paths, prio in entries:
+    # lastmod is the real change date of the record — a rolling "today" told Google every URL had
+    # changed on every request and devalued the signal
+    for paths, prio, imgs, lastmod in entries:
         alternates = "".join(
             f'<xhtml:link rel="alternate" hreflang="{LOCALE_META[l]["hreflang"]}" href="{_loc_url(l, paths[l], routes)}"/>'
             for l in active
@@ -3606,8 +3717,9 @@ async def sitemap(request: Request):
             alternates += f'<xhtml:link rel="alternate" hreflang="x-default" href="{_loc_url("en", paths["en"], routes)}"/>'
         for loc in listed:
             parts.append(
-                f"<url><loc>{_loc_url(loc, paths[loc], routes)}</loc><lastmod>{today}</lastmod>"
-                f"<changefreq>weekly</changefreq><priority>{prio}</priority>{alternates}</url>"
+                f"<url><loc>{_loc_url(loc, paths[loc], routes)}</loc><lastmod>{lastmod}</lastmod>"
+                f"<changefreq>weekly</changefreq><priority>{prio}</priority>"
+                f"{alternates}{img_tags(loc, imgs)}</url>"
             )
     parts.append("</urlset>")
     return Response(content="".join(parts), media_type="application/xml")

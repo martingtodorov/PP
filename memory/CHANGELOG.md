@@ -443,3 +443,43 @@
   `i18n.check_rewrite()` (визуален текст ≥90% от оригинала и идентични заглавия) — при провал се
   запазва оригиналният текст, а URL-ът пак се ротира.
 - Тестове: `tests/test_sitemap_liveness_and_rotation.py` (7). Отчет: iteration_51.json, 0 проблема.
+
+## 2026-06-06 (осма част) — бранд суфикс, край на дублиращите URL адреси, rich results
+- **Суфикс „ - PurePeptide“ във всяко заглавие** (Shopify паритет): `prerender.brand_title()` се
+  прилага централно в `_head()`, а `seo.js.brandTitle()` — в `useSeo`, така че ботовете и браузърът
+  виждат едно и също `<title>`. Ако заглавието вече съдържа бранда (началната страница, SEO
+  заглавията на колекциите), не се добавя нищо. Всички `| PurePeptide` fallback-ове в
+  `frontend/src/pages/*.jsx` и в `prerender.py` са премахнати.
+- **Дублиран продукт (`-lrp` и `-brk` едновременно 200)**: `retired_handle()` / `prerender._retired()`
+  вече обслужват САМО текущо публикувания handle за локала — всеки предишен код от ротационната
+  верига връща твърд 404 (решение на собственика: без 301). `rotate_content()` записва в `rotations`
+  предишния ПУБЛИКУВАН handle (преди това пишеше оригиналния делистнат URL, затова междинните
+  кодове оставаха живи) и дедупликира записите.
+- **Ротацията никога не преизползва комбинация**: нова `next_rotation_handle()` + колекция
+  `rotation_log` (уникален индекс) — кандидатът се проверява срещу лога, срещу handle/pub_slug/
+  rotations на всички колекции и всички локали; `backfill_rotation_log()` при старт вписва цялата
+  стара история, така че повторен импорт (който изтрива `rotations`) не може да върне стар код.
+- **`NotFoundBlock` вече не пренасочва** към каталога — остава на URL-а с 404 съдържание и два
+  бутона; ротираните адреси получават и `robots: noindex, follow` (продукт/колекция/статия).
+  Иначе Googlebot (който изпълнява JS) виждаше soft-200 на ротиран адрес.
+- **Изтрити дублиращи alias страници** (`about`, `contacts`, `what-are-peptides`,
+  `terms-of-service`, `shipping-policy`, `partners`): връщаха 200 на ВСЕКИ език с български текст
+  (`/en/pages/about`). `pages_seed.LEGACY_PAGE_ALIASES`, изтриване при старт (`seed_pages`) и при
+  импорт, твърд 404 в `/api/pages/{slug}` и в prerender-а. `matrixify_import.import_pages()` вече
+  не публикува alias-и.
+- **Rich results (снимка + „In stock“)**: липсваше `returnShippingFeesAmount`, който Google изисква
+  при `returnFees: ReturnShippingFees` — без него цялата return policy (и с нея merchant listing-ът)
+  се изхвърля. Добавени са и `priceValidUntil`, `productID`, снимка на всяка оферта — синхронно в
+  `prerender.py` и `schema.js`. `sitemap.xml` вече е и **image sitemap**
+  (`xmlns:image`, до 10 снимки на продукт).
+- **Стабилен HTML**: `priceValidUntil` е „31 декември на следващата година“, а не „днес + 365“, така
+  че страницата не се променя при всеки деплой; `<lastmod>` в sitemap-а е реалната дата на записа
+  (`updated_at`), а не днешната.
+- **Админ показва живия handle**: списъкът с продукти и редакторът показват публикувания български
+  handle и бележка „ротиран · оригинал: …“ (преди се виждаше само оригиналът и не съвпадаше с
+  адреса в магазина).
+- Тестове: `tests/test_brand_titles_and_rotation_404.py` (35), обновен `tests/test_pages.py`
+  (остарели очаквания от iteration_8), `tests/test_iter52_live_seo.py`. Отчет: iteration_52.json.
+- Известни, НЕсвързани провали: `test_dynamic_links.py::test_storefront_has_no_hardcoded_page_paths`
+  и `test_iteration45_prerender.py::test_private_and_unknown_routes_404` (частните маршрути
+  умишлено връщат 200 с шела).
