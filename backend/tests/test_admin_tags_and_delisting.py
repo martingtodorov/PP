@@ -40,7 +40,8 @@ def test_the_owner_can_tag_a_product_and_the_customer_never_sees_it():
         assert "admin_tags" not in public
         page = requests.get(f"{API}/seo/prerender", params={"path": f"/products/{handle}"},
                             headers={"Host": "purepeptide.bg"}, timeout=30)
-        assert "топ маржин" not in page.text
+        # tags are SEO metadata now: allowed in <head>, never a word of them on the page
+        assert "топ маржин" not in page.text.split("</head>", 1)[1]
     finally:
         payload["admin_tags"] = original
         s.put(f"{API}/admin/products/{prod['id']}", json=payload, timeout=30)
