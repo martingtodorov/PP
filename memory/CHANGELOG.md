@@ -571,3 +571,20 @@
   показва кои зони имат собствен сертификат, кои падат към общия и къде има `.pem` без `.key`.
 - Рендерът е проверен: 5 apex + 5 www 443 блока, всеки със сертификата на своята зона
   (`purepeptide-labs.bg` остава на `origin.pem`), а :80 изброява всички apex + www.
+
+## 2026-06-06 (четиринадесета част) — „unfetchable“ sitemap-и: HEAD 405 + застоял CDN кеш
+- **Истинската причина за „Couldn't fetch“**: всеки `/api` маршрут беше само GET (FastAPI `APIRoute`
+  не добавя HEAD, за разлика от чистия Starlette `Route`), затова **HEAD връщаше 405** на
+  `sitemap.xml`, всички деца, `robots.txt`, `llms.txt` и `agents.md` — а валидаторите и част от
+  ботовете първо пращат HEAD. Всички те вече са `methods=["GET", "HEAD"]`.
+- Добавен кратък изричен TTL (`Cache-Control: public, max-age=300, s-maxage=300`) на sitemap-ите и
+  robots.txt — Cloudflare държеше стар отговор с `max-age=3600` (затова `robots.txt` на продукшън
+  още показваше `Sitemap: …/api/sitemap.xml` от по-стар билд, макмар origin-ът да е поправен).
+- Проверено: 24 файла × 4 домейна отдават 200, `application/xml`, валиден XML, и с Googlebot UA.
+  Размер на най-големия (`.eu` продукти): 306 KB / 192 URL-а — лимитите са 50 MB / 50 000 URL-а,
+  тоест няма проблем с размера.
+- Тестове: `test_sitemap_per_domain.py` +3 (HEAD за 9 адреса, TTL, лимити) — 26 теста в файла.
+- **Само собственикът може**: Cloudflare пренаписва `robots.txt` (блок „Cloudflare Managed content“
+  с `Content-Signal: ai-train=no` и `Disallow: /` за 9 AI бота), което противоречи на нашата
+  политика „всички AI ботове са допуснати“ → AI Crawl Control / Managed robots.txt да се изключи.
+  След деплой да се пусне purge на кеша за `/robots.txt` и `/sitemap*`.

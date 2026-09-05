@@ -3645,6 +3645,8 @@ def _host_locales(request: Request, routes: Dict[str, Any], active: List[str]) -
 
 
 SITEMAP_KINDS = ("products", "collections", "pages", "blogs")
+# a stale CDN copy of robots.txt/sitemap outlived a deploy by an hour and looked like a bug
+SEO_CACHE = {"Cache-Control": "public, max-age=300, s-maxage=300"}
 SITEMAP_CHUNK = 5000          # Shopify splits at 5 000 URLs per file; same limit here
 
 
@@ -3744,7 +3746,9 @@ def _q(path: str) -> str:
     return quote(path, safe="/-_.~") or "/"
 
 
-@api.get("/sitemap.xml")
+# HEAD must answer too: FastAPI routes are GET-only, so validators and crawlers that probe with
+# HEAD got a 405 on every sitemap ("couldn't fetch")
+@api.api_route("/sitemap.xml", methods=["GET", "HEAD"])
 async def sitemap_index(request: Request):
     """Parent sitemap, same shape as the Shopify one: one child file per resource kind."""
     routes, _active, listed, groups = await _sitemap_groups(request)
@@ -3757,10 +3761,10 @@ async def sitemap_index(request: Request):
     xml = ('<?xml version="1.0" encoding="UTF-8"?>'
            '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
            + body + "</sitemapindex>")
-    return Response(content=xml, media_type="application/xml")
+    return Response(content=xml, media_type="application/xml", headers=SEO_CACHE)
 
 
-@api.get("/sitemap_{kind}_{page:int}.xml")
+@api.api_route("/sitemap_{kind}_{page:int}.xml", methods=["GET", "HEAD"])
 async def sitemap_child(kind: str, page: int, request: Request):
     if kind not in SITEMAP_KINDS or page < 1:
         raise HTTPException(404, "Sitemap не съществува")
@@ -3805,10 +3809,10 @@ async def sitemap_child(kind: str, page: int, request: Request):
            'xmlns:xhtml="http://www.w3.org/1999/xhtml" '
            'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">'
            + "".join(window) + "</urlset>")
-    return Response(content=xml, media_type="application/xml")
+    return Response(content=xml, media_type="application/xml", headers=SEO_CACHE)
 
 
-@api.get("/sitemap_agentic_discovery.xml")
+@api.api_route("/sitemap_agentic_discovery.xml", methods=["GET", "HEAD"])
 async def agentic_sitemap(request: Request):
     """AI entry point, same as Shopify's: the agent guide, nothing else. The full URL inventory
     lives in the regular sitemap children, so there is nothing to duplicate here."""
@@ -3822,10 +3826,10 @@ async def agentic_sitemap(request: Request):
                    for p in ("/agents.md", "/llms.txt"))
     xml = ('<?xml version="1.0" encoding="UTF-8"?>'
            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + body + "</urlset>")
-    return Response(content=xml, media_type="application/xml")
+    return Response(content=xml, media_type="application/xml", headers=SEO_CACHE)
 
 
-@api.get("/agents.md", response_class=PlainTextResponse)
+@api.api_route("/agents.md", methods=["GET", "HEAD"], response_class=PlainTextResponse)
 async def agents_md():
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
@@ -3869,7 +3873,7 @@ async def agents_md():
     return "\n".join(lines)
 
 
-@api.get("/llms.txt", response_class=PlainTextResponse)
+@api.api_route("/llms.txt", methods=["GET", "HEAD"], response_class=PlainTextResponse)
 async def llms_txt():
     """llms.txt per llmstxt.org: one H1, a blockquote summary, then link sections (Markdown)."""
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
@@ -3917,7 +3921,7 @@ async def llms_txt():
     return PlainTextResponse("\n".join(lines), media_type="text/markdown; charset=utf-8")
 
 
-@api.get("/robots.txt", response_class=PlainTextResponse)
+@api.api_route("/robots.txt", methods=["GET", "HEAD"], response_class=PlainTextResponse)
 async def robots(request: Request):
     # ONE group for every crawler: separate per-bot groups replace the "*" group for that bot, so
     # the AI crawlers used to lose the /admin, /cart, /checkout and /account exclusions. The content
@@ -3943,7 +3947,7 @@ async def robots(request: Request):
     lines.append("")
     lines.append(f"# AI agent guide: {origin_bg}/agents.md")
     lines.append(f"# llms.txt: {origin_bg}/llms.txt")
-    return "\n".join(lines)
+    return PlainTextResponse("\n".join(lines), headers=SEO_CACHE)
 
 
 # ---------- Mount + CORS ----------
