@@ -77,6 +77,18 @@ export default function AdminDelistedLinksPage() {
     } catch (err) { toast.error(formatErr(err)); } finally { setRotating(""); }
   };
 
+  const healHandles = async () => {
+    if (!window.confirm("Да изравня ли handle-ите на всички продукти и колекции с живите URL адреси?")) return;
+    setRotating("heal");
+    try {
+      const { data } = await api.post("/admin/handles/heal");
+      toast.success(data.fixed || data.revived
+        ? `Изравнени ${data.fixed}, съживени ${data.revived} адреса`
+        : "Всичко вече е изравнено");
+      load();
+    } catch (err) { toast.error(formatErr(err)); } finally { setRotating(""); }
+  };
+
   const update = async (l, patch) => {
     try {
       await api.put(`/admin/delisted-links/${l.id}`, { ...l, ...patch });
@@ -158,6 +170,20 @@ export default function AdminDelistedLinksPage() {
           data-testid="delisted-bulk-btn"
         >
           <Plus className="h-4 w-4" /> Добави всички
+        </button>
+      </div>
+
+      <div className="flex items-start justify-between gap-4 mb-4 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+        <p className="text-xs text-slate-600 max-w-2xl">
+          <span className="font-semibold text-slate-800">Изравняване на handle-ите.</span>{" "}
+          След ротация страницата живее под ротирания handle. Ако някой запис е останал с остар
+          handle или живият му адрес още се води пенсиониран, това го оправя наведнъж — за всички
+          продукти и колекции.
+        </p>
+        <button onClick={healHandles} disabled={rotating === "heal"}
+          className="shrink-0 px-4 py-2 rounded-full text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:border-slate-500 disabled:opacity-60"
+          data-testid="heal-handles">
+          {rotating === "heal" ? "Изравнявам…" : "Изравни handle-ите"}
         </button>
       </div>
 
