@@ -30,7 +30,7 @@ from typing import Optional, List, Dict, Any
 import bcrypt
 import jwt
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, UploadFile, File, Form, Query
-from fastapi.responses import JSONResponse, PlainTextResponse, HTMLResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from motor.motor_asyncio import AsyncIOMotorClient
 from starlette.middleware.cors import CORSMiddleware
@@ -331,6 +331,14 @@ async def seed_catalog():
     seeded_version = (current or {}).get("value", {}).get("seed_version")
     stale = seeded_version != SEED_VERSION
 
+    live = await db.products.count_documents({})
+    if stale and live and os.environ.get("ALLOW_RESEED") != "1":
+        # a new SEED_VERSION used to wipe the catalog on deploy, which threw away the owner's
+        # product ordering (and anything else edited in the admin). Never touch a catalog that has
+        # content — an intentional rebuild needs ALLOW_RESEED=1.
+        log.warning("SEED_VERSION changed to %s but %d products are live — not re-seeding",
+                    SEED_VERSION, live)
+        stale = False
     if stale:
         await db.collections_cat.delete_many({})
         await db.products.delete_many({})
@@ -455,6 +463,7 @@ async def on_startup():
     await backfill_settings()
     await seed_pages()
     await backfill_rotation_log()
+    await restore_product_orders()
     try:
         storage.init_storage()
         log.info("Object storage initialized")
@@ -535,6 +544,42 @@ async def list_collections(locale: str = Query(DEFAULT_LOCALE)):
     docs = await db.collections_cat.find({"delisted": {"$ne": True}}, {"_id": 0}) \
         .sort("sort_order", 1).to_list(100)
     return {"collections": slim(localize_list(docs, loc), "product_order")}
+
+
+async def _save_product_order(col: Dict[str, Any], handles: List[str]) -> None:
+    """Write the manual order twice: on the collection and into `product_orders`.
+
+    `product_orders` is never touched by the seed or by the Matrixify re-import, both of which
+    replace whole documents in `collections_cat`. That is what used to lose the owner's ordering on
+    a deploy; `restore_product_orders()` puts it back at boot.
+    """
+    await db.collections_cat.update_one({"handle": col["handle"]},
+                                        {"$set": {"product_order": handles,
+                                                  "order_updated_at": now_utc()}})
+    await db.product_orders.update_one(
+        {"key": col["handle"]},
+        {"$set": {"key": col["handle"], "link_key": col.get("link_key") or "",
+                  "shopify_id": col.get("shopify_id") or "", "handles": handles,
+                  "updated_at": now_utc()}}, upsert=True)
+
+
+async def restore_product_orders() -> int:
+    """Put every saved ordering back on its collection — a re-seed or re-import wipes the field."""
+    restored = 0
+    async for saved in db.product_orders.find({}, {"_id": 0}):
+        query: Dict[str, Any] = {"handle": saved["key"]}
+        if saved.get("link_key"):
+            query = {"$or": [{"handle": saved["key"]}, {"link_key": saved["link_key"]}]}
+        col = await db.collections_cat.find_one(query, {"_id": 0, "handle": 1, "product_order": 1})
+        if not col or col.get("product_order"):
+            continue                    # still there, or reordered since — leave it alone
+        await db.collections_cat.update_one({"handle": col["handle"]},
+                                            {"$set": {"product_order": saved["handles"]}})
+        restored += 1
+    if restored:
+        log.info("Restored the manual product order of %d collections", restored)
+    return restored
+
 
 
 def _apply_manual_order(prods: List[Dict[str, Any]], order: Optional[List[str]]) -> List[Dict[str, Any]]:
@@ -1833,6 +1878,10 @@ async def _republish_handle(kind: str, doc: Dict[str, Any], typed: str, user_ema
     if typed and typed != live:
         await rotate_content(kind, live, loc, user_email, to=typed)
     final = typed or live
+    # the saved product ordering is keyed by the collection handle — move it with the rename
+    if kind == "collections" and final != doc.get("handle"):
+        await db.product_orders.update_one({"key": doc.get("handle")},
+                                           {"$set": {"key": final}})
     # invariant: whatever is published right now must never be listed as retired — otherwise the
     # owner types a handle he used before and still lands on a 404
     coll = db.products if kind == "products" else db.collections_cat
@@ -2173,12 +2222,10 @@ async def admin_collection_products(handle: str, user=Depends(require_admin)):
 @api.put("/admin/collections/{handle}/order")
 async def admin_set_collection_order(handle: str, payload: Dict[str, List[str]], user=Depends(require_admin)):
     handles = payload.get("handles") or []
-    res = await db.collections_cat.update_one(
-        {"handle": handle},
-        {"$set": {"product_order": handles, "order_updated_at": now_utc()}},
-    )
-    if res.matched_count == 0:
+    col = await db.collections_cat.find_one({"handle": handle}, {"_id": 0})
+    if not col:
         raise HTTPException(404, "Колекцията не е намерена")
+    await _save_product_order(col, handles)
     return {"ok": True, "count": len(handles)}
 
 
@@ -2201,10 +2248,7 @@ async def admin_order_by_sales(handle: str, user=Depends(require_admin)):
     prods = await db.products.find(q, {"_id": 0, "handle": 1, "title": 1}).to_list(500)
     ordered = sorted(prods, key=lambda p: (-sold.get(p["handle"], 0), p.get("title", "")))
     handles = [p["handle"] for p in ordered]
-    await db.collections_cat.update_one(
-        {"handle": handle},
-        {"$set": {"product_order": handles, "order_updated_at": now_utc()}},
-    )
+    await _save_product_order(col, handles)
     return {
         "ok": True,
         "handles": handles,
@@ -4319,11 +4363,32 @@ prerender.init(db)
 
 # HEAD as well as GET: unfurlers (Facebook, LinkedIn, Slack) and uptime monitors probe with HEAD,
 # and a GET-only route answered 405 for every HTML page. Starlette drops the body for HEAD itself.
+async def find_redirect(path: str) -> str:
+    """A 301 target set in the admin ("Пренасочена" + заместващ URL), or "" when there is none.
+
+    Kept in `delisted_links`, the same board the owner already works on, so an imported Shopify
+    redirect and a hand-written one behave identically.
+    """
+    clean = (path or "/").split("?")[0].split("#")[0].rstrip("/") or "/"
+    docs = await db.delisted_links.find(
+        {"status": "redirected", "replacement_url": {"$nin": ["", None]}},
+        {"_id": 0, "url": 1, "replacement_url": 1}).to_list(2000)
+    for d in docs:
+        url = (d.get("url") or "").strip()
+        stored = urlparse(url if "//" in url else f"//{url}").path.rstrip("/") or "/"
+        if stored == clean:
+            return d["replacement_url"].strip()
+    return ""
+
+
 @api.api_route("/seo/prerender", methods=["GET", "HEAD"], include_in_schema=False)
 async def seo_prerender(request: Request, path: str = "/"):
     """Finished HTML for a page request. 404 keeps its status (no soft 404); only a failure here
     (5xx) makes nginx fall back to the static shell."""
     host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    target = await find_redirect(unquote(path))
+    if target:
+        return RedirectResponse(target, status_code=301)
     # sitemaps publish percent-encoded URLs (Cyrillic page slugs), so a crawler can ask for either
     result = await prerender.render(unquote(path), host)
     if not result:
