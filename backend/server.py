@@ -910,6 +910,40 @@ class BulkLinksIn(BaseModel):
     reason: str = ""
 
 
+@api.post("/admin/handles/heal")
+async def admin_heal_handles(user=Depends(require_admin)):
+    """Bring every product and collection in line: the stored handle becomes the live URL.
+
+    A rotation publishes under translations[bg].handle, so documents edited before the admin field
+    was wired to the live URL are left with a stale base handle — and sometimes with their own live
+    address still sitting on the delisted board (which made it 404). One pass fixes them all.
+    """
+    loc = DEFAULT_LOCALE
+    report: Dict[str, List[str]] = {"products": [], "collections": [], "revived": []}
+    for kind, coll, path in (("products", db.products, "/products/"),
+                             ("collections", db.collections_cat, "/collections/")):
+        for doc in await coll.find({}, {"_id": 0}).to_list(1000):
+            live = published_handle(doc, loc)
+            if not live:
+                continue
+            stale_retirement = any(r.get("locale") == loc and r.get("from") == live
+                                   for r in (doc.get("rotations") or []))
+            if doc.get("handle") != live:
+                await coll.update_one({"id": doc["id"]}, {"$set": {"handle": live}})
+                report[kind].append(f'{doc.get("handle")} → {live}')
+            if stale_retirement:
+                await coll.update_one({"id": doc["id"]},
+                                      {"$pull": {"rotations": {"locale": loc, "from": live}}})
+                report["revived"].append(f"{path}{live}")
+            if stale_retirement or doc.get("handle") != live:
+                await db.delisted_links.delete_many(
+                    {"url": {"$regex": f"{re.escape(path + live)}/?$"}})
+    _links_cache.clear()
+    log.info("Handle heal by %s: %s", user["email"], report)
+    return {"ok": True, "fixed": len(report["products"]) + len(report["collections"]),
+            "revived": len(report["revived"]), **report}
+
+
 @api.post("/admin/delisted-links/bulk")
 async def create_delisted_links_bulk(payload: BulkLinksIn, user=Depends(require_admin)):
     """Paste as many links as you want — one per line, comma separated or glued together."""
