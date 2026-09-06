@@ -1786,13 +1786,45 @@ async def admin_create_product(payload: ProductIn, user=Depends(require_admin)):
     return {"product": doc}
 
 
+async def _republish_handle(kind: str, doc: Dict[str, Any], typed: str, user_email: str) -> None:
+    """Keep the admin handle field and the live URL the same thing.
+
+    After a URL rotation the document is published under translations[loc].handle, so the handle in
+    the admin looked stale and editing it changed nothing. Now the typed handle is compared with the
+    live one and, when they differ, the default locale is republished under exactly what was typed —
+    the old URL retires (404) and lands on the delisted-links board.
+    """
+    loc = DEFAULT_LOCALE
+    live = published_handle(doc, loc)
+    if typed and typed != live:
+        await rotate_content(kind, live, loc, user_email, to=typed)
+    final = typed or live
+    # invariant: whatever is published right now must never be listed as retired — otherwise the
+    # owner types a handle he used before and still lands on a 404
+    coll = db.products if kind == "products" else db.collections_cat
+    await coll.update_one({"handle": final},
+                          {"$pull": {"rotations": {"locale": loc, "from": final}}})
+    path = f"/{'products' if kind == 'products' else 'collections'}/{final}"
+    await db.delisted_links.delete_many({"url": {"$regex": f"{re.escape(path)}/?$"}})
+
+
 @api.put("/admin/products/{product_id}")
 async def admin_update_product(product_id: str, payload: ProductIn, user=Depends(require_admin)):
-    fields = await adopt_external_images(payload.model_dump())
-    res = await db.products.update_one({"id": product_id}, {"$set": fields})
-    if res.matched_count == 0:
+    old = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not old:
         raise HTTPException(404)
-    return {"ok": True}
+    typed = (payload.handle or "").strip()
+    if not typed:
+        raise HTTPException(400, "Handle не може да е празен")
+    if typed != old.get("handle") and await db.products.find_one(
+            {"handle": typed, "id": {"$ne": product_id}}):
+        raise HTTPException(400, "Handle вече съществува")
+
+    fields = await adopt_external_images(payload.model_dump())
+    await db.products.update_one({"id": product_id}, {"$set": fields})
+    await _republish_handle("products", old, typed, user["email"])
+    _links_cache.clear()
+    return {"ok": True, "handle": typed}
 
 
 @api.delete("/admin/products/{product_id}")
@@ -2067,14 +2099,7 @@ async def admin_update_collection(collection_id: str, payload: CollectionIn, use
 
     await db.collections_cat.update_one({"id": collection_id},
                                         {"$set": await adopt_external_images(payload.model_dump())})
-    # a rotated collection is published under translations[bg].handle, so editing the base handle
-    # used to change nothing on the site — republish the default locale under the typed handle
-    loc = DEFAULT_LOCALE
-    if new_handle != old.get("handle") and any(r.get("locale") == loc
-                                               for r in (old.get("rotations") or [])):
-        live = published_handle(old, loc)
-        if live != new_handle:
-            await rotate_content("collections", live, loc, user["email"], to=new_handle)
+    await _republish_handle("collections", old, new_handle, user["email"])
     _links_cache.clear()
     return {"ok": True, "handle": new_handle}
 

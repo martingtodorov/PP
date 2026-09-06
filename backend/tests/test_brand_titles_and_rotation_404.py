@@ -116,10 +116,15 @@ def test_sitemap_lastmod_is_the_record_date():
     assert days and len(days) > 1, "every url carrying today's date is a worthless lastmod signal"
 
 
-def test_retired_url_is_a_dead_end_not_a_redirect():
+def test_retired_url_is_a_hard_404_that_walks_the_human_on():
+    """Owner's call (08.06.2026): the dead URL keeps its 404 + noindex, but a human is taken
+    straight to the catalogue instead of being left on a dead end."""
     block = open(os.path.join(ROOT, "frontend", "src", "components", "NotFoundBlock.jsx")).read()
-    assert "useNavigate" not in block and "navigate(" not in block
+    assert "navigate(catalog, { replace: true })" in block
     assert 'data-testid="not-found-catalog-link"' in block
+    r = requests.get(f"{API}/seo/prerender", params={"path": "/products/gone-for-good"},
+                     headers={"Host": "purepeptide.bg"}, timeout=30)
+    assert r.status_code == 404 and "noindex" in r.text
 
 
 # ---------- imported Shopify slug aliases are gone (owner: hard 404) ----------
