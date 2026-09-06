@@ -266,12 +266,23 @@ KEEP_ARTICLE = ("id", "translations", "rotations")
 
 
 def existing_by_handle(collection: str, keys: tuple) -> Dict[str, Dict[str, Any]]:
-    """Snapshot of the admin-owned fields per handle, taken before the collection is replaced."""
+    """Snapshot of the admin-owned fields per handle, taken before the collection is replaced.
+
+    Indexed under both the stored handle and the published (rotated) one: since the admin handle
+    field edits the live URL, the stored handle can differ from the Shopify handle this import
+    inserts under, and a miss here silently wipes translations, rotations and the product order.
+    """
     fields = {k: 1 for k in keys}
     fields["_id"] = 0
     fields["handle"] = 1
-    return {d["handle"]: {k: v for k, v in d.items() if k in keys}
-            for d in db[collection].find({}, fields) if d.get("handle")}
+    fields["translations"] = 1
+    out: Dict[str, Dict[str, Any]] = {}
+    for d in db[collection].find({}, fields):
+        kept = {k: v for k, v in d.items() if k in keys}
+        for alias in {d.get("handle"), ((d.get("translations") or {}).get("bg") or {}).get("handle")}:
+            if alias:
+                out[alias] = kept
+    return out
 
 
 def import_collections() -> Dict[str, str]:
