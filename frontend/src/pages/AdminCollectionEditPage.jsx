@@ -26,12 +26,16 @@ export default function AdminCollectionEditPage() {
       if (!id && data.collections.length) setId(data.collections[0].id);
     });
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
-  useEffect(() => { setDoc(collections.find((c) => c.id === id) || null); }, [id, collections]);
+  useEffect(() => {
+    const found = collections.find((c) => c.id === id);
+    // the handle field is the live bg URL (after a rotation that is the rotated handle), so editing
+    // it moves the real address instead of a stale original
+    setDoc(found ? { ...found, handle: (found.translations?.bg || {}).handle || found.handle } : null);
+  }, [id, collections]);
 
   if (!doc) return <AdminLayout title="Колекции"><p className="text-sm text-slate-400">Зареждане…</p></AdminLayout>;
 
   const tr = (doc.translations || {})[locale] || {};
-  const live = tr.handle || doc.handle;          // the handle this locale is published under
   const value = (f) => (locale === "bg" ? doc[f] ?? "" : tr[f] ?? "");
   const setValue = (f, v) => {
     if (locale === "bg") setDoc({ ...doc, [f]: v });

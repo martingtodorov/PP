@@ -87,3 +87,47 @@ def test_the_catalogue_survives_a_handle_change():
     total = len(requests.get(f"{API}/products", params={"limit": 500}, timeout=20).json()["products"])
     assert len(data["products"]) == total and total > 0
     assert requests.get(f"{API}/links", timeout=20).json()["catalog"] == f"/collections/{live}"
+
+
+def _put_product(s, prod_id, **changes):
+    full = s.get(f"{API}/admin/products/{prod_id}", timeout=20).json()["product"]
+    payload = {k: v for k, v in full.items()
+               if k not in ("id", "created_at", "base_handle", "handles", "rotations")}
+    payload.update(changes)
+    r = s.put(f"{API}/admin/products/{prod_id}", json=payload, timeout=30)
+    assert r.status_code == 200, r.text
+    return full
+
+
+def test_the_product_handle_field_moves_the_live_url():
+    """The admin field and the live URL are one thing now, even after a rotation."""
+    s = _admin()
+    prod = next(p for p in s.get(f"{API}/admin/products", timeout=20).json()["products"]
+                if (p.get("rotations") or []))
+    full = s.get(f"{API}/admin/products/{prod['id']}", timeout=20).json()["product"]
+    live = ((full.get("translations") or {}).get("bg") or {}).get("handle") or full["handle"]
+    new = f"{live}-qa"
+    try:
+        _put_product(s, prod["id"], handle=new)
+        assert requests.get(f"{API}/products/{new}", timeout=20).status_code == 200
+        assert requests.get(f"{API}/products/{live}", timeout=20).status_code == 404
+        back = s.get(f"{API}/admin/products/{prod['id']}", timeout=20).json()["product"]
+        # base handle and published handle are the same again — nothing stale in the admin
+        assert back["handle"] == new
+        assert ((back.get("translations") or {}).get("bg") or {}).get("handle") == new
+    finally:
+        _put_product(s, prod["id"], handle=live)
+    assert requests.get(f"{API}/products/{live}", timeout=20).status_code == 200
+
+
+def test_a_handle_used_before_can_be_brought_back():
+    """Typing a handle that was retired earlier must serve the page, not the 404 it was left as."""
+    s = _admin()
+    prod = next(p for p in s.get(f"{API}/admin/products", timeout=20).json()["products"]
+                if (p.get("rotations") or []))
+    full = s.get(f"{API}/admin/products/{prod['id']}", timeout=20).json()["product"]
+    live = ((full.get("translations") or {}).get("bg") or {}).get("handle") or full["handle"]
+    _put_product(s, prod["id"], handle=f"{live}-tmp")
+    _put_product(s, prod["id"], handle=live)              # back to the retired one
+    assert requests.get(f"{API}/products/{live}", timeout=20).status_code == 200
+    assert requests.get(f"{API}/products/{live}-tmp", timeout=20).status_code == 404

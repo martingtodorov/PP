@@ -35,7 +35,13 @@ export default function AdminProductEditPage() {
     api.get("/admin/collections").then(({ data }) => setCollections(data.collections));
     if (!isNew) {
       api.get(`/admin/products/${id}`)
-        .then(({ data }) => setP({ ...EMPTY, ...data.product, specs: { ...EMPTY.specs, ...(data.product.specs || {}) } }))
+        // the handle field shows the URL that is live now (after a rotation that is the rotated
+        // one), so editing it moves the real address instead of a stale original
+        .then(({ data }) => setP({
+          ...EMPTY, ...data.product,
+          handle: (data.product.translations?.bg || {}).handle || data.product.handle,
+          specs: { ...EMPTY.specs, ...(data.product.specs || {}) },
+        }))
         .catch((e) => toast.error(formatErr(e)))
         .finally(() => setLoading(false));
     }
@@ -216,10 +222,11 @@ export default function AdminProductEditPage() {
               <>
                 <Field label="Заглавие" value={p.title} onChange={(v) => set({ title: v })} testId="field-title" />
                 <Field label="Handle (URL)" value={p.handle} onChange={(v) => set({ handle: v })} mono testId="field-handle" />
-                {(p.translations?.bg || {}).handle && p.translations.bg.handle !== p.handle && (
+                {(p.rotations || []).some((r) => r.locale === "bg") && (
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2" data-testid="rotated-handle-note">
-                    Публикуваният български URL е <span className="font-mono">/products/{p.translations.bg.handle}</span> —
-                    handle-ът по-горе е оригиналът и вече не се отваря. Ротацията се управлява в „Изтеглени линкове“.
+                    Това е живият български URL: <span className="font-mono">/products/{p.handle}</span>.
+                    Смениш ли го, новият адрес тръгва веднага, а старият се пенсионира (404) и влиза
+                    в „Изтеглени линкове“.
                   </p>
                 )}
                 <Field label="Подзаглавие" value={p.subtitle} onChange={(v) => set({ subtitle: v })} testId="field-subtitle" />
