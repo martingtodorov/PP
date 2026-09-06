@@ -156,10 +156,8 @@ export default function AdminDelistedLinksPage() {
           Езикът и причината се взимат от полетата по-горе.
         </p>
         <p className="text-xs text-slate-500 mb-3">
-          <span className="font-semibold text-slate-700">301 препратка:</span> сложи статус
-          „Пренасочена“ и адрес в „Заместващ URL“ — старият адрес връща истинска 301 към новия
-          (важи и за адреси, които никога не са били наши, стига да са на нашия домейн). Оставиш ли
-          статус „Ротирана“, адресът остава мъртъв с 404 — така си беше досега.
+          Ротираните адреси остават <span className="font-semibold text-slate-700">мъртви (404)</span> —
+          тук нищо не се пренасочва. За истински 301 виж отделната страница „301 препратки“.
         </p>
         <textarea
           rows={4}
@@ -256,16 +254,7 @@ export default function AdminDelistedLinksPage() {
                       className="border border-slate-200 rounded-md px-2 py-1 text-xs font-mono w-44"
                       data-testid={`delisted-replacement-${l.id}`}
                     />
-                    {l.status === "redirected" && !l.replacement_url && (
-                      <div className="text-[11px] text-amber-700 mt-1" data-testid={`delisted-noredirect-${l.id}`}>
-                        въведи адрес, иначе 301-цата не работи
-                      </div>
-                    )}
-                    {l.status === "redirected" && !!l.replacement_url && (
-                      <div className="text-[11px] text-sky-700 mt-1" data-testid={`delisted-301-${l.id}`}>
-                        301 е активна
-                      </div>
-                    )}
+
                     {l.status === "rotated" && l.rewritten === false && (
                       <div className="text-[11px] text-amber-700 mt-1" data-testid={`delisted-norewrite-${l.id}`}>
                         описанието не е пренаписано — ротирайте пак

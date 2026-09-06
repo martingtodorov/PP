@@ -32,6 +32,7 @@ import AdminIntegrationsPage from "./pages/AdminIntegrationsPage";
 import AdminUiStringsPage from "./pages/AdminUiStringsPage";
 import AdminTranslationsPage from "./pages/AdminTranslationsPage";
 import AdminArticlesPage from "./pages/AdminArticlesPage";
+import AdminRedirectsPage from "./pages/AdminRedirectsPage";
 import AdminCollectionsPage from "./pages/AdminCollectionsPage";
 import AdminMessagesPage from "./pages/AdminMessagesPage";
 import AdminAnalyticsPage from "./pages/AdminAnalyticsPage";
@@ -111,6 +112,7 @@ function App() {
                 <Route path="/admin/ui-strings" element={<AdminUiStringsPage />} />
                 <Route path="/admin/translations" element={<AdminTranslationsPage />} />
                 <Route path="/admin/articles" element={<AdminArticlesPage />} />
+                <Route path="/admin/redirects" element={<AdminRedirectsPage />} />
                 {/* any other URL: the server already answered 404, the app shows the 404 page
                     and walks the visitor to the catalogue */}
                 <Route path="*" element={<Layout><NotFoundBlock /></Layout>} />
