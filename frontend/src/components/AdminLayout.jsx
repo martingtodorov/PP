@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, Package, ShoppingBag, Users, Upload, Settings, LogOut, Globe, Link2Off, FileText, Menu, X, LineChart, Boxes, ListOrdered, MessageSquare, Plug, Languages, Newspaper, Sparkles } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Users, Upload, Settings, LogOut, Globe, Link2Off,
+  CornerUpRight, FileText, Menu, X, LineChart, Boxes, ListOrdered, MessageSquare, Plug, Languages, Newspaper, Sparkles } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const NAV = [
@@ -20,6 +21,7 @@ const NAV = [
   { to: "/admin/articles", label: "Блог статии", icon: Newspaper },
   { to: "/admin/ui-strings", label: "Текстове на чекаута", icon: Languages },
   { to: "/admin/delisted-links", label: "Изтеглени линкове", icon: Link2Off },
+  { to: "/admin/redirects", label: "301 препратки", icon: CornerUpRight },
   { to: "/admin/integrations", label: "Интеграции", icon: Plug },
   { to: "/admin/settings", label: "Настройки", icon: Settings },
 ];

@@ -133,26 +133,44 @@ def test_a_handle_used_before_can_be_brought_back():
     assert requests.get(f"{API}/products/{live}-tmp", timeout=20).status_code == 404
 
 
+def _prerender(path):
+    return requests.get(f"{API}/seo/prerender", params={"path": path},
+                        headers={"Host": "purepeptide.bg"}, allow_redirects=False, timeout=30)
+
+
 def test_the_admin_can_set_a_real_301():
-    """Status "Пренасочена" + a replacement URL must answer 301, not 404."""
+    """The redirects list is its own feature: from → to, answered with a real 301."""
     s = _admin()
-    r = s.post(f"{API}/admin/delisted-links", timeout=20, json={
-        "url": "https://purepeptide.bg/pages/qa-301", "locale": "bg", "reason": "qa",
-        "status": "redirected", "replacement_url": "/collections/2all-the-peptides-1", "notes": ""})
-    assert r.status_code == 200
-    link_id = r.json()["link"]["id"]
+    r = s.post(f"{API}/admin/redirects", timeout=20, json={
+        "from_path": "https://purepeptide.bg/pages/qa-301",     # a full URL is accepted too
+        "to_url": "/collections/2all-the-peptides-1", "note": "qa"})
+    assert r.status_code == 200 and r.json()["redirect"]["from_path"] == "/pages/qa-301"
+    rid = r.json()["redirect"]["id"]
     try:
-        page = requests.get(f"{API}/seo/prerender", params={"path": "/pages/qa-301"},
-                            headers={"Host": "purepeptide.bg"}, allow_redirects=False, timeout=30)
+        page = _prerender("/pages/qa-301")
         assert page.status_code == 301
         assert page.headers["location"] == "/collections/2all-the-peptides-1"
+        hit = next(x for x in s.get(f"{API}/admin/redirects", timeout=20).json()["redirects"]
+                   if x["id"] == rid)
+        assert hit["hits"] >= 1                                  # usage is counted
 
-        # a rotated (not redirected) entry stays a hard 404
-        entry = next(l for l in s.get(f"{API}/admin/delisted-links", timeout=20).json()["links"]
-                     if l["id"] == link_id)
-        s.put(f"{API}/admin/delisted-links/{link_id}", json={**entry, "status": "rotated"}, timeout=20)
-        page = requests.get(f"{API}/seo/prerender", params={"path": "/pages/qa-301"},
-                            headers={"Host": "purepeptide.bg"}, allow_redirects=False, timeout=30)
-        assert page.status_code == 404
+        s.put(f"{API}/admin/redirects/{rid}", timeout=20,
+              json={"from_path": "/pages/qa-301", "to_url": "/collections/2all-the-peptides-1",
+                    "note": "", "active": False})
+        assert _prerender("/pages/qa-301").status_code == 404     # switched off = dead again
     finally:
-        s.delete(f"{API}/admin/delisted-links/{link_id}", timeout=20)
+        s.delete(f"{API}/admin/redirects/{rid}", timeout=20)
+    assert _prerender("/pages/qa-301").status_code == 404
+
+
+def test_the_delisted_board_never_redirects():
+    """Owner's rule: rotation is a dead end. Only the redirects list may send a 301."""
+    s = _admin()
+    link = s.post(f"{API}/admin/delisted-links", timeout=20, json={
+        "url": "https://purepeptide.bg/pages/qa-rotated", "locale": "bg", "reason": "qa",
+        "status": "redirected", "replacement_url": "/collections/2all-the-peptides-1",
+        "notes": ""}).json()["link"]
+    try:
+        assert _prerender("/pages/qa-rotated").status_code == 404
+    finally:
+        s.delete(f"{API}/admin/delisted-links/{link['id']}", timeout=20)

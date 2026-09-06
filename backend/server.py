@@ -464,6 +464,7 @@ async def on_startup():
     await seed_pages()
     await backfill_rotation_log()
     await restore_product_orders()
+    await adopt_imported_redirects()
     try:
         storage.init_storage()
         log.info("Object storage initialized")
@@ -561,6 +562,28 @@ async def _save_product_order(col: Dict[str, Any], handles: List[str]) -> None:
         {"$set": {"key": col["handle"], "link_key": col.get("link_key") or "",
                   "shopify_id": col.get("shopify_id") or "", "handles": handles,
                   "updated_at": now_utc()}}, upsert=True)
+
+
+async def adopt_imported_redirects() -> int:
+    """Move the 301s that came from Shopify into the redirects list (once).
+
+    They were parked on the delisted-links board as notes; redirects are their own feature now.
+    """
+    moved = 0
+    async for d in db.delisted_links.find({"status": "redirected",
+                                           "replacement_url": {"$nin": ["", None]}}, {"_id": 0}):
+        src = _redirect_path(d.get("url") or "")
+        if not src or src == "/" or await db.redirects.find_one({"from_path": src}):
+            continue
+        await db.redirects.insert_one({"id": str(uuid.uuid4()), "from_path": src,
+                                       "to_url": (d.get("replacement_url") or "").strip(),
+                                       "note": d.get("notes") or "Импортирано от Shopify",
+                                       "active": True, "hits": 0, "last_hit": "",
+                                       "created_at": now_utc(), "created_by": "import"})
+        moved += 1
+    if moved:
+        log.info("Adopted %d imported redirects into the redirects list", moved)
+    return moved
 
 
 async def restore_product_orders() -> int:
@@ -747,6 +770,69 @@ class DelistedLinkIn(BaseModel):
     status: str = "pending"  # pending | rotated | redirected | ignored
     replacement_url: str = ""
     notes: str = ""
+
+
+def _redirect_path(value: str) -> str:
+    """Normalise whatever the owner pasted (full URL or path) to a comparable path."""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    path = urlparse(raw if "//" in raw else f"//{raw}").path or "/"
+    return path.rstrip("/") or "/"
+
+
+class RedirectIn(BaseModel):
+    from_path: str
+    to_url: str
+    note: str = ""
+    active: bool = True
+
+
+@api.get("/admin/redirects")
+async def list_redirects(user=Depends(require_admin)):
+    docs = await db.redirects.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    return {"redirects": docs}
+
+
+@api.post("/admin/redirects")
+async def create_redirect(payload: RedirectIn, user=Depends(require_admin)):
+    src, dst = _redirect_path(payload.from_path), payload.to_url.strip()
+    if not src or src == "/":
+        raise HTTPException(400, "Трябва адрес (път), различен от началната страница")
+    if not dst:
+        raise HTTPException(400, "Трябва адрес, към който да пренасочим")
+    if _redirect_path(dst) == src:
+        raise HTTPException(400, "Адресът сочи към себе си")
+    doc = {"id": str(uuid.uuid4()), "from_path": src, "to_url": dst, "note": payload.note.strip(),
+           "active": payload.active, "hits": 0, "last_hit": "", "created_at": now_utc(),
+           "created_by": user["email"]}
+    await db.redirects.update_one({"from_path": src}, {"$set": doc}, upsert=True)
+    prerender.bump()
+    return {"redirect": doc}
+
+
+@api.put("/admin/redirects/{redirect_id}")
+async def update_redirect(redirect_id: str, payload: RedirectIn, user=Depends(require_admin)):
+    src, dst = _redirect_path(payload.from_path), payload.to_url.strip()
+    if not src or not dst:
+        raise HTTPException(400, "Липсва адрес")
+    res = await db.redirects.update_one(
+        {"id": redirect_id},
+        {"$set": {"from_path": src, "to_url": dst, "note": payload.note.strip(),
+                  "active": payload.active, "updated_at": now_utc()}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Препратката не е намерена")
+    prerender.bump()
+    return {"ok": True}
+
+
+@api.delete("/admin/redirects/{redirect_id}")
+async def delete_redirect(redirect_id: str, user=Depends(require_admin)):
+    res = await db.redirects.delete_one({"id": redirect_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Препратката не е намерена")
+    prerender.bump()
+    return {"ok": True}
 
 
 @api.get("/admin/delisted-links")
@@ -4364,21 +4450,21 @@ prerender.init(db)
 # HEAD as well as GET: unfurlers (Facebook, LinkedIn, Slack) and uptime monitors probe with HEAD,
 # and a GET-only route answered 405 for every HTML page. Starlette drops the body for HEAD itself.
 async def find_redirect(path: str) -> str:
-    """A 301 target set in the admin ("Пренасочена" + заместващ URL), or "" when there is none.
+    """A 301 target from the redirects list, or "" when there is none.
 
-    Kept in `delisted_links`, the same board the owner already works on, so an imported Shopify
-    redirect and a hand-written one behave identically.
+    Redirects live in their own collection, on purpose: a rotated URL is a dead end (hard 404) and
+    must never quietly become a redirect. The two lists are separate features.
     """
-    clean = (path or "/").split("?")[0].split("#")[0].rstrip("/") or "/"
-    docs = await db.delisted_links.find(
-        {"status": "redirected", "replacement_url": {"$nin": ["", None]}},
-        {"_id": 0, "url": 1, "replacement_url": 1}).to_list(2000)
-    for d in docs:
-        url = (d.get("url") or "").strip()
-        stored = urlparse(url if "//" in url else f"//{url}").path.rstrip("/") or "/"
-        if stored == clean:
-            return d["replacement_url"].strip()
-    return ""
+    clean = _redirect_path(path)
+    if clean == "/":
+        return ""
+    doc = await db.redirects.find_one({"from_path": clean, "active": {"$ne": False}},
+                                      {"_id": 0, "to_url": 1})
+    if not doc:
+        return ""
+    await db.redirects.update_one({"from_path": clean}, {"$inc": {"hits": 1},
+                                                         "$set": {"last_hit": now_utc()}})
+    return (doc.get("to_url") or "").strip()
 
 
 @api.api_route("/seo/prerender", methods=["GET", "HEAD"], include_in_schema=False)

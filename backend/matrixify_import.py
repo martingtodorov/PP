@@ -12,6 +12,7 @@ import html as html_lib
 import logging
 import os
 import re
+from urllib.parse import urlparse
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -487,19 +488,17 @@ def import_redirects() -> None:
         target = r.get("Target")
         if not path:
             continue
-        db.delisted_links.update_one(
-            {"url": path},
+        # redirects are their own feature — never mixed into the delisted (rotated = 404) board
+        src = urlparse(path if "//" in path else f"//{path}").path.rstrip("/") or "/"
+        if not target or src == "/":
+            continue
+        db.redirects.update_one(
+            {"from_path": src},
             {
-                "$set": {
-                    "url": path,
-                    "locale": "bg",
-                    "reason": "Shopify 301 redirect",
-                    "status": "redirected",
-                    "replacement_url": target or "",
-                    "notes": "Импортирано от Matrixify",
-                    "updated_at": now_utc(),
-                },
-                "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now_utc(), "created_by": "matrixify-import"},
+                "$set": {"from_path": src, "to_url": target, "active": True,
+                         "note": "Импортирано от Matrixify", "updated_at": now_utc()},
+                "$setOnInsert": {"id": str(uuid.uuid4()), "hits": 0, "last_hit": "",
+                                 "created_at": now_utc(), "created_by": "matrixify-import"},
             },
             upsert=True,
         )
