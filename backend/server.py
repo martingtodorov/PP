@@ -1340,15 +1340,8 @@ async def checkout(payload: CheckoutIn, request: Request):
         )
     except Exception:
         log.exception("Order push notification failed")
-    try:
-        admin_to = os.environ.get("CONTACT_EMAIL") or os.environ["ADMIN_EMAIL"]
-        if email_service.is_test_address(order["customer_email"]):
-            log.info("test order %s — admin notification skipped", order["order_number"])
-        else:
-            admin_subject, admin_html = email_templates.render_admin_order(order_clean)
-            await email_service.send_email(admin_to, admin_subject, admin_html, site_settings)
-    except Exception:
-        log.exception("Admin order email failed")
+    # No admin e-mail for a new order (owner's call, 08.06.2026) — the phone push above is the
+    # notification; the order is in /admin/orders and in the daily report.
     try:
         await abandoned.mark_recovered(order["customer_email"])
     except Exception:
