@@ -1,4 +1,5 @@
 """No third-party trackers in the shell, and the hero is preloaded only where it is used."""
+import os
 import pathlib
 
 import requests
@@ -27,3 +28,10 @@ def test_the_hero_is_preloaded_on_the_home_page_only():
     assert 'href="/hero-home.webp"' in page("/")
     for path in ("/pages/faq", "/collections", "/pages/html-sitemap"):
         assert "hero-home.webp" not in page(path), path
+
+
+def test_no_admin_email_on_a_new_order():
+    """Owner's call: the phone push is the notification, no e-mail per order."""
+    src = open(os.path.join(os.path.dirname(__file__), "..", "server.py")).read()
+    assert "render_admin_order" not in src          # nothing sends it any more
+    assert "notify_admin_push_bg(" in src           # the phone push stays
