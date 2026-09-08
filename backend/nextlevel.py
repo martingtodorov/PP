@@ -186,6 +186,38 @@ def tracking_url_for(courier: Optional[str], courier_awb: Optional[str], awb: st
     return ""
 
 
+# per-courier sanity checks: a NextLevel internal awb starts with 1 and gets rejected by the
+# courier's own site, so a number in that shape is not a tracking number we may show
+COURIER_NUMBER_RULES = {
+    "BoxNow": lambda n: not n.startswith("1"),        # BoxNow parcel ids never start with 1
+}
+
+
+def is_courier_number(courier: Optional[str], number: str, internal_awb: str = "") -> bool:
+    """Is this really the courier's own number, or NextLevel's internal id in disguise?"""
+    num = (number or "").strip()
+    if not num or num == (internal_awb or "").strip():
+        return False
+    rule = COURIER_NUMBER_RULES.get(courier or "")
+    return rule(num) if rule else True
+
+
+def customer_tracking(shipment: Dict[str, Any]) -> Dict[str, Any]:
+    """What the customer is given: the courier's own number and the courier's tracking page.
+
+    `awb` is NextLevel's internal id — useless to a customer and unsearchable on any courier site,
+    so it never leaves the admin. Until the courier number arrives the tracking block stays empty.
+    """
+    courier_awb = str(shipment.get("courier_awb") or "").strip()
+    courier = shipment.get("courier") or ""
+    if not is_courier_number(courier, courier_awb, str(shipment.get("awb") or "")):
+        courier_awb = ""                              # nothing to show yet
+    return {"tracking_number": courier_awb,
+            "tracking_url": tracking_url_for(courier, courier_awb, shipment.get("awb", "")),
+            "carrier": courier or "NextLevel",
+            "ready": bool(courier_awb)}
+
+
 def _summary(res: Dict[str, Any]) -> Dict[str, Any]:
     price = res.get("price") if isinstance(res.get("price"), dict) else {}
     courier = res.get("subcontractor") or res.get("courier")
@@ -226,15 +258,27 @@ async def create_shipment(order_id: str, force: bool = False) -> Dict[str, Any]:
         await _db.orders.update_one({"id": order_id}, {"$set": {"shipment_error": str(ex), "shipment_error_at": _now()}})
         raise HTTPException(502, str(ex))
     shipment = {**_summary(res), "payload": payload}
-    tracking = {"tracking_number": shipment["awb"], "tracking_url": shipment["tracking_link"],
-                "carrier": shipment.get("courier") or "NextLevel"}
+    tracking = customer_tracking(shipment)
     await _db.orders.update_one({"id": order_id}, {
-        "$set": {"shipment": shipment, "tracking": tracking, "tracking_number": shipment["awb"]},
+        "$set": {"shipment": shipment, "tracking": tracking,
+                 "tracking_number": tracking["tracking_number"]},
         "$unset": {"shipment_error": "", "shipment_error_at": ""}})
     log.info("NextLevel shipment %s for order %s (%s)", shipment["awb"], order.get("order_number"), shipment.get("courier"))
-    if order.get("customer_email") and order.get("source") != "nextlevel-selftest":
+    # the courier number often lands a few minutes later; the sync loop mails the customer as soon
+    # as it does, so nobody receives a number no courier can find
+    if order.get("customer_email") and order.get("source") != "nextlevel-selftest" and tracking["ready"]:
         asyncio.create_task(_notify_customer({**order, "shipment": shipment}))
     return shipment
+
+
+async def _notify_once(order_id: str) -> None:
+    """Send the shipment mail the first time the courier number exists, and only then."""
+    order = await _db.orders.find_one(
+        {"id": order_id, "shipment.customer_notified_at": {"$exists": False},
+         "customer_email": {"$nin": ["", None]}, "source": {"$ne": "nextlevel-selftest"}},
+        {"_id": 0})
+    if order:
+        await _notify_customer(order)
 
 
 async def _notify_customer(order: Dict[str, Any]) -> None:
@@ -307,15 +351,74 @@ async def sync_open_shipments() -> Dict[str, Any]:
             if awb not in by_awb:
                 continue
             courier = row.get("subcontractor") or None
+            shipment = {"awb": awb, "courier": courier, "courier_awb": row.get("courier_awb")}
+            tracking = customer_tracking(shipment)
             await _db.orders.update_one({"id": by_awb[awb]}, {"$set": {
                 "shipment.status": row.get("status"), "shipment.status_id": row.get("status_id"),
                 "shipment.courier": courier, "shipment.courier_awb": row.get("courier_awb"),
-                "shipment.tracking_link": tracking_url_for(courier, row.get("courier_awb"), awb),
-                "shipment.last_movement": row.get("last_movement"), "shipment.updated_at": _now()}})
+                "shipment.tracking_link": tracking["tracking_url"],
+                "shipment.last_movement": row.get("last_movement"), "shipment.updated_at": _now(),
+                "tracking": tracking, "tracking_number": tracking["tracking_number"]}})
             updated += 1
+            if tracking["ready"]:
+                await _notify_once(by_awb[awb])
             if str(row.get("status") or "").lower() == "delivered":
                 await notify_delivered(by_awb[awb])
     return {"open": len(by_awb), "updated": updated}
+
+
+async def refresh_all_tracking() -> Dict[str, Any]:
+    """Re-read every NextLevel shipment and rewrite the customer's number and link.
+
+    For orders created before the customer number was split from NextLevel's internal awb: it asks
+    NextLevel for the courier's own waybill and stores that instead.
+    """
+    cursor = _db.orders.find({"shipment.awb": {"$nin": ["", None]}},
+                             {"_id": 0, "id": 1, "shipment": 1, "tracking_number": 1})
+    orders = await cursor.to_list(5000)
+    by_awb = {str(o["shipment"]["awb"]): o for o in orders if o.get("shipment", {}).get("awb")}
+    fixed, still_missing, failed = 0, 0, 0
+
+    # warehouse (fulfillment) shipments already carry the courier's own waybill — no API call needed
+    for o in [x for x in orders if (x.get("shipment") or {}).get("source") == "fulfillment"]:
+        sh = o["shipment"]
+        tracking = customer_tracking({"awb": sh["awb"], "courier": sh.get("courier"),
+                                      "courier_awb": sh.get("courier_awb") or sh["awb"]})
+        tracking["tracking_url"] = tracking["tracking_url"] or (sh.get("tracking_link") or "")
+        await _db.orders.update_one({"id": o["id"]}, {"$set": {
+            "shipment.courier_awb": sh.get("courier_awb") or sh["awb"],
+            "shipment.tracking_link": tracking["tracking_url"],
+            "tracking": tracking, "tracking_number": tracking["tracking_number"]}})
+        by_awb.pop(str(sh["awb"]), None)
+        fixed, still_missing = (fixed + 1, still_missing) if tracking["ready"] else (fixed, still_missing + 1)
+
+    awbs = list(by_awb)
+    for i in range(0, len(awbs), 50):
+        try:
+            rows = await track(awbs[i:i + 50])
+        except Exception as ex:
+            log.warning("NextLevel track failed while refreshing: %s", ex)
+            failed += len(awbs[i:i + 50])
+            continue
+        for row in rows:
+            awb = str(row.get("awb") or "")
+            order = by_awb.get(awb)
+            if not order:
+                continue
+            courier = row.get("subcontractor") or row.get("courier") or order["shipment"].get("courier")
+            shipment = {"awb": awb, "courier": courier, "courier_awb": row.get("courier_awb")}
+            tracking = customer_tracking(shipment)
+            await _db.orders.update_one({"id": order["id"]}, {"$set": {
+                "shipment.courier": courier, "shipment.courier_awb": row.get("courier_awb"),
+                "shipment.tracking_link": tracking["tracking_url"],
+                "shipment.updated_at": _now(),
+                "tracking": tracking, "tracking_number": tracking["tracking_number"]}})
+            if tracking["ready"]:
+                fixed += 1
+            else:
+                still_missing += 1
+    return {"orders": len(by_awb), "with_courier_number": fixed,
+            "waiting_for_courier_number": still_missing, "unreachable": failed}
 
 
 async def notify_delivered(order_id: str) -> None:
@@ -449,5 +552,9 @@ def init(db_, admin_guard) -> APIRouter:
     @router.post("/admin/shipments/sync")
     async def sync(admin=Depends(admin_guard)):
         return await sync_open_shipments()
+
+    @router.post("/admin/shipments/refresh-tracking")
+    async def refresh_tracking(admin=Depends(admin_guard)):
+        return await refresh_all_tracking()
 
     return router

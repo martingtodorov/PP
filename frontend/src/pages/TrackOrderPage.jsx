@@ -89,20 +89,20 @@ export default function TrackOrderPage() {
               <h2 className="font-display font-bold text-xl text-slate-900 flex items-center gap-2">
                 <Truck className="h-5 w-5 text-coral-600" /> {t("trackingTitle")}
               </h2>
-              {order.shipment ? (
+              {order.tracking?.tracking_number ? (
                 <>
                   <dl className="mt-4 space-y-3 text-sm">
-                    {[[t("trackingCourier"), order.shipment.courier || "NextLevel"],
-                      [t("trackingNumber"), order.shipment.awb],
-                      ...(order.shipment.status ? [[t("trackingStatus"), order.shipment.status]] : [])].map(([k, v]) => (
+                    {[[t("trackingCourier"), order.tracking.carrier || order.shipment?.courier || "NextLevel"],
+                      [t("trackingNumber"), order.tracking.tracking_number],
+                      ...(order.shipment?.status ? [[t("trackingStatus"), order.shipment.status]] : [])].map(([k, v]) => (
                       <div key={k} className="flex justify-between items-center gap-4 border-b border-slate-100 pb-2">
                         <dt className="text-slate-500">{k}</dt>
                         <dd className="font-mono text-slate-900 font-medium">{v}</dd>
                       </div>
                     ))}
                   </dl>
-                  {order.shipment.tracking_link && (
-                    <a href={order.shipment.tracking_link} target="_blank" rel="noreferrer"
+                  {order.tracking.tracking_url && (
+                    <a href={order.tracking.tracking_url} target="_blank" rel="noreferrer"
                       className="inline-flex items-center gap-2 mt-4 bg-slate-900 hover:bg-slate-800 text-white font-semibold px-5 py-3 rounded-md transition-colors"
                       data-testid="track-courier-link">{t("trackingOpen")}</a>
                   )}

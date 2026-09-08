@@ -268,12 +268,19 @@ async def _apply_awb(order: Dict[str, Any], ff: Dict[str, Any]) -> None:
     """The warehouse issued the waybill → the customer sees/gets it exactly like our own shipments."""
     courier = ff.get("courier")
     awb = ff["awb"]
-    shipment = {"awb": awb, "courier_awb": None, "courier": courier, "status": ff.get("shipment_status") or "Created",
-                "tracking_link": ff.get("tracking_link") or nextlevel.tracking_url_for(courier, awb, awb) or f"https://nextlevel.delivery/track?awb={awb}",
+    # the warehouse hands over the courier's own waybill, so that is the number the customer gets;
+    # no made-up nextlevel.delivery link — it is not a public tracking page
+    courier_awb = ff.get("courier_awb") or awb
+    shipment = {"awb": awb, "courier_awb": courier_awb, "courier": courier,
+                "status": ff.get("shipment_status") or "Created",
+                "tracking_link": ff.get("tracking_link") or nextlevel.tracking_url_for(courier, courier_awb, awb),
                 "source": "fulfillment", "created_at": _now(), "updated_at": _now()}
-    tracking = {"tracking_number": awb, "tracking_url": shipment["tracking_link"], "carrier": courier or "NextLevel"}
+    tracking = nextlevel.customer_tracking(shipment)
+    if ff.get("tracking_link"):
+        tracking["tracking_url"] = ff["tracking_link"]
     await _db.orders.update_one({"id": order["id"], "shipment.awb": {"$ne": awb}}, {
-        "$set": {"shipment": shipment, "tracking": tracking, "tracking_number": awb, "fulfillment_status": "shipped"}})
+        "$set": {"shipment": shipment, "tracking": tracking,
+                 "tracking_number": tracking["tracking_number"], "fulfillment_status": "shipped"}})
     if order.get("customer_email") and not (order.get("shipment") or {}).get("awb") == awb:
         asyncio.create_task(nextlevel._notify_customer({**order, "shipment": shipment}))
 
