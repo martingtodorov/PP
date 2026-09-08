@@ -261,8 +261,10 @@ def clean_body(html: str, title: str = "", drop_leading_h1: bool = True, keep_h1
 # Fields the admin owns, not Shopify: a re-import must never reset them. Losing `translations`
 # wiped every AI translation on production, and losing `rotations` republished a delisted URL
 # (the rotated handle lives in translations.<locale>.handle).
-KEEP_PRODUCT = ("id", "translations", "rotations", "active", "featured", "coa_image")
-KEEP_COLLECTION = ("id", "translations", "rotations", "product_order", "menu_order", "sort_order")
+KEEP_PRODUCT = ("id", "translations", "rotations", "active", "featured", "coa_image",
+                "admin_tags", "delisted")
+KEEP_COLLECTION = ("id", "translations", "rotations", "product_order", "menu_order", "sort_order",
+                   "admin_tags", "delisted", "nav_hidden")
 KEEP_ARTICLE = ("id", "translations", "rotations")
 
 
@@ -283,6 +285,22 @@ def existing_by_handle(collection: str, keys: tuple) -> Dict[str, Dict[str, Any]
         for alias in {d.get("handle"), ((d.get("translations") or {}).get("bg") or {}).get("handle")}:
             if alias:
                 out[alias] = kept
+    return out
+
+
+def stock_by_sku() -> Dict[str, int]:
+    """Live stock is ours, not Shopify's: checkout decrements it, so a re-import must not reset it.
+
+    Keyed by handle+SKU (a SKU can repeat across products) under the stored and the rotated handle.
+    """
+    out: Dict[str, int] = {}
+    for d in db.products.find({}, {"_id": 0, "handle": 1, "translations": 1, "variants": 1}):
+        aliases = {d.get("handle"), ((d.get("translations") or {}).get("bg") or {}).get("handle")}
+        for v in d.get("variants") or []:
+            sku = (v.get("sku") or "").strip()
+            for alias in aliases:
+                if sku and alias:
+                    out[f"{alias}|{sku}"] = int(v.get("stock") or 0)
     return out
 
 
@@ -335,6 +353,7 @@ def import_products() -> None:
     rows = sheet("Products")
     groups = group_by(rows, "Handle")
     kept = existing_by_handle("products", KEEP_PRODUCT)
+    live_stock = stock_by_sku()
     db.products.delete_many({})
     imported = 0
     for handle, group in groups.items():
@@ -358,12 +377,15 @@ def import_products() -> None:
             compare = r.get("Variant Compare At Price")
             if compare is None:
                 compare = r.get("Compare At Price / Bulgaria")
+            sku = r.get("Variant SKU") or ""
             variants.append({
                 "name": str(name),
                 "price_eur": round(num(price), 2),
                 "compare_at_eur": round(num(compare), 2) if num(compare) > num(price) else 0.0,
-                "stock": int(num(r.get("Variant Inventory Qty"))),
-                "sku": r.get("Variant SKU") or "",
+                # the shop's own quantity wins over the (stale) export
+                "stock": live_stock.get(f"{handle}|{sku.strip()}",
+                                        int(num(r.get("Variant Inventory Qty")))),
+                "sku": sku,
             })
         if not variants:
             variants = [{"name": "1 бр.", "price_eur": 0.0, "stock": 0, "sku": ""}]

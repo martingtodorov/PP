@@ -45,17 +45,22 @@ export default function AdminAnalyticsPage() {
     }
   };
 
-  const load = useCallback(() => {
+  const load = useCallback((fresh = false) => {
     const params = { range };
     if (range === "custom") { params.date_from = from; params.date_to = to; }
+    if (fresh) params.fresh = 1;
     api.get("/admin/analytics", { params }).then(({ data }) => setData(data));
   }, [range, from, to]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    const t = setInterval(load, 30000);
+    const t = setInterval(() => load(), 30000);
     return () => clearInterval(t);
   }, [load]);
+
+  const builtAt = data?.cached_at
+    ? new Date(data.cached_at).toLocaleTimeString("bg-BG", { hour: "2-digit", minute: "2-digit" })
+    : "";
 
   const cur = data?.current;
   const prev = data?.previous;
@@ -87,11 +92,23 @@ export default function AdminAnalyticsPage() {
               className="border border-slate-300 rounded-md px-2 py-1.5" data-testid="analytics-date-to" />
           </span>
         )}
-        <button onClick={sendReport} disabled={sending}
-          className="ml-auto px-4 py-1.5 rounded-full text-sm font-semibold bg-white border border-slate-200 text-slate-700 hover:border-slate-400 disabled:opacity-60"
-          data-testid="send-daily-report">
-          {sending ? "Изпращам…" : "Прати отчета за вчера"}
-        </button>
+        <span className="ml-auto flex items-center gap-2">
+          {builtAt && (
+            <span className="text-xs text-slate-500" data-testid="analytics-built-at">
+              данни от {builtAt} ч.
+            </span>
+          )}
+          <button onClick={() => load(true)}
+            className="px-4 py-1.5 rounded-full text-sm font-semibold bg-white border border-slate-200 text-slate-700 hover:border-slate-400"
+            data-testid="analytics-refresh">
+            Преизчисли
+          </button>
+          <button onClick={sendReport} disabled={sending}
+            className="px-4 py-1.5 rounded-full text-sm font-semibold bg-white border border-slate-200 text-slate-700 hover:border-slate-400 disabled:opacity-60"
+            data-testid="send-daily-report">
+            {sending ? "Изпращам…" : "Прати отчета за вчера"}
+          </button>
+        </span>
       </div>
 
       <section className="bg-slate-950 text-white rounded-2xl p-5 sm:p-6" data-testid="analytics-panel">

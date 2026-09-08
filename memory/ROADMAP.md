@@ -8,6 +8,11 @@
 - Prerender: начална страница 200 с H1/canonical/JSON-LD, несъществуващи URL-и → истински 404
   (проверено с 17 бекенд теста + e2e). Остава само деплоят на продукция.
 
+## P0 — чака валидация (08.06.2026)
+- **BoxNow tracking линк** — кодът тегли публичния номер от NextLevel Fulfillment API, но поръчка
+  GUL07 не е в preview базата, така че не е потвърдено на живо. След деплой: Админ → Поръчки →
+  „Обнови проследяванията“ и провери линка на BoxNow поръчка.
+
 ## P0 — чака собственика (06.06.2026)
 1. **Деплой на прод** (без `run_catalog_import=true`, докато не е потвърдено): Save to GitHub →
    `git pull` → `ansible-playbook -i inventory.ini playbooks/deploy_backend.yml` + `deploy_frontend.yml`.
