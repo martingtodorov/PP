@@ -770,9 +770,10 @@ def render_shipment(order: Dict[str, Any], locale: str, contact_email: str, sell
     sh = order.get("shipment") or {}
     n = order.get("order_number", "")
     money = _money_of(order)
-    rows = [(tr(loc, "sh_courier"), sh.get("courier") or "NextLevel"), (tr(loc, "sh_awb"), sh.get("awb", ""))]
-    if sh.get("courier_awb") and sh.get("courier_awb") != sh.get("awb"):
-        rows.append((tr(loc, "sh_courier") + " №", sh["courier_awb"]))
+    # the courier's own number is the one that works on the courier's site; NextLevel's internal
+    # awb stays in the admin panel
+    number = (sh.get("courier_awb") or "").strip() or sh.get("awb", "")
+    rows = [(tr(loc, "sh_courier"), sh.get("courier") or "NextLevel"), (tr(loc, "sh_awb"), number)]
     if order.get("payment_method") == "cod":
         rows.append((tr(loc, "sh_cod"), money(order.get("total_eur"), order.get("total_orig"))))
     table = "".join(

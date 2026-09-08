@@ -36,6 +36,16 @@ export const NextLevelCard = () => {
     } catch (e) { toast.error(formatErr(e)); } finally { setBusy(""); }
   };
 
+  const refreshTracking = async () => {
+    if (!window.confirm("Да презапиша ли номерата и линковете за проследяване на всички поръчки с товарителница?")) return;
+    setBusy("tracking");
+    try {
+      const { data } = await api.post("/admin/shipments/refresh-tracking");
+      toast.success(`Обновени ${data.orders} поръчки · ${data.with_courier_number} с куриерски номер`
+        + (data.waiting_for_courier_number ? ` · ${data.waiting_for_courier_number} чакат номер от куриера` : ""));
+    } catch (e) { toast.error(formatErr(e)); } finally { setBusy(""); }
+  };
+
   if (!cfg) return null;
   const v = (k) => (form[k] !== undefined ? form[k] : cfg[k] ?? "");
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "number" ? Number(e.target.value) : e.target.value }));
@@ -70,6 +80,12 @@ export const NextLevelCard = () => {
         </button>
         <button onClick={runTest} disabled={!!busy || !cfg.has_keys} className="inline-flex items-center gap-1.5 border border-slate-300 hover:border-slate-500 text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-50" data-testid="nextlevel-test">
           {busy === "test" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Тествай връзката
+        </button>
+        <button onClick={refreshTracking} disabled={!!busy || !cfg.has_keys}
+          className="inline-flex items-center gap-1.5 border border-slate-300 hover:border-slate-500 text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-50"
+          data-testid="nextlevel-refresh-tracking">
+          {busy === "tracking" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Обнови номерата за проследяване
         </button>
       </div>
       {test && (

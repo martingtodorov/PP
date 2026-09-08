@@ -564,10 +564,38 @@ async def _save_product_order(col: Dict[str, Any], handles: List[str]) -> None:
                   "updated_at": now_utc()}}, upsert=True)
 
 
+async def _redirect_target_lives(to_url: str) -> bool:
+    """Is the 301 target a real page? A redirect into a 404 is worse than the 404 itself."""
+    raw = (to_url or "").strip()
+    if not raw:
+        return False
+    parsed = urlparse(raw if "//" in raw else f"//{raw}")
+    if parsed.hostname and "purepeptide" not in parsed.hostname:
+        return True                                   # someone else's site: not ours to validate
+    path = unquote(parsed.path or "/").rstrip("/") or "/"
+    if path == "/":
+        return True
+    kind, _, handle = path.lstrip("/").partition("/")
+    if not handle:
+        return kind in ("collections", "articles")    # listing pages exist on their own
+    query = {"$or": [{"handle": handle}, {f"translations.{DEFAULT_LOCALE}.handle": handle}]}
+    if kind == "products":
+        return bool(await db.products.find_one({**query, "active": {"$ne": False}}, {"_id": 1}))
+    if kind == "collections":
+        return bool(await db.collections_cat.find_one({**query, "delisted": {"$ne": True}}, {"_id": 1}))
+    if kind == "pages":
+        return bool(await db.pages.find_one({"$or": [{"slug": handle}, {"pub_slug": handle}]}, {"_id": 1}))
+    if kind == "articles":
+        return bool(await db.articles.find_one(query, {"_id": 1}))
+    return False
+
+
 async def adopt_imported_redirects() -> int:
     """Move the 301s that came from Shopify into the redirects list (once).
 
     They were parked on the delisted-links board as notes; redirects are their own feature now.
+    An imported redirect only goes live if its target actually resolves — several of the Shopify
+    ones point at handles that no longer exist, and those wait in the list switched off.
     """
     moved = 0
     async for d in db.delisted_links.find({"status": "redirected",
@@ -575,14 +603,25 @@ async def adopt_imported_redirects() -> int:
         src = _redirect_path(d.get("url") or "")
         if not src or src == "/" or await db.redirects.find_one({"from_path": src}):
             continue
+        target = (d.get("replacement_url") or "").strip()
         await db.redirects.insert_one({"id": str(uuid.uuid4()), "from_path": src,
-                                       "to_url": (d.get("replacement_url") or "").strip(),
+                                       "to_url": target,
                                        "note": d.get("notes") or "Импортирано от Shopify",
-                                       "active": True, "hits": 0, "last_hit": "",
+                                       "active": await _redirect_target_lives(target),
+                                       "validated": True, "hits": 0, "last_hit": "",
                                        "created_at": now_utc(), "created_by": "import"})
         moved += 1
-    if moved:
-        log.info("Adopted %d imported redirects into the redirects list", moved)
+
+    # records adopted before the check existed: validate them once, then never touch them again
+    checked = 0
+    async for r in db.redirects.find({"created_by": "import", "validated": {"$ne": True}},
+                                     {"_id": 0, "from_path": 1, "to_url": 1}):
+        await db.redirects.update_one(
+            {"from_path": r["from_path"]},
+            {"$set": {"validated": True, "active": await _redirect_target_lives(r.get("to_url", ""))}})
+        checked += 1
+    if moved or checked:
+        log.info("Redirects list: %d adopted, %d validated", moved, checked)
     return moved
 
 
@@ -1369,6 +1408,9 @@ async def get_order(order_id: str, request: Request):
     o["cancellable"] = not blocker
     o["cancel_blocker"] = blocker
     bank = await _bank_block(o)
+    if o.get("shipment"):
+        # computed on read: older orders stored NextLevel's internal awb as the tracking number
+        o["tracking"] = nextlevel.customer_tracking(o["shipment"])
     is_owner = user and (user.get("role") == "admin" or o.get("customer_id") == user.get("id"))
     if not is_owner:
         # allow guest lookup by id (acts as token) for confirmation page
@@ -1444,6 +1486,8 @@ def _track_view(o: Dict[str, Any]) -> Dict[str, Any]:
             "status": shipment.get("status") or "",
             "tracking_link": shipment.get("tracking_link") or (o.get("tracking") or {}).get("tracking_url") or "",
         } if shipment.get("awb") else None,
+        # computed on read, so older orders that stored NextLevel's internal awb are corrected too
+        "tracking": nextlevel.customer_tracking(shipment) if shipment.get("awb") else None,
     }
 
 
