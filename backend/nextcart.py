@@ -40,6 +40,8 @@ COUNTRY_COURIERS: Dict[str, list] = {
 
 # Prepaid-only markets (owner's decision — no cash on delivery there). Germany keeps COD.
 COUNTRY_PAYMENTS: Dict[str, list] = {c: ["bank_transfer"] for c in ("ES", "FR", "BE", "NL", "CY")}
+# Bulgaria is cash-on-delivery only (owner's decision — no bank transfer)
+COUNTRY_PAYMENTS["BG"] = ["cod"]
 
 # The merchant's own delivery offer — wins over whatever the NextCart profile says (price and presence).
 METHOD_OVERRIDES: Dict[str, Dict[str, Dict[str, Any]]] = {
@@ -72,6 +74,12 @@ def payment_methods_for(country: str) -> list:
 
 def cod_allowed(country: str) -> bool:
     return any(m["key"] == "cod" for m in payment_methods_for(country))
+
+
+def payment_method_for(country: str, wanted: str) -> str:
+    """The payment the destination really offers — a stale/forged client choice is corrected here."""
+    allowed = [m["key"] for m in payment_methods_for(country)]
+    return wanted if wanted in allowed else allowed[0]
 
 
 def method_price(country: str, method_key: str, destination_type: str = "") -> Optional[float]:

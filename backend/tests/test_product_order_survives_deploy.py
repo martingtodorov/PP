@@ -72,3 +72,23 @@ def test_a_deploy_never_wipes_a_live_catalogue():
     assert 'os.environ.get("ALLOW_RESEED") != "1"' in guard
     assert "not re-seeding" in guard
     assert "stale = False" in guard
+
+
+def test_the_import_keeps_stock_and_admin_fields_on_products():
+    """Stock is decremented by our own checkout, so the export must never overwrite it, and the
+    internal admin tags / delisting are ours too."""
+    import matrixify_import as mi
+
+    assert "admin_tags" in mi.KEEP_PRODUCT and "delisted" in mi.KEEP_PRODUCT
+    assert "admin_tags" in mi.KEEP_COLLECTION and "delisted" in mi.KEEP_COLLECTION
+    assert "nav_hidden" in mi.KEEP_COLLECTION
+
+    live = mi.stock_by_sku()
+    assert live, "no SKUs with stock in the database"
+    for doc in DB.products.find({}, {"_id": 0, "handle": 1, "variants": 1}):
+        for v in doc.get("variants") or []:
+            sku = (v.get("sku") or "").strip()
+            if sku:
+                assert live[f"{doc['handle']}|{sku}"] == int(v.get("stock") or 0)
+    src = open(os.path.join(os.path.dirname(__file__), "..", "matrixify_import.py")).read()
+    assert 'live_stock.get(f"{handle}|{sku.strip()}"' in src

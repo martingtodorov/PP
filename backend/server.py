@@ -401,14 +401,40 @@ async def seed_catalog():
             )
 
 
+async def run_once(name: str, fn):
+    """One-shot data migration: a deploy or a restart must never rewrite content again.
+
+    On a shop that already has its real catalog the migration is recorded as done WITHOUT running —
+    it ran on an earlier release, and re-running it could undo an edit made in the admin since
+    (a deleted heading, a deleted redirect). `RERUN_MIGRATION=<name>` forces one more run.
+    """
+    forced = os.environ.get("RERUN_MIGRATION") == name
+    if not forced and await db.migrations.find_one({"name": name}):
+        return None
+    mark = {"$set": {"name": name, "at": now_utc()}}
+    if not forced:
+        site = ((await db.settings.find_one({"key": "site"}, {"_id": 0})) or {}).get("value") or {}
+        if site.get("catalog_imported"):
+            await db.migrations.update_one({"name": name}, {**mark, "$setOnInsert": {"skipped": True}},
+                                           upsert=True)
+            log.info("migration %s marked as done on a live shop (not run)", name)
+            return None
+    out = await fn()
+    await db.migrations.update_one({"name": name}, mark, upsert=True)
+    log.info("migration %s applied: %s", name, out)
+    return out
+
+
 async def seed_pages():
     """Insert the default Bulgarian/English static page content once."""
     # the imported Shopify slug aliases answered 200 in every locale with Bulgarian copy and
     # duplicated the real page — they are gone for good (owner's decision: hard 404)
-    dropped = await db.pages.delete_many({"$or": [{"canonical_slug": {"$nin": [None, ""]}},
-                                                  {"slug": {"$in": LEGACY_PAGE_ALIASES}}]})
-    if dropped.deleted_count:
-        log.info("removed %s duplicate page aliases", dropped.deleted_count)
+    async def drop_aliases():
+        dropped = await db.pages.delete_many({"$or": [{"canonical_slug": {"$nin": [None, ""]}},
+                                                      {"slug": {"$in": LEGACY_PAGE_ALIASES}}]})
+        return dropped.deleted_count
+
+    await run_once("drop_page_aliases", drop_aliases)
     for slug, per_locale in DEFAULT_PAGES.items():
         for locale, content in per_locale.items():
             existing = await db.pages.find_one({"slug": slug, "locale": locale})
@@ -464,7 +490,7 @@ async def on_startup():
     await seed_pages()
     await backfill_rotation_log()
     await restore_product_orders()
-    await adopt_imported_redirects()
+    await run_once("adopt_imported_redirects", adopt_imported_redirects)
     try:
         storage.init_storage()
         log.info("Object storage initialized")
@@ -477,12 +503,13 @@ async def on_startup():
     asyncio.create_task(wc_api.backfill_wc_ids())
     from restore_headings import restore_headings
     try:
-        await restore_headings(db, storage)
+        await run_once("restore_body_headings", lambda: restore_headings(db, storage))
     except Exception as ex:
         log.error("Heading restore failed: %s", ex)
     await resume_translate_jobs()
     asyncio.create_task(auto_translate_watch())
     asyncio.create_task(daily_report_loop())
+    asyncio.create_task(analytics_warm_loop())
 
 
 @app.on_event("shutdown")
@@ -1299,11 +1326,10 @@ async def checkout(payload: CheckoutIn, request: Request):
             shipping_override = payload.delivery.price_amount
         payload.delivery.price_amount = shipping_override
     user = await get_user_from_request(request)
-    # some markets are prepaid only (Spain) — the client must not be able to send COD
-    from nextcart import cod_allowed
+    # each market offers only what the owner sells there (BG = COD only, ES/FR/BE/NL/CY = prepaid)
+    from nextcart import payment_method_for
     pay_method = payload.payment_method if payload.payment_method in ("bank_transfer", "cod") else "bank_transfer"
-    if pay_method == "cod" and not cod_allowed((payload.shipping.country or "").upper()):
-        pay_method = "bank_transfer"
+    pay_method = payment_method_for((payload.shipping.country or "").upper(), pay_method)
     totals = _calc_totals(line_items, payload.shipping_method, discount.get("discount_eur", 0.0), shipping_override)
     loc = (payload.locale or "bg").lower()
     fx = await currency.rate_for_locale(db, loc)
@@ -1353,7 +1379,8 @@ async def checkout(payload: CheckoutIn, request: Request):
     # bank instructions
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     site_settings = (s or {}).get("value", {})
-    bank = bank_details.from_settings(site_settings, order["order_number"], totals["total_eur"])
+    bank = (bank_details.from_settings(site_settings, order["order_number"], totals["total_eur"])
+            if pay_method == "bank_transfer" else None)
     order_clean = {k: v for k, v in order.items() if k != "_id"}
     await db.orders.update_one({"id": order["id"]}, {"$set": {"wc_id": wc_api.wc_int(order["id"])}})
     asyncio.create_task(fulfillment.dispatch_new_order(order["id"]))
@@ -3394,7 +3421,18 @@ async def admin_analytics(
     range: str = Query("today"),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    fresh: bool = False,
     user=Depends(require_admin),
+):
+    """Served from the 5-minute warm cache (the tab opens instantly); `fresh=1` recomputes."""
+    payload = await _analytics_cached(range, date_from, date_to, fresh=fresh)
+    return {**payload, **await _analytics_live()}
+
+
+async def _analytics_payload(
+    range: str = "today",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
 ):
     start, end, prev_start, prev_end, bucket, axis_end, prev_axis_end = _range_bounds(
         range, date_from, date_to)
@@ -3402,10 +3440,7 @@ async def admin_analytics(
     previous = await _period_stats(prev_start, prev_end, bucket, prev_axis_end)
 
     now = datetime.now(timezone.utc)
-    live_start = now - timedelta(minutes=5)
     day_start = now - timedelta(hours=24)
-    live = await db.visits.distinct("session_id", {"ts": {"$gte": live_start.isoformat()},
-                                                  **analytics_bots.NOT_BOT})
     bots = await db.visits.count_documents({"ts": {"$gte": start.isoformat(), "$lt": end.isoformat()},
                                             "$nor": [analytics_bots.NOT_BOT]})
 
@@ -3420,12 +3455,10 @@ async def admin_analytics(
         "timezone": str(SHOP_TZ),
         "from": start.isoformat(),
         "to": end.isoformat(),
-        "live": len(live),
         "bots_excluded": bots,
         "visitors": await _visitor_windows(),
         "geo": await _geo_breakdown(start, end),
-        # the same breakdown for the two windows the owner watches: live now, and the last 24 hours
-        "live_geo": await _geo_breakdown(live_start, now),
+        # the same breakdown for the window the owner watches: the last 24 hours
         "day_geo": await _geo_breakdown(day_start, now),
         **await _pages_and_sources(start, end),
         "current": current,
@@ -3439,6 +3472,67 @@ async def admin_analytics(
             "conversion": delta(current["conversion"], previous["conversion"]),
         },
     }
+
+
+async def _analytics_live() -> Dict[str, Any]:
+    """Who is on the site right now — always live, it is two cheap queries on a 5-minute window."""
+    now = datetime.now(timezone.utc)
+    live_start = now - timedelta(minutes=5)
+    live = await db.visits.distinct("session_id", {"ts": {"$gte": live_start.isoformat()},
+                                                  **analytics_bots.NOT_BOT})
+    return {"live": len(live), "live_geo": await _geo_breakdown(live_start, now)}
+
+
+# The analytics tab is heavy (a dozen aggregations over `visits`), so it is precomputed every
+# ANALYTICS_WARM_SEC and the admin only ever reads the cache.
+ANALYTICS_WARM_SEC = int(os.environ.get("ANALYTICS_WARM_SEC", "300"))
+ANALYTICS_WARM_RANGES = ("today", "7d", "30d")
+_analytics_cache: Dict[str, Dict[str, Any]] = {}
+
+
+def _analytics_key(range: str, date_from: Optional[str], date_to: Optional[str]) -> str:
+    return f"{range}|{date_from or ''}|{date_to or ''}"
+
+
+async def _analytics_cached(range: str, date_from: Optional[str] = None, date_to: Optional[str] = None,
+                            fresh: bool = False) -> Dict[str, Any]:
+    key = _analytics_key(range, date_from, date_to)
+    entry = _analytics_cache.get(key)
+    now = time.time()
+    if entry:
+        entry["used_at"] = now
+    # stale only if the warm loop died; a normal request never waits for the aggregations
+    if not fresh and entry and now - entry["at"] < ANALYTICS_WARM_SEC * 2:
+        return {**entry["payload"], "cached_at": entry["iso"], "cache_age_sec": int(now - entry["at"])}
+    payload = await _analytics_payload(range, date_from, date_to)
+    _analytics_cache[key] = {"at": now, "iso": now_utc(), "used_at": now, "payload": payload,
+                             "args": (range, date_from, date_to)}
+    return {**payload, "cached_at": _analytics_cache[key]["iso"], "cache_age_sec": 0}
+
+
+async def analytics_warm_loop():
+    """Keep the analytics tab warm: the fixed ranges plus every custom range opened in the last hour."""
+    while True:
+        try:
+            wanted = {_analytics_key(r, None, None): (r, None, None) for r in ANALYTICS_WARM_RANGES}
+            cutoff = time.time() - 3600
+            for key, entry in list(_analytics_cache.items()):
+                if entry.get("used_at", 0) >= cutoff:
+                    wanted.setdefault(key, entry["args"])
+                else:
+                    _analytics_cache.pop(key, None)
+            for key, (r, df, dt_) in wanted.items():
+                payload = await _analytics_payload(r, df, dt_)
+                prev = _analytics_cache.get(key) or {}
+                _analytics_cache[key] = {"at": time.time(), "iso": now_utc(),
+                                         "used_at": prev.get("used_at", time.time()),
+                                         "payload": payload, "args": (r, df, dt_)}
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Analytics warm-up failed")
+        await asyncio.sleep(ANALYTICS_WARM_SEC)
+
 
 
 # ---------- Inventory tracking ----------
