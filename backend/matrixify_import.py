@@ -262,10 +262,10 @@ def clean_body(html: str, title: str = "", drop_leading_h1: bool = True, keep_h1
 # wiped every AI translation on production, and losing `rotations` republished a delisted URL
 # (the rotated handle lives in translations.<locale>.handle).
 KEEP_PRODUCT = ("id", "translations", "rotations", "active", "featured", "coa_image",
-                "admin_tags", "delisted")
+                "admin_tags", "delisted", "seo_title", "seo_description")
 KEEP_COLLECTION = ("id", "translations", "rotations", "product_order", "menu_order", "sort_order",
-                   "admin_tags", "delisted", "nav_hidden")
-KEEP_ARTICLE = ("id", "translations", "rotations")
+                   "admin_tags", "delisted", "nav_hidden", "seo_title", "seo_description")
+KEEP_ARTICLE = ("id", "translations", "rotations", "seo_title", "seo_description")
 
 
 def existing_by_handle(collection: str, keys: tuple) -> Dict[str, Dict[str, Any]]:
@@ -430,12 +430,13 @@ SKIP_PAGE_HANDLES = {"ads-page", "homepage"}
 
 def _page_upsert(slug: str, title: str, html: str, seo: Dict[str, str],
                  canonical_slug: Optional[str] = None) -> None:
-    fields = {"title": title, "html": html, "faq_items": [], **seo, "updated_at": now_utc(),
+    fields = {"title": title, "html": html, "faq_items": [], "updated_at": now_utc(),
               "link_key": link_key_for("page", canonical_slug or slug) or ""}
     fields["canonical_slug"] = canonical_slug or ""
     db.pages.update_one(
         {"slug": slug, "locale": "bg"},
-        {"$set": fields, "$setOnInsert": {"id": str(uuid.uuid4()), "slug": slug, "locale": "bg"}},
+        # the meta title/description are the owner's — the export only fills them for a brand new page
+        {"$set": fields, "$setOnInsert": {"id": str(uuid.uuid4()), "slug": slug, "locale": "bg", **seo}},
         upsert=True,
     )
 
