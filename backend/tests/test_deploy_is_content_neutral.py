@@ -54,12 +54,10 @@ def test_the_endpoint_serves_the_cache_and_keeps_live_fresh():
 
 
 def test_a_cached_read_is_instant_and_reports_its_age():
-    import asyncio
+    from conftest import run
     import server
 
-    asyncio.get_event_loop_policy().new_event_loop()
     server._analytics_cache.clear()
-    run = asyncio.new_event_loop().run_until_complete
     t0 = time.time()
     first = run(server._analytics_cached("today"))
     cold = time.time() - t0

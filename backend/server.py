@@ -1006,6 +1006,18 @@ async def next_rotation_handle(kind: str, base: str, doc: Dict[str, Any], loc: s
     raise HTTPException(500, f"Няма свободна комбинация за „{base}“")
 
 
+def _frozen_meta(title: str, description: str, seo_title: str, seo_description: str) -> Dict[str, str]:
+    """The meta tags as they are on the page right now.
+
+    An empty SEO field falls back to the title / the description, so rewriting the copy would also
+    move the meta tags. Before a rotation rewrites anything the current values are written into the
+    fields once — the owner's SEO title and description then stay byte-for-byte the same.
+    """
+    from prerender import _text
+    return {"seo_title": seo_title or title or "",
+            "seo_description": seo_description or _text(description)}
+
+
 async def rotate_page(link: Dict[str, Any], handle: str, loc: str, user_email: str) -> Dict[str, Any]:
     """Rotate a static page URL for one locale: /pages/faq -> /pages/faq-xyz.
 
@@ -1036,6 +1048,9 @@ async def rotate_page(link: Dict[str, Any], handle: str, loc: str, user_email: s
     update = {"pub_slug": new_slug, "rotations": rotations, "updated_at": now_utc()}
     if rewritten:
         update["html"] = html
+        frozen = _frozen_meta(doc.get("title") or "", doc.get("html") or "",
+                              doc.get("seo_title") or "", doc.get("seo_description") or "")
+        update.update({k: v for k, v in frozen.items() if not doc.get(k)})
     await db.pages.update_one({"slug": doc["slug"], "locale": loc}, {"$set": update})
     _links_cache.clear()
     return {"kind": "pages", "handle": new_slug, "path": f"/pages/{new_slug}", "rewritten": rewritten}
@@ -1059,14 +1074,26 @@ async def rotate_content(kind: str, handle: str, loc: str, user_email: str, to: 
     entry["handle"] = new_handle
 
     rewritten = False
+    base_updates: Dict[str, Any] = {}
     source_html = entry.get("description") or (doc.get("description") if loc == DEFAULT_LOCALE else "")
     if not to and source_html and len(source_html) > 40:
+        # the meta tags are pinned to their current wording before the copy changes
+        localized = localize_doc(doc, loc)
+        frozen = _frozen_meta(localized.get("title") or "", localized.get("description") or "",
+                              localized.get("seo_title") or "", localized.get("seo_description") or "")
         try:
             entry["description"] = await ai_rewrite_html(
                 source_html, loc, context=f"{kind} „{entry.get('title') or doc.get('title')}“ — ротация на съдържание")
             rewritten = True
         except Exception as exc:            # a failed rewrite must not block the URL rotation
             log.warning("rotation rewrite failed for %s: %s", handle, exc)
+        if rewritten:
+            for field, value in frozen.items():
+                if loc == DEFAULT_LOCALE:
+                    if not doc.get(field):
+                        base_updates[field] = value       # bg SEO lives on the document itself
+                elif not entry.get(field):
+                    entry[field] = value
     tr[loc] = entry
 
     # the entry retires the handle that WAS published (not the delisted url the board still shows),
@@ -1077,7 +1104,7 @@ async def rotate_content(kind: str, handle: str, loc: str, user_email: str, to: 
     rotations.append({"locale": loc, "from": previous, "to": new_handle, "code": new_handle.split("-")[-1],
                       "rewritten": rewritten, "at": now_utc(), "by": user_email})
     await coll.update_one({"handle": doc["handle"]}, {"$set": {"translations": tr, "rotations": rotations,
-                                                              "updated_at": now_utc()}})
+                                                              "updated_at": now_utc(), **base_updates}})
     _links_cache.clear()
     return {"kind": kind, "handle": new_handle, "path": f"/{kind}/{new_handle}", "rewritten": rewritten}
 

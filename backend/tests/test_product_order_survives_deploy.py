@@ -38,8 +38,7 @@ def test_the_order_is_saved_in_its_own_collection_too():
 
 def test_a_wiped_order_is_restored():
     """A re-seed or a Matrixify re-import replaces the collection document and drops the field."""
-    import asyncio
-
+    from conftest import run          # motor is bound to the session loop
     import server
 
     col = next(c for c in _admin().get(f"{API}/admin/collections", timeout=20).json()["collections"]
@@ -48,7 +47,7 @@ def test_a_wiped_order_is_restored():
     saved = DB.product_orders.find_one({"key": handle}, {"_id": 0})["handles"]
 
     DB.collections_cat.update_one({"handle": handle}, {"$unset": {"product_order": ""}})
-    assert asyncio.run(server.restore_product_orders()) >= 1
+    assert run(server.restore_product_orders()) >= 1
     assert DB.collections_cat.find_one({"handle": handle}, {"_id": 0})["product_order"] == saved
 
 
