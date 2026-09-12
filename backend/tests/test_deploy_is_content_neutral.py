@@ -69,3 +69,21 @@ def test_a_cached_read_is_instant_and_reports_its_age():
     assert warm <= cold
     assert warm < 0.05
     assert "live" not in second        # the live counters are added by the endpoint, never cached
+
+
+def test_the_import_never_overwrites_the_owners_seo_title_and_description():
+    import matrixify_import as mi
+
+    for keep in (mi.KEEP_PRODUCT, mi.KEEP_COLLECTION, mi.KEEP_ARTICLE):
+        assert "seo_title" in keep and "seo_description" in keep
+    src = (BACKEND / "matrixify_import.py").read_text()
+    # pages: the export may only fill the meta of a page that does not exist yet
+    assert '"$setOnInsert": {"id": str(uuid.uuid4()), "slug": slug, "locale": "bg", **seo}' in src
+    assert '"faq_items": [], "updated_at": now_utc()' in src
+
+    snapshot = mi.existing_by_handle("products", mi.KEEP_PRODUCT)
+    live = DB.products.find_one({"seo_title": {"$nin": ["", None]}},
+                                {"_id": 0, "handle": 1, "seo_title": 1, "seo_description": 1})
+    assert live, "no product with SEO text in the database"
+    assert snapshot[live["handle"]]["seo_title"] == live["seo_title"]
+    assert snapshot[live["handle"]]["seo_description"] == live["seo_description"]
