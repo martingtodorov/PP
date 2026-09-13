@@ -3,6 +3,7 @@ import os
 
 import requests
 from dotenv import load_dotenv
+from conftest import run          # one shared event loop for the suite
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 API = "http://localhost:8001/api"
@@ -78,7 +79,7 @@ def test_the_daily_report_renders_with_the_numbers_and_the_traffic_sources():
 
     day = __import__("datetime").datetime.now(server.SHOP_TZ).date() - __import__("datetime").timedelta(days=1)
     data = asyncio.get_event_loop().run_until_complete(server._report_payload(day)) \
-        if False else asyncio.run(server._report_payload(day))
+        if False else run(server._report_payload(day))
     subject, html = et.render_admin_daily_report(data)
     assert day.strftime("%d.%m.%Y") in subject or "поръчки" in subject
     for label in ("Продажби", "Поръчки", "Сесии", "Посетители", "ДНЕВЕН ОТЧЕТ"):

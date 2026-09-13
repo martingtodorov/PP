@@ -17,6 +17,7 @@ import uuid
 import asyncio
 import pytest
 import requests
+from conftest import run          # one shared event loop for the suite
 
 BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE}/api"
@@ -251,7 +252,7 @@ async def _cleanup_order(order_id: str, admin_session):
 
 
 def test_checkout_resolves_stale_product_id_by_sku(admin_session):
-    prod, variant = asyncio.run(_pick_stock_variant())
+    prod, variant = run(_pick_stock_variant())
     assert prod, "no product with stock available"
     stale_id = str(uuid.uuid4())  # not in DB
     payload = {
@@ -285,7 +286,7 @@ def test_checkout_resolves_stale_product_id_by_sku(admin_session):
         assert order["items"][0]["variant_sku"] == variant["sku"]
     finally:
         # cleanup no matter what
-        asyncio.run(_cleanup_order(order_id, admin_session))
+        run(_cleanup_order(order_id, admin_session))
 
 
 def test_checkout_still_rejects_completely_unknown_sku():

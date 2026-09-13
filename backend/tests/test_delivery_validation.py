@@ -4,6 +4,7 @@ import os
 import requests
 from dotenv import load_dotenv
 from pymongo import MongoClient
+from conftest import run          # one shared event loop for the suite
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 API = "http://localhost:8001/api"
@@ -63,11 +64,11 @@ def test_the_offer_of_the_destination_country_is_validated_server_side():
     import asyncio
     from importlib import import_module
     resolve = import_module("nextcart").resolve_delivery
-    fr = asyncio.run(resolve("FR", "econt", "econt_address", "address"))
+    fr = run(resolve("FR", "econt", "econt_address", "address"))
     assert fr["ok"] and fr["price"] == 8.99 and fr["method"]["provider_key"] == "gls"
-    assert asyncio.run(resolve("FR", "econt", "econt_office", "office"))["ok"] is False
-    assert asyncio.run(resolve("BG", "econt", "econt_address", "address"))["price"] == 4.99
-    assert asyncio.run(resolve("FR", "gls", "gls_address", "address"))["price"] == 8.99
+    assert run(resolve("FR", "econt", "econt_office", "office"))["ok"] is False
+    assert run(resolve("BG", "econt", "econt_address", "address"))["price"] == 4.99
+    assert run(resolve("FR", "gls", "gls_address", "address"))["price"] == 8.99
 
 
 def test_a_bank_transfer_order_pays_the_courier_price_too():

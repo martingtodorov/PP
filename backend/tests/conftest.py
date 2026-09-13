@@ -1,5 +1,9 @@
-"""One event loop for the whole test session — motor binds its client to the loop that is current
-when `server` is imported, so every test file must drive that same loop."""
+"""Shared test plumbing: the backend on the import path, the .env loaded and ONE event loop.
+
+The motor client is created once, when `server` is imported, and belongs to the loop that first
+touches it — so every test file in the suite must drive the same loop. Use `from conftest import run`
+instead of `asyncio.run`.
+"""
 import asyncio
 import sys
 from pathlib import Path

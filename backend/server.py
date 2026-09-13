@@ -684,6 +684,24 @@ def published_handle(doc: Dict[str, Any], loc: str) -> str:
     return ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc.get("handle") or ""
 
 
+def collection_handles(col: Dict[str, Any]) -> List[str]:
+    """Every handle this collection has ever had.
+
+    Products store the collection handle they were imported with, so a rotated collection must
+    still find them (and must keep finding them after a re-import).
+    """
+    out = [col.get("handle")]
+    for r in col.get("rotations") or []:
+        out += [r.get("from"), r.get("to")]
+    for entry in (col.get("translations") or {}).values():
+        out.append((entry or {}).get("handle"))
+    seen: List[str] = []
+    for h in out:
+        if h and h not in seen:
+            seen.append(h)
+    return seen
+
+
 def retired_handle(doc: Dict[str, Any], loc: str, requested: str) -> bool:
     """A handle that was rotated away must 404 for that locale (delisted URL).
 
@@ -692,10 +710,15 @@ def retired_handle(doc: Dict[str, Any], loc: str, requested: str) -> bool:
     (…-lrp next to the live …-brk) stays online as a duplicate of the same product.
     """
     rotations = doc.get("rotations") or []
+    published = published_handle(doc, loc)
+    if requested == published:
+        # invariant: whatever is published right now is never a 404, even if an interrupted
+        # rotation left its handle on the retired list — otherwise the page disappears completely
+        return False
     if any(r.get("locale") == loc and r.get("from") == requested for r in rotations):
         return True
     if any(r.get("locale") == loc for r in rotations):
-        return requested != published_handle(doc, loc)
+        return requested != published
     return False
 
 
@@ -724,7 +747,8 @@ async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     if is_catalog:
         prods = await db.products.find({"active": {"$ne": False}}, {"_id": 0}).to_list(500)
     else:
-        prods = await db.products.find({"collections": base_handle, "active": {"$ne": False}}, {"_id": 0}).to_list(500)
+        prods = await db.products.find({"collections": {"$in": collection_handles(col)},
+                                        "active": {"$ne": False}}, {"_id": 0}).to_list(500)
     siblings = await db.collections_cat.find(
         {"handle": {"$nin": [base_handle, ALL_COLLECTION, LEGACY_ALL]}, "nav_hidden": {"$ne": True},
          "delisted": {"$ne": True}, "link_key": {"$ne": "catalog"}}, {"_id": 0}
@@ -774,7 +798,8 @@ async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
         {"_id": 0},
     ).limit(8).to_list(8)
     cols = await db.collections_cat.find(
-        {"handle": {"$in": p.get("collections", [])}}, {"_id": 0}
+        {"$or": [{"handle": {"$in": p.get("collections", [])}},
+                 {"rotations.from": {"$in": p.get("collections", [])}}]}, {"_id": 0}
     ).to_list(20)
     articles = await db.articles.find(
         {"product_handle": p["handle"], "published": {"$ne": False}},
@@ -2381,7 +2406,8 @@ async def admin_collection_products(handle: str, user=Depends(require_admin)):
     col = await db.collections_cat.find_one({"handle": handle}, {"_id": 0})
     if not col:
         raise HTTPException(404, "Колекцията не е намерена")
-    q = {} if (handle == ALL_COLLECTION or col.get("link_key") == "catalog") else {"collections": handle}
+    q = ({} if (handle == ALL_COLLECTION or col.get("link_key") == "catalog")
+         else {"collections": {"$in": collection_handles(col)}})
     prods = await db.products.find(q, {"_id": 0}).to_list(500)
     prods = _apply_manual_order(prods, col.get("product_order"))
     return {
@@ -2421,7 +2447,8 @@ async def admin_order_by_sales(handle: str, user=Depends(require_admin)):
             if h:
                 sold[h] = sold.get(h, 0) + int(it.get("quantity") or 1)
 
-    q = {} if (handle == ALL_COLLECTION or col.get("link_key") == "catalog") else {"collections": handle}
+    q = ({} if (handle == ALL_COLLECTION or col.get("link_key") == "catalog")
+         else {"collections": {"$in": collection_handles(col)}})
     prods = await db.products.find(q, {"_id": 0, "handle": 1, "title": 1}).to_list(500)
     ordered = sorted(prods, key=lambda p: (-sold.get(p["handle"], 0), p.get("title", "")))
     handles = [p["handle"] for p in ordered]

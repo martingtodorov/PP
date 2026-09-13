@@ -261,30 +261,42 @@ def clean_body(html: str, title: str = "", drop_leading_h1: bool = True, keep_h1
 # Fields the admin owns, not Shopify: a re-import must never reset them. Losing `translations`
 # wiped every AI translation on production, and losing `rotations` republished a delisted URL
 # (the rotated handle lives in translations.<locale>.handle).
-KEEP_PRODUCT = ("id", "translations", "rotations", "active", "featured", "coa_image",
+KEEP_PRODUCT = ("id", "handle", "translations", "rotations", "active", "featured", "coa_image",
                 "admin_tags", "delisted", "seo_title", "seo_description")
-KEEP_COLLECTION = ("id", "translations", "rotations", "product_order", "menu_order", "sort_order",
-                   "admin_tags", "delisted", "nav_hidden", "seo_title", "seo_description")
-KEEP_ARTICLE = ("id", "translations", "rotations", "seo_title", "seo_description")
+KEEP_COLLECTION = ("id", "handle", "translations", "rotations", "product_order", "menu_order",
+                   "sort_order", "admin_tags", "delisted", "nav_hidden", "seo_title",
+                   "seo_description")
+KEEP_ARTICLE = ("id", "handle", "translations", "rotations", "seo_title", "seo_description")
+
+
+def handle_aliases(doc: Dict[str, Any]) -> set:
+    """Every handle a document has answered to: the stored one, the translated ones and every
+    rotation step. The Shopify export still carries the ORIGINAL handle, so without the rotation
+    aliases the snapshot misses the document and the retired handle goes live again."""
+    out = {doc.get("handle"), ((doc.get("translations") or {}).get("bg") or {}).get("handle")}
+    for r in doc.get("rotations") or []:
+        out |= {r.get("from"), r.get("to")}
+    return {h for h in out if h}
 
 
 def existing_by_handle(collection: str, keys: tuple) -> Dict[str, Dict[str, Any]]:
     """Snapshot of the admin-owned fields per handle, taken before the collection is replaced.
 
-    Indexed under both the stored handle and the published (rotated) one: since the admin handle
-    field edits the live URL, the stored handle can differ from the Shopify handle this import
-    inserts under, and a miss here silently wipes translations, rotations and the product order.
+    Indexed under every handle the document has ever had (see `handle_aliases`): the admin handle
+    field and the URL rotations both change the live handle, while the export inserts under the
+    Shopify one — a miss here silently wipes translations, rotations and the product order, and
+    republishes a handle that must stay a 404.
     """
     fields = {k: 1 for k in keys}
     fields["_id"] = 0
     fields["handle"] = 1
     fields["translations"] = 1
+    fields["rotations"] = 1
     out: Dict[str, Dict[str, Any]] = {}
     for d in db[collection].find({}, fields):
         kept = {k: v for k, v in d.items() if k in keys}
-        for alias in {d.get("handle"), ((d.get("translations") or {}).get("bg") or {}).get("handle")}:
-            if alias:
-                out[alias] = kept
+        for alias in handle_aliases(d):
+            out[alias] = kept
     return out
 
 
@@ -294,8 +306,9 @@ def stock_by_sku() -> Dict[str, int]:
     Keyed by handle+SKU (a SKU can repeat across products) under the stored and the rotated handle.
     """
     out: Dict[str, int] = {}
-    for d in db.products.find({}, {"_id": 0, "handle": 1, "translations": 1, "variants": 1}):
-        aliases = {d.get("handle"), ((d.get("translations") or {}).get("bg") or {}).get("handle")}
+    for d in db.products.find({}, {"_id": 0, "handle": 1, "translations": 1, "rotations": 1,
+                                   "variants": 1}):
+        aliases = handle_aliases(d)
         for v in d.get("variants") or []:
             sku = (v.get("sku") or "").strip()
             for alias in aliases:

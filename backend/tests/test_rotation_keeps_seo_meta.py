@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 BACKEND = Path(__file__).resolve().parents[1]
 load_dotenv(BACKEND / ".env")
 
-from conftest import LOOP  # noqa: E402  (one shared loop, see tests/conftest.py)
+from conftest import run  # noqa: E402
 
 import server  # noqa: E402
 from prerender import _text  # noqa: E402
@@ -22,7 +22,6 @@ DESC = ("<h1>Какво е тестовият пептид?</h1>\n<p>Тесто�
 REWRITTEN = ("<h1>Какво е тестовият пептид?</h1>\n<p>За тестовия пептид има проведени изследвания "
              "върху ефектите му върху метаболизма и възстановяването. Проучванията се провеждат "
              "единствено за лабораторна употреба.</p>")
-run = LOOP.run_until_complete
 
 
 def _make(seo_title="", seo_description="", handle="zz-seo-rotation"):
