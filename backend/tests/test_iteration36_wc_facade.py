@@ -24,6 +24,7 @@ import os
 import time
 import pytest
 import requests
+from conftest import run          # one shared event loop for the suite
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
 API = f"{BASE_URL}/api"
@@ -419,7 +420,7 @@ async def main():
         {{'$unset': {{'fulfillment':'','shipment':'','tracking':'','tracking_number':'','wc_notes':''}},
           '$set': {{'fulfillment_status':'unfulfilled'}}}})
     print('matched', r.matched_count, 'modified', r.modified_count)
-asyncio.run(main())
+run(main())
 """
     env = os.environ.copy()
     # load .env

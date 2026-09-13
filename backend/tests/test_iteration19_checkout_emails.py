@@ -4,6 +4,7 @@ import os
 import time
 import pytest
 import requests
+from conftest import run          # one shared event loop for the suite
 
 BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get(
     "REACT_APP_BACKEND_URL") else open("/app/frontend/.env").read().split(
@@ -118,7 +119,7 @@ class TestCheckoutContract:
             client.close()
             return doc
 
-        doc = asyncio.run(_fetch())
+        doc = run(_fetch())
         assert doc, f"order {oid} not in db"
         assert (doc.get("locale") or "").lower() == "ro", f"locale={doc.get('locale')!r}"
 

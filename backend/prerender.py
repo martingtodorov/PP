@@ -306,15 +306,10 @@ async def _page_alt_routes(base_slug: str) -> Dict[str, str]:
 def _retired(doc: Dict[str, Any], locale: str, requested: str) -> bool:
     """A handle rotated away in the admin must 404 for crawlers too, not only in the JSON API.
 
-    Same rule as server.retired_handle: a rotated document serves only its published handle, so no
-    intermediate rotation code can be crawled as a duplicate."""
-    rotations = doc.get("rotations") or []
-    if any(r.get("locale") == locale and r.get("from") == requested for r in rotations):
-        return True
-    if any(r.get("locale") == locale for r in rotations):
-        published = ((doc.get("translations") or {}).get(locale) or {}).get("handle") or doc.get("handle") or ""
-        return requested != published
-    return False
+    One rule for both: `server.retired_handle` is the single source of truth, so the SSR HTML and
+    the JSON API can never disagree about which URL is live."""
+    from server import retired_handle
+    return retired_handle(doc, locale, requested)
 
 
 async def _catalog_route(locale: str) -> str:
@@ -403,8 +398,9 @@ async def _collection(locale: str, handle: str) -> Optional[Dict[str, str]]:
     base_handle = doc.get("handle")
     # the catch-all collection holds every product and is recognised by its link_key, so renaming
     # or rotating its handle keeps the SSR listing full
+    from server import collection_handles
     query = ({"active": True} if doc.get("link_key") == "catalog"
-             else {"collections": base_handle, "active": True})
+             else {"collections": {"$in": collection_handles(doc)}, "active": True})
     products = await _db.products.find(query, {"_id": 0}).to_list(60)
     items = [localize_doc(p, locale) for p in products]
     title = c.get("seo_title") or f'{c.get("title")}'
