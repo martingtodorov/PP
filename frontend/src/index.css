@@ -1634,6 +1634,15 @@ button.bg-coral-600:disabled { box-shadow: none; }
 .nc2-cta:disabled { background: #cbd5e1; }
 .nc2-muted { font-size: 12px; color: #94a3b8; margin-top: 8px; }
 .nc2-err { background: #fef2f2; color: #b91c1c; border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+.nc2-inp--bad { border-color: #f87171; background: #fff7f7; }
+.nc2-missing {
+  margin-top: 10px;
+  padding-left: 18px;
+  list-style: disc;
+  font-size: 13px;
+  color: #b91c1c;
+}
+.nc2-missing li { margin-top: 2px; }
 @media (max-width: 860px) {
   .nc2-backdrop { padding: 0; align-items: flex-start; }
   .nc2-dialog { max-width: none; border-radius: 0; min-height: 100%; height: auto; align-self: flex-start; }
