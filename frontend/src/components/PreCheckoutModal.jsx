@@ -283,6 +283,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
     || { name: "", email: "", phone: "", dial: "359", country: localeCountry || "BG" });
   const [pickups, setPickups] = useState([]);
   const [loadingPickups, setLoadingPickups] = useState(false);
+  const [pickupErr, setPickupErr] = useState("");
   const [pickup, setPickup] = useState(saved.current?.pickup || null);
   const [addr, setAddr] = useState(saved.current?.addr
     || { city: "", postal_code: "", place_id: null, street: "", number: "" });
@@ -292,6 +293,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   const [countries, setCountries] = useState([]);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showMissing, setShowMissing] = useState(false);
 
   // lock the page behind the overlay, the overlay itself scrolls
   useEffect(() => {
@@ -427,12 +429,14 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   // full pickup list for the chosen method — sorted by distance once we know where the visitor is
   const point = geo?.source === "device" && geo?.lat && geo?.lng ? { lat: geo.lat, lng: geo.lng } : null;
   const pickupReq = useRef(0);
+  const [pickupReload, setPickupReload] = useState(0);
   useEffect(() => {
     if (!needsPickup || !method) { setPickups([]); return; }
     /* switching courier fires a second request — a slower earlier answer must not win, otherwise
        "До офис на Еконт" ends up showing the BOX NOW lockers that were requested before it */
     const token = ++pickupReq.current;
     setLoadingPickups(true);
+    setPickupErr("");
     pfPickups(method.provider_key, method.destination_type, contact.country, point)
       .then((data) => {
         if (token !== pickupReq.current) return;
@@ -447,9 +451,14 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
           return null;
         });
       })
-      .catch(() => { if (token === pickupReq.current) setPickups([]); })
+      .catch(() => {
+        // an empty office list is a dead end for the customer — say so instead of an idle dropdown
+        if (token !== pickupReq.current) return;
+        setPickups([]);
+        setPickupErr(t("officesFailed"));
+      })
       .finally(() => { if (token === pickupReq.current) setLoadingPickups(false); });
-  }, [method, needsPickup, contact.country, point?.lat, point?.lng]);
+  }, [method, needsPickup, contact.country, point?.lat, point?.lng, pickupReload]);
 
   // IP city pre-fills the address form (only on an exact city match, once)
   const prefilled = useRef(false);
@@ -472,9 +481,33 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   /* the amounts actually shown: rounded per line, then summed — same rule as the backend */
   const amt = cartAmounts({ items, shippingEur: shipping, discount });
   const nameWords = contact.name.trim().split(/\s+/).filter((w) => w.length >= 2);
-  const ready = nameWords.length >= 2 && EMAIL_RE.test(contact.email)
-    && contact.phone.replace(/\D/g, "").length >= 6 && method && termsAccepted
-    && (needsPickup ? !!pickup : addr.city && addr.street);
+  /* Why the order cannot be placed yet — the button used to be greyed out with no explanation and
+     people could not tell what was missing (a one-word name, an unpicked office, …). */
+  const missing = [];
+  if (nameWords.length < 2) missing.push({ f: "name", testId: "pc-name", msg: t("needName") });
+  if (!EMAIL_RE.test(contact.email)) missing.push({ f: "email", testId: "pc-email", msg: t("needEmail") });
+  if (contact.phone.replace(/\D/g, "").length < 6) missing.push({ f: "phone", testId: "pc-phone", msg: t("needPhone") });
+  if (!method) missing.push({ f: "method", testId: "pc-couriers", msg: t("needMethod") });
+  if (needsPickup && !pickup) {
+    missing.push({ f: "pickup", testId: "pc-pickup-search",
+                   msg: method?.destination_type === "locker" ? t("needLocker") : t("needOffice") });
+  }
+  if (needsAddress && !addr.city) missing.push({ f: "city", testId: "pc-city", msg: t("needCity") });
+  if (needsAddress && !addr.street) missing.push({ f: "street", testId: "pc-street", msg: t("needStreet") });
+  if (!termsAccepted) missing.push({ f: "terms", testId: "", msg: t("termsRequired") });
+  const bad = (field) => (showMissing && missing.some((m) => m.f === field) ? " nc2-inp--bad" : "");
+
+  const trySubmit = () => {
+    if (!missing.length) return placeOrder();
+    setShowMissing(true);
+    toast.error(missing[0].msg);
+    const el = missing[0].testId && document.querySelector(`[data-testid="${missing[0].testId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (typeof el.focus === "function") el.focus({ preventScroll: true });
+    }
+    return undefined;
+  };
 
   // remember everything for 90 days
   useEffect(() => {
@@ -574,11 +607,11 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
             <div className="nc2-grid">
               <div className="nc2-left">
                 <h2 className="nc2-sec-title">{t("yourDetails")}</h2>
-                <input className="nc2-inp" placeholder={t("fullNamePh")} autoComplete="name" value={contact.name}
+                <input className={`nc2-inp${bad("name")}`} placeholder={t("fullNamePh")} autoComplete="name" value={contact.name}
                   onChange={(e) => setContact({ ...contact, name: e.target.value })}
                   onBlur={(e) => setContact((c) => ({ ...c, name: e.target.value }))}
                   data-testid="pc-name" />
-                <input className="nc2-inp" type="email" placeholder={t("emailPh")} autoComplete="email" value={contact.email}
+                <input className={`nc2-inp${bad("email")}`} type="email" placeholder={t("emailPh")} autoComplete="email" value={contact.email}
                   onChange={(e) => setContact({ ...contact, email: e.target.value })}
                   onBlur={(e) => setContact((c) => ({ ...c, email: e.target.value }))}
                   data-testid="pc-email" />
@@ -597,7 +630,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                         <option key={`${d.iso2}-${d.dial}`} value={d.dial}>+{d.dial} {d.iso2}</option>
                       ))}
                     </select>
-                    <input className="nc2-inp" placeholder={t("phonePh")} autoComplete="tel" value={contact.phone}
+                    <input className={`nc2-inp${bad("phone")}`} placeholder={t("phonePh")} autoComplete="tel" value={contact.phone}
                       onChange={(e) => setContact({ ...contact, phone: e.target.value })}
                       onBlur={(e) => setContact((c) => ({ ...c, phone: e.target.value }))}
                       data-testid="pc-phone" />
@@ -666,6 +699,15 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                     placeholder={`${method.destination_type === "locker" ? t("chooseLocker") : t("chooseOffice")}`
                       + ` (${pickups.length})`
                       + (geo?.city ? ` — ${t("nearestTo", { city: geo.city })}` : "")} />
+                )}
+                {needsPickup && !loadingPickups && !pickups.length && (
+                  <p className="nc2-err" data-testid="pc-pickup-error">
+                    {pickupErr || t("officesEmpty")}{" "}
+                    <button type="button" className="underline font-semibold"
+                      onClick={() => setPickupReload((n) => n + 1)} data-testid="pc-pickup-retry">
+                      {t("tryAgain")}
+                    </button>
+                  </p>
                 )}
 
                 {needsAddress && (
@@ -755,9 +797,14 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                   {showsBGN() && <p className="nc2-muted text-right">{fmtBGN(total)}</p>}
                 </div>
 
-                <button type="button" className="nc2-cta" disabled={!ready || busy} onClick={placeOrder} data-testid="pc-continue">
+                <button type="button" className="nc2-cta" disabled={busy} onClick={trySubmit} data-testid="pc-continue">
                   {busy ? t("submittingText") : `${t("submitOrder")} · ${fmtAmount(amt.total)}`}
                 </button>
+                {showMissing && missing.length > 0 && (
+                  <ul className="nc2-missing" data-testid="pc-missing">
+                    {missing.map((m) => <li key={m.f}>{m.msg}</li>)}
+                  </ul>
+                )}
               </div>
             </div>
           )}
