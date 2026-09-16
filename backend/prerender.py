@@ -10,6 +10,7 @@ import html
 import logging
 import os
 import re
+from urllib.parse import quote
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -99,11 +100,15 @@ def strip_prefix(path: str) -> str:
 
 
 def url_for(locale: str, route: str) -> str:
+    """Absolute URL, percent-encoded exactly like the sitemap.
+
+    The Cyrillic slugs (/pages/какво-са-пептиди) appear encoded in the sitemap and raw in the
+    canonical — the same page in two spellings. Both are built with the same encoding now."""
     site = SITE_ORIGINS.get(locale, SITE_ORIGINS[DEFAULT_LOCALE])
     clean = route.strip("/")
     if not clean:
         return f"{site['origin']}{site['prefix']}/" if site["prefix"] else f"{site['origin']}/"
-    return f"{site['origin']}{site['prefix']}/{clean}"
+    return f"{site['origin']}{site['prefix']}/{quote(clean, safe='/-_.~')}"
 
 
 def _abs(url: str, origin: str) -> str:

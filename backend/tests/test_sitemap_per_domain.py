@@ -98,8 +98,9 @@ def child(host: str, kind: str) -> str:
 def test_product_entries_match_the_shopify_shape():
     xml = child("purepeptide.bg", "products")
     assert "<priority>" not in xml                       # Shopify does not emit priority
-    home, first = re.findall(r"<url>.*?</url>", xml)[:2]
-    assert home == "<url><loc>https://purepeptide.bg/</loc><changefreq>daily</changefreq></url>"
+    # pretty-printed, one tag per line — the shape the owner compared against the Shopify export
+    home, first = re.findall(r"<url>.*?</url>", xml, re.S)[:2]
+    assert re.sub(r"\s+", "", home) == "<url><loc>https://purepeptide.bg/</loc><changefreq>daily</changefreq></url>"
     assert "<changefreq>daily</changefreq>" in first
     assert re.search(r"<lastmod>\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+\-]\d\d:\d\d</lastmod>", first), first
     assert first.count("<image:image>") == 1             # the featured image only
@@ -119,7 +120,7 @@ def test_agentic_sitemap_is_only_the_agent_guide():
     xml = requests.get(f"{BASE}/api/sitemap_agentic_discovery.xml",
                        headers={"Host": "purepeptide.bg"}, timeout=20).text
     assert locs(xml) == ["https://purepeptide.bg/agents.md", "https://purepeptide.bg/llms.txt"]
-    assert "<changefreq>weekly</changefreq>" in xml
+    assert "<changefreq>daily</changefreq>" in xml
 
 
 def test_agents_md_and_llms_txt_are_served():

@@ -2,6 +2,7 @@
 import os
 import urllib.parse
 import pytest
+import re
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://shopify-migrate-3.preview.emergentagent.com").rstrip("/")
@@ -92,14 +93,20 @@ class TestLinkIndex:
 # ---------- SEO endpoints ----------
 class TestSEO:
     def test_sitemap_xml(self):
+        """The parent is an index (like Shopify) — the URLs live in the child sitemaps, and the
+        collection handles come from the live catalogue, because a rotation renames them."""
         r = requests.get(f"{API}/sitemap.xml", timeout=30)
         assert r.status_code == 200, r.text
-        body = r.text
-        assert "/collections/2all-the-peptides-1" in body
-        assert "/pages/contact-1" in body
+        assert r.text.lstrip().startswith("<?xml")
+        children = re.findall(r"<loc>([^<]+)</loc>", r.text)
+        assert children
+        body = ""
+        for child in children:
+            body += requests.get(f"{API}/" + child.rsplit("/", 1)[-1], timeout=30).text
+        live = requests.get(f"{API}/collections", timeout=30).json()["collections"]
+        assert f"/collections/{live[0]['handle']}" in body
+        assert "/pages/contact" in body
         assert "/pages/html-sitemap" in body
-        # xml validity - starts with <?xml
-        assert body.lstrip().startswith("<?xml")
 
     def test_agentic_sitemap(self):
         r = requests.get(f"{API}/sitemap_agentic_discovery.xml", timeout=30)
