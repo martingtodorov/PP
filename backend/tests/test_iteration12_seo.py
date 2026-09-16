@@ -124,5 +124,9 @@ def test_product_has_collections(s, handle):
 def test_sitemap(s):
     r = s.get(f"{BASE_URL}/api/sitemap.xml", timeout=20)
     assert r.status_code == 200
-    assert "<urlset" in r.text
-    assert "/products/" in r.text
+    # like Shopify: the parent is an index of child sitemaps, the URLs live in the children
+    assert "<sitemapindex" in r.text
+    child = re.findall(r"<loc>([^<]+sitemap_products[^<]*)</loc>", r.text)[0]
+    body = s.get(f"{BASE_URL}/api/" + child.rsplit("/", 1)[-1], timeout=30).text
+    assert "<urlset" in body
+    assert "/products/" in body

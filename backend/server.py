@@ -4285,12 +4285,18 @@ def _host_locales(request: Request, routes: Dict[str, Any], active: List[str]) -
     A sitemap may only list URLs of its own host — purepeptide.bg/sitemap.xml listing the .eu and
     .ro pages made Search Console report hundreds of foreign URLs. purepeptide.eu keeps its eight
     prefixed languages, .bg / .ro / .gr keep one each.
+
+    The match is on the domain alone, never on the "enabled" flag: purepeptide.ro answers 200 on
+    production even while the Romanian market is switched off for selling, and falling back to
+    "every locale" served 652 Bulgarian URLs under the Romanian host.
     """
     host = _bare_host(request.headers.get("x-forwarded-host") or request.headers.get("host") or "")
-    own = [l for l in active if _bare_host((routes.get(l) or SITE_ORIGINS[l])["origin"]) == host]
+    own = [l for l in LOCALES if _bare_host((routes.get(l) or SITE_ORIGINS[l])["origin"]) == host]
     if not own and host == "purepeptide-labs.bg":       # the Bulgarian alias domain
-        own = [l for l in active if l == DEFAULT_LOCALE]
-    return own or active
+        own = [DEFAULT_LOCALE]
+    # an unknown host (preview, health probe, direct IP) behaves like the main domain — mixing all
+    # eleven locales there produced child names like purepeptide.bg/sitemap_blogs_gr_1.xml
+    return own or [DEFAULT_LOCALE]
 
 
 SITEMAP_KINDS = ("products", "collections", "pages", "blogs")
@@ -4309,6 +4315,9 @@ async def _sitemap_groups(request: Request):
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
     active = [l for l in LOCALES if (routes.get(l) or {}).get("enabled", True)]
     listed = _host_locales(request, routes, active)
+    # the metas must cover the locales this domain lists, even when the market is switched off for
+    # selling: purepeptide.ro is live and its child sitemaps used to crash with KeyError('ro')
+    wanted = list(dict.fromkeys(active + listed))
     # a delisted collection 404s on the storefront — it belongs in no sitemap
     cols = await db.collections_cat.find({"delisted": {"$ne": True}}, {"_id": 0}).to_list(200)
     # a de-activated product 404s on the storefront — listing it in a sitemap is a dead link
@@ -4340,7 +4349,7 @@ async def _sitemap_groups(request: Request):
         """Per-locale path, image title and caption — every domain must read in its own language,
         not in Bulgarian (the cached translations already hold the localised titles)."""
         out = {}
-        for loc in active:
+        for loc in wanted:
             local = localize_doc(doc, loc)
             title = local.get("title") or ""
             src = (local.get("images") or [None])[0] or local.get("image")
@@ -4354,7 +4363,7 @@ async def _sitemap_groups(request: Request):
     groups: Dict[str, List[tuple]] = {k: [] for k in SITEMAP_KINDS}
     for path in static_pages:
         slug = path.rsplit("/", 1)[-1]
-        meta = {loc: {"path": (page_path(path, loc) if path else path), "src": ""} for loc in active}
+        meta = {loc: {"path": (page_path(path, loc) if path else path), "src": ""} for loc in wanted}
         if path == "":                       # Shopify lists the home page in the product sitemap
             groups["products"].append((meta, "daily", ""))
             continue
@@ -4402,9 +4411,19 @@ def _q(path: str) -> str:
 async def sitemap_index(request: Request):
     """Parent sitemap, same shape as the Shopify one: one child file per resource kind."""
     routes, _active, listed, groups = await _sitemap_groups(request)
+    if not listed:
+        # the domain of a switched-off market has no pages of its own
+        raise HTTPException(404, "Sitemap не съществува")
     origin = _host_origin(request, routes, listed)
     locs = [f"{origin}/sitemap_agentic_discovery.xml"]
     for kind in SITEMAP_KINDS:
+        if len(listed) > 1:
+            # purepeptide.eu carries eight languages: one mixed file of 176 URLs is unreadable and
+            # hides per-language coverage in Search Console — one child per language instead
+            for loc in listed:
+                for page in range(1, _sitemap_pages(groups[kind], [loc]) + 1):
+                    locs.append(f"{origin}/sitemap_{kind}_{loc}_{page}.xml")
+            continue
         for page in range(1, _sitemap_pages(groups[kind], listed) + 1):
             locs.append(f"{origin}/sitemap_{kind}_{page}.xml")
     body = "".join(f"  <sitemap>\n    <loc>{loc}</loc>\n  </sitemap>\n" for loc in locs)
@@ -4414,11 +4433,24 @@ async def sitemap_index(request: Request):
     return Response(content=xml, media_type="application/xml", headers=SEO_CACHE)
 
 
+# one file per language on a multi-language domain (/sitemap_products_en_1.xml) — declared before
+# the plain route so "products_en_1" is not read as kind="products_en"
+@api.api_route("/sitemap_{kind}_{locale}_{page:int}.xml", methods=["GET", "HEAD"])
+async def sitemap_child_localised(kind: str, locale: str, page: int, request: Request):
+    if locale not in LOCALES:
+        raise HTTPException(404, "Sitemap не съществува")
+    return await sitemap_child(kind, page, request, only=locale)
+
+
 @api.api_route("/sitemap_{kind}_{page:int}.xml", methods=["GET", "HEAD"])
-async def sitemap_child(kind: str, page: int, request: Request):
+async def sitemap_child(kind: str, page: int, request: Request, only: Optional[str] = None):
     if kind not in SITEMAP_KINDS or page < 1:
         raise HTTPException(404, "Sitemap не съществува")
     routes, active, listed, groups = await _sitemap_groups(request)
+    if only:
+        listed = [only] if only in listed else []
+    if not listed:
+        raise HTTPException(404, "Sitemap не съществува")
     entries = groups[kind]
     if page > _sitemap_pages(entries, listed):
         raise HTTPException(404, "Sitemap не съществува")
@@ -4462,7 +4494,10 @@ async def agentic_sitemap(request: Request):
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
     active = [l for l in LOCALES if (routes.get(l) or {}).get("enabled", True)]
-    locale = _host_locales(request, routes, active)[0]
+    listed = _host_locales(request, routes, active)
+    if not listed:
+        raise HTTPException(404, "Sitemap не съществува")
+    locale = listed[0]
     cfg = routes.get(locale) or SITE_ORIGINS[locale]
     origin = cfg["origin"].rstrip("/")
     body = "".join(f"  <url>\n    <loc>{origin}{p}</loc>\n    <changefreq>daily</changefreq>\n  </url>\n"
@@ -4587,14 +4622,16 @@ async def robots(request: Request):
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
     # a domain advertises its OWN sitemaps only — the other storefronts have their own robots.txt
-    for origin in dict.fromkeys((routes.get(loc) or SITE_ORIGINS[loc])["origin"]
-                                for loc in _host_locales(request, routes, LOCALES)):
+    own = dict.fromkeys((routes.get(loc) or SITE_ORIGINS[loc])["origin"]
+                        for loc in _host_locales(request, routes, LOCALES))
+    for origin in own:
         lines.append(f"Sitemap: {origin}/sitemap.xml")
         lines.append(f"Sitemap: {origin}/sitemap_agentic_discovery.xml")
-    origin_bg = (routes.get("bg") or SITE_ORIGINS["bg"])["origin"]
+    # the guide of THIS domain: pointing every storefront at the .bg copy sent crawlers off-host
+    here = next(iter(own), (routes.get("bg") or SITE_ORIGINS["bg"])["origin"]).rstrip("/")
     lines.append("")
-    lines.append(f"# AI agent guide: {origin_bg}/agents.md")
-    lines.append(f"# llms.txt: {origin_bg}/llms.txt")
+    lines.append(f"# AI agent guide: {here}/agents.md")
+    lines.append(f"# llms.txt: {here}/llms.txt")
     return PlainTextResponse("\n".join(lines), headers=SEO_CACHE)
 
 

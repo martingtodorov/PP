@@ -139,7 +139,15 @@ server {
         try_files $uri =404;
     }
 
-    location = /robots.txt   { try_files $uri @backend; }
+    # robots.txt comes from the backend, never from the build: the static file in the bundle
+    # advertised all four domains' /api/sitemap.xml, so Search Console reported a cross-host
+    # sitemap it "couldn't read" on every domain
+    location = /robots.txt {
+        proxy_pass http://{{ backend_private_ip }}:8001/api/robots.txt;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
 
     # every sitemap file comes from the backend (index + per-kind children, like Shopify:
     # /sitemap.xml -> /sitemap_products_1.xml, _collections_, _pages_, _blogs_, _agentic_discovery)
