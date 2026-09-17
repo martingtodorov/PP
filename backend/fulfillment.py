@@ -6,6 +6,7 @@ Two transports: the authenticated API (`app-id ff-…` + `app-secret`, gives bac
 per-shop inbound webhook URL (`https://api.nextlevel.delivery/webhooks/orders/ff-…`, fire-and-forget).
 """
 import asyncio
+import re
 import logging
 import os
 from datetime import datetime, timezone
@@ -16,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 import nextlevel
+from nextcart import normalize_phone
 from nextlevel import COUNTRY_CURRENCY, NextLevelError, office_id_of
 
 log = logging.getLogger("purepeptide.fulfillment")
@@ -24,6 +26,18 @@ API = "https://api.nextlevel.delivery/v1/fulfillment/orders"
 SETTINGS_KEY = "integrations.nextlevel_fulfillment"
 SYNC_SEC = 600
 DONE_STATUSES = {"delivered", "returned", "cancelled", "duplicated", "trash"}
+# NextLevel statuses that stop the order dead in the hub until somebody in the office acts
+# (https://nextlevel-delivery.readme.io/reference/order-status)
+ATTENTION_STATUSES = {
+    "need_correction": "изисква корекция на адреса или продуктите",
+    "waiting": "чака информация или промяна по поръчката",
+    "unconfirmed": "не е потвърдена от клиента",
+    "unknown_number": "телефонът на клиента е грешен или непознат",
+    "no_answer": "клиентът не отговаря на телефона",
+    "problem": "има проблем с продуктите или получателя",
+    "reclamation": "рекламация от клиента",
+    "duplicated": "е дублирана",
+}
 # checkout provider_key → NextLevel courier name (address deliveries only; offices carry the courier)
 COURIER_NAMES = {"econt": "Econt", "boxnow": "BoxNow", "speedy": "Speedy", "sameday": "Sameday", "fancourier": "FAN",
                  "speedex": "Speedex", "gls": "GLS", "acs": "ACS", "geniki": "Geniki"}
@@ -105,7 +119,10 @@ def build_order(order: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     receiver: Dict[str, Any] = {
         "name": (ship.get("full_name") or order.get("customer_name") or "").strip()[:100],
-        "phone": (ship.get("phone") or order.get("customer_phone") or "").strip(),
+        # a doubled country code (typed by the customer) is stripped here too, so the orders taken
+        # before the checkout learned to do it still ship
+        "phone": normalize_phone(ship.get("phone") or order.get("customer_phone") or "",
+                                 (ship.get("country") or "").upper()),
     }
     email = (ship.get("email") or order.get("customer_email") or "").strip()
     if email:
@@ -380,7 +397,43 @@ async def refresh_order(order_id: str) -> Dict[str, Any]:
         await nextlevel.notify_delivered(order_id)
     if str(fresh.get("status") or "").lower() == "cancelled" and order.get("status") != "cancelled":
         await warehouse_cancelled(order_id)
+    await _alert_if_stuck(order, ff, fresh)
     return {**ff, **{k: v for k, v in fresh.items() if v is not None}}
+
+
+def _status_key(value: Any) -> str:
+    return re.sub(r"[\s-]+", "_", str(value or "").strip().lower())
+
+
+async def _alert_if_stuck(order: Dict[str, Any], ff: Dict[str, Any], fresh: Dict[str, Any]) -> None:
+    """Push the admin when the warehouse parks an order (need_correction, unknown_number, …).
+
+    Once per status per order: the sync loop revisits the same order every 10 minutes and must not
+    turn one stuck shipment into a stream of notifications.
+    """
+    status = _status_key(fresh.get("status"))
+    if status not in ATTENTION_STATUSES:
+        if order.get("needs_attention"):        # the office sorted it out — clear the flag
+            await _db.orders.update_one({"id": order["id"]},
+                                        {"$unset": {"needs_attention": "", "fulfillment.alerted_status": ""}})
+        return
+    if ff.get("alerted_status") == status:
+        return
+    await _db.orders.update_one({"id": order["id"]},
+                                {"$set": {"fulfillment.alerted_status": status,
+                                          "fulfillment.alerted_at": _now(),
+                                          "needs_attention": {"status": status,
+                                                              "reason": ATTENTION_STATUSES[status],
+                                                              "at": _now()}}})
+    from server import notify_admin_push_bg          # late: server imports this module
+    await notify_admin_push_bg(
+        f"Пратка {order.get('order_number') or ''} {ATTENTION_STATUSES[status]}".strip(),
+        f"{(order.get('shipping') or {}).get('full_name') or order.get('customer_name') or ''} · "
+        f"NextLevel статус: {fresh.get('status')}",
+        f"/admin/orders/{order['id']}",
+        f"ff-{status}-{order['id']}",
+    )
+    log.warning("Fulfillment order %s parked by NextLevel: %s", order.get("order_number"), status)
 
 
 async def sync_open_orders() -> Dict[str, Any]:

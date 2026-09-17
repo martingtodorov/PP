@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search } from "lucide-react";
+import { AlertTriangle, Search } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import { api, fmtEUR, fmtMoney } from "../lib/api";
 
 const TABS = [
   { key: "all", label: "Всички" },
+  { key: "attention", label: "За намеса" },
   { key: "unfulfilled", label: "Неизпратени" },
   { key: "unpaid", label: "Неплатени" },
   { key: "open", label: "Отворени" },
@@ -97,6 +98,13 @@ export default function AdminOrdersPage() {
               {o.customer.name || o.customer.email || "—"} • {o.items_count} {o.items_count === 1 ? "артикул" : "артикула"} • {fmtTime(o.created_at)}
             </p>
             <div className="flex flex-wrap items-center gap-2 mt-2">
+              {o.needs_attention && (
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-red-100 text-red-800 inline-flex items-center gap-1"
+                  data-testid={`order-attention-${o.order_number}`}>
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {`Складът ${o.needs_attention.reason}`}
+                </span>
+              )}
               <Badge map={FUL_BADGE} value={o.fulfillment_status} />
               <Badge map={PAY_BADGE} value={o.payment_status} />
             </div>

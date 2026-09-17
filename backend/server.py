@@ -1379,7 +1379,7 @@ async def checkout(payload: CheckoutIn, request: Request):
         payload.delivery.price_amount = shipping_override
     user = await get_user_from_request(request)
     # each market offers only what the owner sells there (BG = COD only, ES/FR/BE/NL/CY = prepaid)
-    from nextcart import payment_method_for
+    from nextcart import normalize_phone, payment_method_for
     pay_method = payload.payment_method if payload.payment_method in ("bank_transfer", "cod") else "bank_transfer"
     pay_method = payment_method_for((payload.shipping.country or "").upper(), pay_method)
     totals = _calc_totals(line_items, payload.shipping_method, discount.get("discount_eur", 0.0), shipping_override)
@@ -1389,15 +1389,20 @@ async def checkout(payload: CheckoutIn, request: Request):
     for li, price in zip(line_items, local.pop("item_prices", [])):
         li["price_orig"] = price
 
+    # the customer often types his own country code into a field that already has the prefix —
+    # +359359888… made the courier stamp the shipment "unknown_number" and it never left the hub
+    ship_country = (payload.shipping.country or "").upper()
+    shipping = payload.shipping.model_dump()
+    shipping["phone"] = normalize_phone(shipping.get("phone") or payload.customer_phone, ship_country)
     order = {
         "id": str(uuid.uuid4()),
         "order_number": await _next_order_number(),
         "customer_id": user["id"] if user else None,
         "customer_email": payload.customer_email.lower(),
         "customer_name": payload.customer_name,
-        "customer_phone": payload.customer_phone,
+        "customer_phone": normalize_phone(payload.customer_phone or shipping.get("phone"), ship_country),
         "items": line_items,
-        "shipping": payload.shipping.model_dump(),
+        "shipping": shipping,
         "shipping_method": payload.shipping_method,
         "delivery": payload.delivery.model_dump() if payload.delivery else None,
         "notes": payload.notes,
@@ -1682,6 +1687,8 @@ def _order_view(o: Dict[str, Any]) -> Dict[str, Any]:
         "shipment_error": o.get("shipment_error"),
         "fulfillment": o.get("fulfillment"),
         "fulfillment_error": o.get("fulfillment_error"),
+        # set when NextLevel parks the order in the hub (need_correction, unknown_number, …)
+        "needs_attention": o.get("needs_attention"),
         "wc_id": o.get("wc_id"),
         "note": o.get("notes") or o.get("note") or "",
         "source": o.get("source") or "storefront",
@@ -1697,6 +1704,7 @@ def _order_view(o: Dict[str, Any]) -> Dict[str, Any]:
 
 
 ORDER_FILTERS = {
+    "attention": {"needs_attention": {"$ne": None}, "status": {"$ne": "cancelled"}},
     "unfulfilled": {"fulfillment_status": {"$nin": ["fulfilled", "shipped"]}, "status": {"$ne": "cancelled"}},
     "unpaid": {"payment_status": {"$ne": "paid"}, "status": {"$ne": "cancelled"}},
     "paid": {"payment_status": "paid"},

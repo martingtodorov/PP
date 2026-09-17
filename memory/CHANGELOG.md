@@ -891,3 +891,22 @@ caption, подредено с отстъпи). Проверено, че **ро�
 lastmod-ът и картинният блок остават същите, а старият handle изчезва от sitemap-а.
 Тестове: `tests/test_sitemap_integrity.py` (9 нови), обновени 3 остарели очаквания в
 `test_sitemap_per_domain.py`, `test_iteration12_seo.py`, `test_iteration14_url_alignment.py`.
+
+## 17.06.2026 — телефонът с двоен префикс и известия за спрени пратки
+1. **Двойният код на държавата се игнорира.** Клиент, който пише своя префикс в полето, което вече
+   има избирач (+359), пращаше поръчка с `+359359888…`; NextLevel я маркираше „unknown_number“ и
+   тя не тръгваше. Нов `nextcart.normalize_phone(raw, country)` реже префикса (със и без `+`/`00`)
+   и водещата нула. Прилага се на: чекаута (`server.py`, и `customer_phone`, и `shipping.phone`),
+   и при създаване на товарителница/фулфилмент поръчка (`nextlevel.py`, `fulfillment.py`) — така и
+   старите поръчки с развален телефон тръгват. Същата логика и във фронтенда
+   (`PreCheckoutModal.jsx` → `nationalNumber`), но бекендът има последната дума.
+2. **Известия при спрян фулфилмент.** По документацията на NextLevel
+   (https://nextlevel-delivery.readme.io/reference/order-status) следните статуси спират поръчката
+   в хъба: `need_correction`, `waiting`, `unconfirmed`, `unknown_number`, `no_answer`, `problem`,
+   `reclamation`, `duplicated`. `fulfillment._alert_if_stuck()` праща push на админа при преминаване
+   в такъв статус — по веднъж на статус на поръчка (sync loop-ът минава всеки 10 мин.), с линк към
+   поръчката. Поръчката се маркира с `needs_attention` (излиза в API-то), в админа има нов таб
+   „За намеса“, червен бадж в списъка и банер в детайла. Щом складът продължи (напр. `processing`),
+   флагът се вдига автоматично.
+- Тестове: `tests/test_phone_and_stuck_shipments.py` (16) + реална поръчка през API с `+359359…`,
+  която влиза в базата като `+359888123456`. Админ UI проверен със screenshot.
