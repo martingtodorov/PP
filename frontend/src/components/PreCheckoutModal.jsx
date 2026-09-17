@@ -41,6 +41,20 @@ const methodLabel = (m, t, locale) => {
   return t("methodToOffice", { courier });
 };
 
+/* The customer types his own country code into a field that already has the prefix picker, so the
+   order used to leave as +359359888… and the courier stamped it "unknown_number". Mirrors
+   nextcart.normalize_phone on the backend, which has the final say. */
+const nationalNumber = (raw, dial) => {
+  let d = String(raw || "").replace(/\D/g, "");
+  const code = String(dial || "").replace(/\D/g, "");
+  if (code) {
+    if (d.startsWith(`00${code}`)) d = d.slice(2 + code.length);
+    while (d.startsWith(code + code)) d = d.slice(code.length);
+    if (d.startsWith(code) && d.length - code.length >= 6) d = d.slice(code.length);
+  }
+  return d.replace(/^0+/, "");
+};
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 
 /** Strip punctuation (№, ., -, …) so "Витоша 150" matches "бул. Витоша №150". */
@@ -523,7 +537,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
       api.post("/cart/track", {
         email: contact.email,
         customer_name: contact.name,
-        phone: contact.phone ? `+${contact.dial}${contact.phone.replace(/\D/g, "").replace(/^0+/, "")}` : "",
+        phone: contact.phone ? `+${contact.dial}${nationalNumber(contact.phone, contact.dial)}` : "",
         locale,
         items: items.map((it) => ({
           product_id: it.product_id, variant_sku: it.variant_sku, title: it.title,
@@ -542,7 +556,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   const placeOrder = async () => {
     setBusy(true);
     try {
-      const phone = `+${contact.dial}${contact.phone.replace(/\D/g, "").replace(/^0+/, "")}`;
+      const phone = `+${contact.dial}${nationalNumber(contact.phone, contact.dial)}`;
       const fullName = contact.name.trim().replace(/\s+/g, " ");
       const { data } = await api.post("/checkout", {
         items: items.map((it) => ({ product_id: it.product_id, variant_sku: it.variant_sku, quantity: it.quantity })),

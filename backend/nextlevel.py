@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import httpx
+from nextcart import normalize_phone
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -120,7 +121,8 @@ def build_payload(order: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     delivery = order.get("delivery") or {}
     receiver: Dict[str, Any] = {
         "name": (ship.get("full_name") or order.get("customer_name") or "").strip()[:100],
-        "phone": (ship.get("phone") or order.get("customer_phone") or "").strip(),
+        "phone": normalize_phone(ship.get("phone") or order.get("customer_phone") or "",
+                                 (ship.get("country") or "").upper()),
         "email": (ship.get("email") or order.get("customer_email") or "").strip(),
     }
     if not receiver["name"] or not receiver["phone"]:

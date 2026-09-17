@@ -423,6 +423,30 @@ COUNTRY_DIAL = {
 }
 
 
+def normalize_phone(raw: str, country: str = "", dial: str = "") -> str:
+    """+<dial><national number>, whatever the customer typed.
+
+    People type their own country code into the field that already has a prefix picker, so the
+    order left with +359359888…; the courier then marks the shipment "unknown_number" and it never
+    ships. The prefix (with or without 00 / +) and the trunk zero are dropped here.
+    """
+    digits = re.sub(r"\D", "", raw or "")
+    code = re.sub(r"\D", "", dial or COUNTRY_DIAL.get((country or "").upper(), ""))
+    if not digits:
+        return ""
+    if code:
+        if digits.startswith("00" + code):
+            digits = digits[2 + len(code):]
+        # a doubled prefix is always a typo; a single one only if a real number is left behind
+        while digits.startswith(code + code):
+            digits = digits[len(code):]
+        if digits.startswith(code) and len(digits) - len(code) >= 6:
+            digits = digits[len(code):]
+        digits = digits.lstrip("0")
+        return f"+{code}{digits}" if digits else ""
+    return f"+{digits.lstrip('0')}"
+
+
 @router.get("/countries")
 async def nextcart_countries():
     """Countries we actually ship to — drives the checkout country selector.

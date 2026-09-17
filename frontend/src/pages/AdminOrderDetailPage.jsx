@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Copy, Check, Truck, Clock, PackageCheck, XCircle, Ban } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Ban, Check, Clock, Copy, PackageCheck, Truck, XCircle } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import { ShipmentCard } from "../components/admin/ShipmentCard";
 import { FulfillmentOrderCard } from "../components/admin/FulfillmentOrderCard";
@@ -113,6 +113,17 @@ export default function AdminOrderDetailPage() {
         <Badge map={FUL_BADGE} value={order.fulfillment_status} />
         <Badge map={PAY_BADGE} value={order.payment_status} />
       </div>
+      {order.needs_attention && (
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4 text-sm text-red-800"
+          data-testid="order-attention-banner">
+          <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <span>
+            Складът на NextLevel е спрял поръчката: <b>{order.needs_attention.reason}</b>
+            {` (статус ${order.needs_attention.status}, ${new Date(order.needs_attention.at).toLocaleString("bg-BG")})`}.
+            Оправи данните и натисни „Обнови статуса“.
+          </span>
+        </div>
+      )}
       {order.cancel_reason !== undefined && order.cancelled_at && (
         <div className="flex items-start gap-2 bg-slate-100 border border-slate-200 rounded-lg px-4 py-3 mb-4 text-sm text-slate-700"
           data-testid="order-cancelled-banner">
