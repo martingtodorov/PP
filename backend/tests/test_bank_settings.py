@@ -1,6 +1,7 @@
 """Bank account shown on the site and in the e-mail comes from the admin settings."""
 import os
 
+import pytest
 import requests
 from dotenv import load_dotenv
 
@@ -23,8 +24,11 @@ def test_the_admin_can_change_the_bank_account_and_the_shop_uses_it():
               "bank_iban": "BG00TEST00000000000000", "bank_bic": "TESTBGSF"}
     try:
         assert s.put(f"{API}/admin/settings", json={"value": edited}, timeout=20).status_code == 200
-        order = next(o for o in s.get(f"{API}/admin/orders", params={"limit": 50}, timeout=20).json()["orders"]
-                     if o.get("payment_method", "bank_transfer") == "bank_transfer")
+        # Bulgaria is cash-on-delivery only now, so a bank-transfer order may simply not exist
+        order = next((o for o in s.get(f"{API}/admin/orders", params={"limit": 200}, timeout=20).json()["orders"]
+                      if o.get("payment_method") == "bank_transfer"), None)
+        if order is None:
+            pytest.skip("no bank-transfer order in this environment")
         bank = requests.get(f"{API}/orders/{order['id']}", timeout=20).json()["bank_transfer"]
         if bank:            # a paid or cancelled order carries no instructions
             assert bank["iban"] == "BG00TEST00000000000000"
