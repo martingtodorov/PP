@@ -2,6 +2,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import restore_headings as rh  # noqa: E402
@@ -20,12 +22,16 @@ def test_pages_still_drop_and_demote_the_h1():
 
 
 def test_bundled_export_has_a_heading_for_most_products():
+    if not rh.BUNDLED_XLSX.exists():
+        pytest.skip("Matrixify експортът не е в repo-то (само на сървъра)")
     heads = rh.body_headings(rh.BUNDLED_XLSX)
     assert heads["21-retatrutide-5"] == "Какво е Ретатрутид?"
     assert len(heads) >= 20
 
 
 def test_collections_have_their_own_page_heading():
+    if not rh.BUNDLED_XLSX.exists():
+        pytest.skip("Matrixify експортът не е в repo-то (само на сървъра)")
     heads = rh.body_headings(rh.BUNDLED_XLSX, rh.SHEETS["collections"])
     assert heads["metabolic-studies"] == "Пептиди, изследвани за отслабване и метаболизъм"
     assert heads["2all-the-peptides-1"] == "Всички пептиди"

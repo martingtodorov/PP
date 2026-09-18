@@ -748,6 +748,11 @@ if __name__ == "__main__":
             only = [s.strip() for s in sys.argv[i + 1].split(",")]
         if arg == "--file" and i + 1 < len(sys.argv):
             xlsx_path = Path(sys.argv[i + 1])
+    if not xlsx_path.exists():
+        sys.exit(f"няма такъв Matrixify експорт: {xlsx_path}\n"
+                 "Експортът не се държи в git — сложи го на сървъра в <app_dir>/shared/"
+                 "matrixify-export.xlsx или подай --file /path/to/export.xlsx "
+                 "(в админ панела: Импорт → качване на .xlsx).")
     WB = openpyxl.load_workbook(xlsx_path, read_only=True, data_only=True)
     available = set(WB.sheetnames)
     storage.init_storage()

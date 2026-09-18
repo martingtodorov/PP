@@ -952,3 +952,17 @@ lastmod-ът и картинният блок остават същите, а с
   (`_needs_keys()` в `test_iteration35_fulfillment.py`); `test_bank_settings.py` скипва, ако няма
   поръчка с банков превод (България е само с наложен платеж).
 - Нов `memory/SECRETS.md`: какво липсва, откъде се взема и кои функции са изключени дотогава.
+
+## 18.06.2026 — Matrixify експортът и импортираните данни са махнати от preview
+Собственикът споделя акаунта, затова реалните данни на магазина вече не стоят в тази среда.
+- изтрит `backend/data/matrixify-export.xlsx` и добавен в `.gitignore` (не влиза в git);
+- нов `backend/scripts/purge_preview_data.py --yes` — изчиства импортираното от базата
+  (products, collections_cat, pages, articles, redirects/delisted_links/rotation_log, files,
+  image_map, import_jobs, customers, orders, abandoned_carts, inventory_log, shipments,
+  contact_messages, translate_jobs, wc_api_log, visits, audit) и вдига `value.catalog_imported`,
+  за да се върне демо seed-ът. Пуснат тук: остават 7 демо колекции + 16 демо продукта;
+- `deploy_backend.yml`: експортът живее на сървъра в `{{ app_dir }}/shared/matrixify-export.xlsx`
+  (осиновява се от предишния release, копира се в новия, само предупреждение ако липсва) —
+  `-e run_catalog_import=true` работи както преди;
+- `coa_import.pairs()` връща `[]` при липсващ файл, `matrixify_import.py` дава ясна грешка,
+  `tests/test_product_headings.py` прескача двата теста, които четат експорта.

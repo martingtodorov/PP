@@ -115,3 +115,6 @@ frontend/node_modules/.cache/default-development/6.pack
 frontend/node_modules/.cache/default-development/13.pack
 frontend/node_modules/.cache/default-development/14.pack
 frontend/node_modules/.cache/default-development/1.pack_
+
+# Matrixify export (owner shop data — server-side only, see memory/SECRETS.md)
+backend/data/matrixify-export.xlsx
