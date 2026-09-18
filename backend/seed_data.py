@@ -433,12 +433,12 @@ DEFAULT_SETTINGS = {
     "resend_api_key": "",
     "resend_from": "PurePeptide <onboarding@resend.dev>",
     # bank transfer instructions — shown on the confirmation page and in the order e-mail
-    "bank_name": "DSK Bank",
-    "bank_iban": "BG61STSA93000032400775",
-    "bank_bic": "STSABGSF",
-    "bank_holder": "Purepeptide LTD",
+    "bank_name": "<банка>",
+    "bank_iban": "BG00XXXX00000000000000",
+    "bank_bic": "XXXXBGSF",
+    "bank_holder": "<име на фирмата>",
     # seller details printed on invoices / order e-mails
-    "company_name": "Purepeptide LTD",
+    "company_name": "<име на фирмата>",
     "company_eik": "",
     "company_vat": "",
     "company_address": "",

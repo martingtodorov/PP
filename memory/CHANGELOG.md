@@ -936,3 +936,19 @@ lastmod-ът и картинният блок остават същите, а с
   за етикета („ПОДАРЪК“, „Free gift“, „Cadeau offert“, „Δώρο“, …).
 - `pages/ProductPage.jsx`: редът вече е промоционална лента (`data-testid=free-water-promo`) —
   корал градиент, кръгла икона с капка, надпис „ПОДАРЪК“ над изречението, вместо предишния сив ред.
+
+## 18.06.2026 — средата е изчистена от ключове преди споделяне на акаунта
+- `backend/.env`: изтрити стойностите на `NEXTLEVEL_FF_APP_ID/SECRET`, `RESEND_API_KEY`,
+  `ANTHROPIC_API_KEY`, `VAPID_PUBLIC_KEY/PRIVATE_KEY` и банковите `BANK_*`; `JWT_SECRET` е
+  презаписан с нов случаен (старите админ сесии са невалидни). Имената на променливите са запазени.
+- База: `settings.integrations.nextlevel` и `…nextlevel_fulfillment` — изчистени `app_id`,
+  `app_secret`, `wc_consumer_key`, `wc_consumer_secret`; `settings.site` — изчистени банкови полета;
+  `push_subscriptions` изтрити (устройства на собственика).
+- Изчистени реални стойности, попаднали във файлове в git: `seed_data.py` (IBAN по подразбиране),
+  `tests/test_iteration35_fulfillment.py` (app-id), `group_vars/all.yml.example`, `memory/PRD.md`,
+  6 файла в `test_reports/`. Проверено: app secret-ът никога не е влизал в git историята; `.env`
+  файловете не са проследявани.
+- Тестовете, които искат живи ключове, вече **скипват** вместо да падат
+  (`_needs_keys()` в `test_iteration35_fulfillment.py`); `test_bank_settings.py` скипва, ако няма
+  поръчка с банков превод (България е само с наложен платеж).
+- Нов `memory/SECRETS.md`: какво липсва, откъде се взема и кои функции са изключени дотогава.

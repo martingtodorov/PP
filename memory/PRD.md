@@ -244,7 +244,7 @@ Domains & languages
   per-locale domains).
 
 ### Other
-- Bank details corrected everywhere: **DSK Bank · BG61STSA93000032400775 · STSABGSF · Purepeptide LTD**.
+- Bank details corrected everywhere: **<банка> · BG00XXXX00000000000000 · XXXXBGSF · <име на фирмата>**.
 - Homepage heading "Пептиди, изследвани за:" reduced to `text-lg sm:text-xl`.
 - RevOrder: `gen_revorder_keys.py` generated an api_key + secret_key + inbound webhook URL per domain
   (purepeptide.bg / .eu / .ro / .gr) — stored in `settings.integrations.revorder`, disabled until enabled.
@@ -1025,7 +1025,7 @@ purepeptide.ro.
   Когато е **включено**, чекаутът НЕ създава наша товарителница (`dispatch_new_order`); COD → веднага, банков превод → при
   „Маркирай като платена“ (`on_paid`). Admin: GET/PUT `/api/admin/integrations/nextlevel-fulfillment`, `/test`, `/preview/{id}`,
   `/wc-keys`, `/wc-log`; `/api/admin/orders/{id}/fulfillment` (POST/DELETE/`/refresh`), `/api/admin/fulfillment/sync`.
-- **Магазинът на собственика в NextLevel е тип WooCommerce** (app-id `ff-OcTywYtADkJDKfs6i`; текущите app-id/secret за
+- **Магазинът на собственика в NextLevel е тип WooCommerce** (app-id `ff-xxxxxxxxxxxxxxxxx`; текущите app-id/secret за
   товарителници дават 401 на `/v1/fulfillment/*`). Затова `backend/wc_api.py` е WooCommerce REST фасада: Basic auth с
   consumer key/secret, `GET/PUT /orders`, `/orders/{id}/notes`, `/products`, `/variations` (stock от склада → inventory_log
   `nextlevel_sync`), catch-all 404 в WC формат; всичко се логва в `wc_api_log`. Монтирана на `/api/wc/wp-json/wc/v3` и
@@ -1243,7 +1243,7 @@ preview данни (23 vs 21 продукта, стари handles преди р�
 - `email_templates.seller_lines()` връща винаги "" и `_shell` игнорира `seller` — нито един клиентски
   имейл (поръчка, платена, изпратена, доставена, отказана, изоставена количка) не съдържа фирмено име,
   ЕИК, ДДС номер или адрес, независимо какво е записано в admin настройките.
-- От блока „Данни за банков превод“ е махнат редът „Получател: Purepeptide LTD“; банка, IBAN, BIC и
+- От блока „Данни за банков превод“ е махнат редът „Получател: <име на фирмата>“; банка, IBAN, BIC и
   основание остават. Тест: `tests/test_bank_settings.py` (4 минават, 30 рендера × 5 езика без изтичане).
 - ОБНОВЕНО 08.06.2026: редът „Получател“ е върнат в имейлите по искане на собственика. Checkout success страницата показва
   `bank_transfer.holder`; `.env BANK_HOLDER` и admin „Титуляр“ полето стоят.
