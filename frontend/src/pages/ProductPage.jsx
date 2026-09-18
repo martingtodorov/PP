@@ -194,9 +194,21 @@ export default function ProductPage() {
             )}
             {p.subtitle && <p className="text-sm text-slate-500 -mt-3">{p.subtitle}</p>}
 
-            <div className="space-y-1.5 text-sm text-slate-700">
+            <div className="space-y-2 text-sm text-slate-700">
               <p className="flex items-center gap-2"><Truck className="h-4 w-4 text-coral-600" /> {t("fastShipping")}</p>
-              <p className="flex items-center gap-2 font-semibold"><Droplets className="h-4 w-4 text-coral-600" /> {t("withWater")}</p>
+              {/* the free bacteriostatic water is the strongest argument on the page — it gets a gift strip */}
+              <div className="flex items-center gap-3 rounded-xl border border-coral-200 bg-gradient-to-r from-coral-50 to-white px-3 py-2.5 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
+                data-testid="free-water-promo">
+                <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-coral-600 text-white">
+                  <Droplets className="h-4 w-4" />
+                </span>
+                <span className="leading-tight">
+                  <span className="block text-[10px] font-extrabold uppercase tracking-[0.12em] text-coral-700">
+                    {t("freeGift")}
+                  </span>
+                  <span className="font-semibold text-slate-900">{t("withWater")}</span>
+                </span>
+              </div>
             </div>
 
             <div className="text-2xl font-bold text-slate-900 flex flex-wrap items-baseline gap-2" data-testid="product-price">
