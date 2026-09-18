@@ -19,6 +19,8 @@ META_COLS = (
 
 def pairs() -> List[Dict[str, Any]]:
     """[{handle, filename, url}] for every product that has a chemical-analysis file."""
+    if not XLSX.exists():
+        return []
     wb = openpyxl.load_workbook(XLSX, read_only=True, data_only=True)
     links: Dict[str, str] = {}
     if "Files" in wb.sheetnames:

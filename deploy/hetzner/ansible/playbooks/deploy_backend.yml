@@ -201,6 +201,50 @@
         force: true
       tags: [config]
 
+    # ---- Matrixify export: lives on the server, never in git (it is the owner's shop data) ----
+    - name: Shared directory for files that must survive a release
+      file:
+        path: "{{ app_dir }}/shared"
+        state: directory
+        owner: root
+        group: "{{ backend_service_user }}"
+        mode: "0750"
+      tags: [code, config, catalog]
+
+    - name: Adopt the Matrixify export from an older release (one-off — it used to ship in git)
+      shell: |
+        if [ ! -f {{ app_dir }}/shared/matrixify-export.xlsx ]; then
+          src=$(ls -1t {{ app_dir }}/releases/*/*/data/matrixify-export.xlsx 2>/dev/null | head -n1)
+          if [ -n "$src" ]; then cp "$src" {{ app_dir }}/shared/matrixify-export.xlsx; echo adopted; fi
+        fi
+      register: export_adopt
+      changed_when: "'adopted' in export_adopt.stdout"
+      tags: [code, config, catalog]
+
+    - name: Is the Matrixify export on the server?
+      stat: { path: "{{ app_dir }}/shared/matrixify-export.xlsx" }
+      register: catalog_export
+      tags: [code, config, catalog]
+
+    - name: Put the export into the release (matrixify_import.py and restore_headings read backend/data/)
+      copy:
+        src: "{{ app_dir }}/shared/matrixify-export.xlsx"
+        dest: "{{ backend_src_dir }}/data/matrixify-export.xlsx"
+        remote_src: true
+        owner: root
+        group: "{{ backend_service_user }}"
+        mode: "0640"
+      when: catalog_export.stat.exists
+      tags: [code, config, catalog]
+
+    - name: Warn when the export is missing (the catalog import would have nothing to read)
+      debug:
+        msg: >-
+          {{ app_dir }}/shared/matrixify-export.xlsx is missing. Upload it there (scp) or import
+          from Admin -> Импорт. Only the optional -e run_catalog_import=true step needs it.
+      when: not catalog_export.stat.exists
+      tags: [code, config, catalog]
+
     - name: Render the systemd unit
       template:
         src: ../templates/purepeptide-backend.service.j2
