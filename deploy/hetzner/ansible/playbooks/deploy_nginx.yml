@@ -119,6 +119,21 @@
         nginx_http2_directive: "{{ 'http2on' if (nginx_version.stdout | trim is version('1.25.1', '>=')) else 'listen' }}"
       tags: [config]
 
+    # served to visitors from a country we do not serve (US/CA) — it must survive a frontend
+    # deploy, so it lives next to the build, not inside it
+    - name: Create the error page directory
+      file: { path: "{{ web_root }}/error-pages", state: directory, owner: www-data, group: www-data, mode: "0755" }
+      tags: [config]
+
+    - name: Install the "domain not configured" page
+      copy:
+        src: ../files/error-pages/_not-live.html
+        dest: "{{ web_root }}/error-pages/_not-live.html"
+        owner: www-data
+        group: www-data
+        mode: "0644"
+      tags: [config]
+
     - name: Render the site config
       template:
         src: ../templates/nginx-purepeptide.conf.j2

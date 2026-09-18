@@ -910,3 +910,22 @@ lastmod-ът и картинният блок остават същите, а с
    флагът се вдига автоматично.
 - Тестове: `tests/test_phone_and_stuck_shipments.py` (16) + реална поръчка през API с `+359359…`,
   която влиза в базата като `+359888123456`. Админ UI проверен със screenshot.
+
+## 18.06.2026 — САЩ и Канада виждат „домейнът не е конфигуриран“
+- Блокирането е на origin-а (nginx), не в Cloudflare: безплатният план не позволява собствена
+  страница, а брандираната „you have been blocked“ издава, че зад домейна има сайт.
+- `templates/nginx-purepeptide.conf.j2`: `CF-IPCountry` → `$pp_geo_blocked` (от `blocked_countries`,
+  по подразбиране US+CA), user-agent → `$pp_crawler`, комбинацията → `$pp_block`.
+  `if ($pp_block) { return 403; }` в `/`, `= /`, `^~ /api/`, `^~ /api/files/`, а
+  `error_page 403 /_not-live.html` подменя тялото. `if`-ът НЕ може да е в `server` блока — там nginx
+  отдава собствената си 403 страница и игнорира `error_page` (проверено).
+- Нова страница `files/error-pages/_not-live.html` — „This domain is not configured“, noindex,
+  `no-store`, без името на магазина. Инсталира се от `deploy_nginx.yml` в `{{ web_root }}/error-pages/`
+  (извън билда, за да не се изтрива при фронтенд деплой).
+- Не се блокират: проверените ботове (Googlebot, Bingbot, Applebot, Yandex, GPTBot, ClaudeBot,
+  PerplexityBot, социални, мониторинг) — обхождат от US IP-та и без изключението спира индексирането;
+  `/wp-json/` (NextLevel чете поръчките оттам); robots/sitemap/llms/agents.
+- Документация: `deploy/hetzner/BLOCK_COUNTRIES.md` (смяна на списъка = `blocked_countries` +
+  `deploy_nginx.yml --tags config`).
+- Тестове: `tests/test_geoblock_us_ca.py` (19) — рендира истинския шаблон, вдига nginx на 8477 и
+  проверява US/CA → 403 с нашата страница, BG/GR/DE/RO/GB → 200, 4 бота от US → 200.

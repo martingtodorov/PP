@@ -34,6 +34,33 @@ map $host $pp_apex {
     "~*^www\.(?<apex>.+)$"  $apex;
 }
 
+# ---------- countries we do not serve ----------
+# Owner's call (17.06.2026): visitors from the US and Canada must not see the store. Cloudflare
+# hands the country over in CF-IPCountry, so the decision is made here, at the origin — the free
+# Cloudflare plan cannot serve our own page, and its branded "you have been blocked" page tells the
+# visitor there IS a site behind it. This one looks like a domain that was never set up.
+map $http_cf_ipcountry $pp_geo_blocked {
+    default   0;
+{% for c in blocked_countries | default(['US', 'CA']) %}    {{ c }}        1;
+{% endfor %}}
+
+# Googlebot, Bingbot and the AI crawlers all crawl from US addresses: blocking them would end the
+# indexing (and Search Console would stop reading the sitemaps). Verified-bot data is a paid
+# Cloudflare feature, so the origin matches the crawler user agents instead — the worst a forged
+# one gets is to see a public shop page.
+map $http_user_agent $pp_crawler {
+    default                                                          0;
+    "~*(googlebot|google-inspectiontool|storebot-google|bingbot|adidxbot|duckduckbot|applebot|yandex(bot|images)|baiduspider|slurp|petalbot|ahrefsbot|semrushbot)" 1;
+    "~*(gptbot|oai-searchbot|chatgpt-user|perplexitybot|perplexity-user|claudebot|claude-user|anthropic-ai|amazonbot|meta-externalagent|bytespider|google-extended)" 1;
+    "~*(facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|slackbot|discordbot|pinterest)" 1;
+    "~*(uptimerobot|pingdom|better ?uptime|statuscake|cf-uam)"        1;
+}
+
+map "$pp_geo_blocked:$pp_crawler" $pp_block {
+    default   0;
+    "1:0"     1;
+}
+
 server {
     listen 80;
     listen [::]:80;
@@ -69,6 +96,16 @@ server {
     add_header X-Frame-Options SAMEORIGIN always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
 
+    # A visitor from a country we do not serve gets an unconfigured-domain page, nothing more.
+    # The `if` has to sit inside the content locations below: with `return 403` in the server block
+    # nginx answers with its own default 403 body and ignores `error_page`.
+    error_page 403 /_not-live.html;
+    location = /_not-live.html {
+        internal;
+        alias {{ web_root }}/error-pages/_not-live.html;
+        add_header Cache-Control "no-store" always;
+    }
+
     gzip on;
     gzip_comp_level 5;
     gzip_min_length 512;
@@ -80,6 +117,7 @@ server {
     # /api/files/*.png|jpg|webp request is captured by the static image regex below and answered with
     # nginx's own 404 (this is what broke every product image after the Matrixify import).
     location ^~ /api/ {
+        if ($pp_block) { return 403; }
         proxy_pass http://{{ backend_private_ip }}:8001;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -95,6 +133,7 @@ server {
     }
 
     # WooCommerce-compatible REST façade for the NextLevel fulfillment warehouse (backend/wc_api.py)
+    # not guarded by $pp_block: this is NextLevel's integration endpoint, not a visitor
     location ^~ /wp-json/ {
         proxy_pass http://{{ backend_private_ip }}:8001;
         proxy_http_version 1.1;
@@ -109,6 +148,7 @@ server {
 
     # media is content-addressed and served as WebP/JPEG by the backend
     location ^~ /api/files/ {
+        if ($pp_block) { return 403; }
         proxy_pass http://{{ backend_private_ip }}:8001;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -220,6 +260,7 @@ server {
     # the home page: without this nginx would serve index.html straight from disk (index directive)
     # and the prerender would never run for "/"
     location = / {
+        if ($pp_block) { return 403; }
         # the "#geo" marker (quoted — a bare # would start an nginx comment) tells the app that the
         # visitor landed here from the bare apex, so the IP check may move him to his own language.
         # Typing /en/ himself carries no marker and is never redirected. Crawlers drop fragments.
@@ -231,6 +272,9 @@ server {
 
     # SPA fallback — locale prefixes (/en, /fr, …) are handled by the app
     location / {
+        # nothing is served to a country we do not ship to: the visitor sees the "domain is not
+        # configured" page, the same as a domain that points here without a site behind it
+        if ($pp_block) { return 403; }
         # on purepeptide.eu an unprefixed page is a duplicate of the English one
         if ($pp_needs_en) {
             return 301 https://$host/en$request_uri;
