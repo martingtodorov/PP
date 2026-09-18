@@ -135,3 +135,8 @@ backup_offsite: ""
 # NextLevel Delivery (api.nextlevel.delivery) — може и от Админ → Интеграции; тук е само резервно
 nextlevel_app_id: ""
 nextlevel_app_secret: ""
+
+# Countries that must not see the store (owner's call 17.06.2026). The visitor gets the
+# "domain is not configured" page; verified crawlers (Googlebot, Bingbot, …) are never blocked.
+# Empty list = nobody is blocked.
+blocked_countries: ["US", "CA"]
