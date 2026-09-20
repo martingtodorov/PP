@@ -966,3 +966,33 @@ lastmod-ът и картинният блок остават същите, а с
   `-e run_catalog_import=true` работи както преди;
 - `coa_import.pairs()` връща `[]` при липсващ файл, `matrixify_import.py` дава ясна грешка,
   `tests/test_product_headings.py` прескача двата теста, които четат експорта.
+
+## 20.06.2026 — H1 на „Всички пептиди“
+Страницата на catch-all колекцията вече винаги има H1 = преведеното „Всички пептиди“
+(All peptides / Alle Peptide / Tous les peptides / …), а не заглавието от импортирания body.
+- `pages/CollectionPage.jsx`: при `isAll` H1-ът се рендира дори когато описанието си носи `<h1>`
+  (то се снишава до `<h2>` от `demoteHeadings`, така че H1 остава един).
+- `prerender.py` (`_collection`): ново `_ALL_HANDLES` + проверка по `link_key == "catalog"` —
+  SSR H1-ът и breadcrumb-ът ползват `_t(locale, "catalog")`. Проверено: bg/en/de дават
+  „Всички пептиди“ / „All peptides“ / „Alle Peptide“.
+
+## 20.06.2026 — SEO одит на страницата „Всички пептиди“ (корекции)
+- **H1**: catch-all колекцията вече винаги има `<h1>` с преведеното „Всички пептиди“ (клиентски и SSR;
+  описанието си остава снишено до `<h2>`, така че H1 е точно един).
+- **hreflang ↔ линкове за език**: нов единен източник на истината.
+  `i18n.published_handle()` е ротационно-осъзнат (ако преводният handle е бил ротиран — печели
+  последната ротация; повторен импорт вече не връща пенсиониран handle), и се ползва от
+  `localize_doc().handles`, `/api/links`, sitemap-а, `prerender._alt_routes` и `_catalog_route`.
+  Във фронтенда `lib/seo.alternateHref()` чете hreflang алтернативите от `<head>` — `LocaleSwitcher`
+  и езиковият списък във футъра вече сочат същите URL-и като `<head>`.
+- **Бисквитки**: „Правила за поверителност“ вече води към `link("privacy")` (`/pages/privacy-policy`),
+  а не към общите условия.
+- **Schema**: `WebSite` обектът се добавя в графа на колекциите и статичните страници (дотогава
+  `isPartOf: #website` сочеше в нищото).
+- **LCP**: първите 4 продуктови карти се зареждат с `loading="eager"` + `fetchpriority="high"`
+  (`ProductCard` има нов `priority` проп).
+- Премахнат дублиран `<meta name="theme-color">`; aria-label-ите на лентата със съобщения са
+  преведени (`prevAnnouncement`/`nextAnnouncement` за 11-те езика).
+- **Правопис**: нов `fix_bg_typos()` при старт (не е `run_once`, защото тези се пропускат на жив
+  магазин) — „удобрени“ → „одобрени“, „паренетерално“ → „парентерално“ в `settings`, `pages`,
+  `products`, `collections_cat`, `articles`. Идемпотентно, оправя и след повторен импорт.

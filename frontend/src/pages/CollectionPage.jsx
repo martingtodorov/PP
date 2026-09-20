@@ -10,7 +10,7 @@ import { useLocaleCtx } from "../i18n/LocaleContext";
 import { LOCALES } from "../i18n/locales";
 import { isAllCollection } from "../lib/collections";
 import { useSeo } from "../lib/seo";
-import { graph, itemListLd, breadcrumbLd, organizationLd } from "../lib/schema";
+import { graph, itemListLd, breadcrumbLd, organizationLd, websiteLd } from "../lib/schema";
 import { demoteHeadings } from "../lib/richText";
 
 export default function CollectionPage() {
@@ -51,6 +51,7 @@ export default function CollectionPage() {
         { name: c.title, path: `/collections/${handle}` },
       ]),
       organizationLd(),
+      websiteLd(locale),
     ),
   });
 
@@ -96,7 +97,7 @@ export default function CollectionPage() {
             : [{ label: t("catalog"), to: lp(link("catalog")) }, { label: c.title }]}
         />
         {/* like purepeptide.bg: the description carries the page H1 ("Пептиди, изследвани за…") */}
-        {!/<h1[\s>]/i.test(c.description || "") && (
+        {(isAll || !/<h1[\s>]/i.test(c.description || "")) && (
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-3"
             data-testid="collection-title">{isAll ? t("catalog") : c.title}</h1>
         )}
@@ -128,7 +129,7 @@ export default function CollectionPage() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-2 sm:gap-x-3 gap-y-6">
-          {sorted.map((p) => <ProductCard key={p.id} product={p} showAddToCart />)}
+          {sorted.map((p, i) => <ProductCard key={p.id} product={p} showAddToCart priority={i < 4} />)}
         </div>
         {sorted.length === 0 && <p className="text-center text-slate-500 py-20">{t("emptyCollection")}</p>}
       </div>

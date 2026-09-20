@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import PreCheckoutModal from "./PreCheckoutModal";
 import CookieConsent from "./CookieConsent";
 import { setSiteMedia, siteMedia, setShippingInfo } from "../lib/media";
+import { alternateHref } from "../lib/seo";
 import { prefetchCheckout } from "../lib/checkoutPrefetch";
 
 const Price = ({ eur, className = "" }) => (
@@ -30,6 +31,7 @@ const Price = ({ eur, className = "" }) => (
 
 /* ---------------- Announcement bar (coral, arrow carousel) ---------------- */
 const AnnouncementBar = ({ messages, loading }) => {
+  const { t } = useLocaleCtx();
   const [i, setI] = useState(0);
   const list = messages && messages.length ? messages : [];
   useEffect(() => {
@@ -46,7 +48,7 @@ const AnnouncementBar = ({ messages, loading }) => {
       <button
         type="button"
         className="pp-announce__nav"
-        aria-label="Previous announcement"
+        aria-label={t("prevAnnouncement")}
         onClick={() => setI((v) => (v - 1 + list.length) % list.length)}
         data-testid="announcement-prev"
       >
@@ -56,7 +58,7 @@ const AnnouncementBar = ({ messages, loading }) => {
       <button
         type="button"
         className="pp-announce__nav"
-        aria-label="Next announcement"
+        aria-label={t("nextAnnouncement")}
         onClick={() => setI((v) => (v + 1) % list.length)}
         data-testid="announcement-next"
       >
@@ -724,7 +726,7 @@ const Footer = ({ collections, articles, settings }) => {
           <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-slate-300" data-testid="footer-locales">
             {LOCALES.filter((l) => l !== locale).map((l) => (
               <li key={l}>
-                <a href={localeUrl(l, basePath)} onClick={() => rememberLocale(l)} className="hover:text-white" hrefLang={LOCALE_META[l].hreflang} data-testid={`footer-locale-${l}`}>
+                <a href={alternateHref(LOCALE_META[l].hreflang) || localeUrl(l, basePath)} onClick={() => rememberLocale(l)} className="hover:text-white" hrefLang={LOCALE_META[l].hreflang} data-testid={`footer-locale-${l}`}>
                   {LOCALE_META[l].label}
                 </a>
               </li>

@@ -10,7 +10,7 @@ import { FAQ_ITEMS, LOCALES, pick } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
 import { ContactForm } from "../components/ContactForm";
 import { ContactInfo } from "../components/ContactInfo";
-import { graph, faqLd, breadcrumbLd, organizationLd } from "../lib/schema";
+import { graph, faqLd, breadcrumbLd, organizationLd, websiteLd } from "../lib/schema";
 import { isAllCollection } from "../lib/collections";
 import { demoteHeadings } from "../lib/richText";
 
@@ -130,6 +130,7 @@ export default function StaticPage() {
         { name: title, path: `/pages/${slug}` },
       ]),
       organizationLd(),
+      websiteLd(locale),
     ),
   });
 

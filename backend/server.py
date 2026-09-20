@@ -40,7 +40,7 @@ from translations_seed import COLLECTION_TR, PRODUCT_TR, ARTICLE_TR
 from i18n import (
     LOCALES, DEFAULT_LOCALE, LOCALE_META, SITE_ORIGINS,
     normalize_locale, localize_doc, localize_list, ai_translate, ai_translate_chunked, ai_translate_page,
-    ai_rewrite_html,
+    ai_rewrite_html, published_handle,
 )
 from pages_seed import PAGE_SLUGS, PAGE_LABELS, DEFAULT_PAGES, LEGACY_PAGE_ALIASES
 import storage
@@ -425,6 +425,40 @@ async def run_once(name: str, fn):
     return out
 
 
+TYPO_FIXES = {"удобрени": "одобрени", "паренетерално": "парентерално"}
+
+
+def _fix_typos(value: Any) -> Any:
+    if isinstance(value, str):
+        for bad, good in TYPO_FIXES.items():
+            value = value.replace(bad, good)
+        return value
+    if isinstance(value, dict):
+        return {k: _fix_typos(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_fix_typos(v) for v in value]
+    return value
+
+
+async def fix_bg_typos() -> int:
+    """Two misspellings that came in with the Shopify copy („удобрени“, „паренетерално“).
+
+    Not a run_once migration on purpose: those skip on a shop that already holds the imported
+    catalog, and a re-import brings the typos back. Idempotent and runs over ~100 documents.
+    """
+    fixed = 0
+    for name in ("settings", "pages", "products", "collections_cat", "articles"):
+        async for doc in db[name].find({}):
+            body = {k: v for k, v in doc.items() if k != "_id"}
+            patched = _fix_typos(body)
+            if patched != body:
+                await db[name].update_one({"_id": doc["_id"]}, {"$set": patched})
+                fixed += 1
+    if fixed:
+        log.info("Bulgarian spelling fixed in %d documents", fixed)
+    return fixed
+
+
 async def seed_pages():
     """Insert the default Bulgarian/English static page content once."""
     # the imported Shopify slug aliases answered 200 in every locale with Bulgarian copy and
@@ -488,6 +522,7 @@ async def on_startup():
     await seed_catalog()
     await backfill_settings()
     await seed_pages()
+    await fix_bg_typos()
     await backfill_rotation_log()
     await restore_product_orders()
     await run_once("adopt_imported_redirects", adopt_imported_redirects)
@@ -679,11 +714,6 @@ def _apply_manual_order(prods: List[Dict[str, Any]], order: Optional[List[str]])
     return sorted(prods, key=lambda p: (index.get(p.get("handle"), len(index)), p.get("title", "")))
 
 
-def published_handle(doc: Dict[str, Any], loc: str) -> str:
-    """The handle this document is published under right now for that locale."""
-    return ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc.get("handle") or ""
-
-
 def collection_handles(col: Dict[str, Any]) -> List[str]:
     """Every handle this collection has ever had.
 
@@ -728,7 +758,7 @@ async def catalog_handle(loc: str = DEFAULT_LOCALE) -> str:
                                             {"_id": 0, "handle": 1, "translations": 1})
     if not doc:
         return ALL_COLLECTION
-    return ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc["handle"]
+    return published_handle(doc, loc) or ALL_COLLECTION
 
 
 @api.get("/collections/{handle}")
@@ -4229,8 +4259,7 @@ async def resolve_links(locale: str = Query(DEFAULT_LOCALE)):
             doc = (await db.collections_cat.find_one({"link_key": key}, {"_id": 0})
                    or await db.collections_cat.find_one({"handle": {"$in": candidates}}, {"_id": 0}))
             if doc:
-                handle = ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc["handle"]
-                out[key] = f"/collections/{handle}"
+                out[key] = f"/collections/{published_handle(doc, loc)}"
         else:
             doc = await db.pages.find_one({"link_key": key, "locale": "bg",
                                           "canonical_slug": {"$in": [None, ""]}}, {"_id": 0})
@@ -4351,7 +4380,7 @@ async def _sitemap_groups(request: Request):
         return f"/pages/{rotated_pages.get(loc, {}).get(slug, slug)}"
 
     def handle_for(doc, loc):
-        return ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc.get("handle")
+        return published_handle(doc, loc)
 
     def entry(doc, prefix: str, brand_sep: str) -> Dict[str, Dict[str, str]]:
         """Per-locale path, image title and caption — every domain must read in its own language,

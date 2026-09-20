@@ -26,6 +26,12 @@ const setLink = (rel, href, hreflang) => {
 
 const BRAND = "PurePeptide";
 
+/** The localised URL the page itself declared as its hreflang alternate — one source of truth for
+ *  the head, the language switcher and the footer language list (they used to disagree after a
+ *  handle rotation). Empty when the page has not rendered its alternates yet. */
+export const alternateHref = (hreflang) =>
+  document.head.querySelector(`link[rel="alternate"][hreflang="${hreflang}"]`)?.getAttribute("href") || "";
+
 /* Shopify parity: every title ends with " - PurePeptide" unless it already names the brand.
    Mirrored in backend/prerender.py `brand_title` — bots and browsers must see the same <title>. */
 export const brandTitle = (title) => {

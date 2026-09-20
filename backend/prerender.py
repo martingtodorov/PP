@@ -17,7 +17,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
-from i18n import DEFAULT_LOCALE, LOCALES, LOCALE_META, SITE_ORIGINS, localize_doc, normalize_locale
+from i18n import (DEFAULT_LOCALE, LOCALES, LOCALE_META, SITE_ORIGINS, localize_doc, normalize_locale,
+                  published_handle)
 from nextcart import shipping_summary
 from pages_seed import LEGACY_PAGE_ALIASES
 
@@ -121,6 +122,11 @@ def _text(value: Any, limit: int = 300) -> str:
     plain = re.sub(r"<[^>]+>", " ", str(value or ""))
     plain = html.unescape(re.sub(r"\s+", " ", plain)).strip()
     return plain[:limit].rstrip()
+
+
+# the catch-all collection: `link_key` is authoritative, the handles are a fallback for old data
+_ALL_HANDLES = {"2all-the-peptides-1", "all-peptides"}
+
 
 
 def demote(markup: str) -> str:
@@ -295,9 +301,7 @@ def _product_li(locale: str, product: Dict[str, Any]) -> str:
 def _alt_routes(doc: Dict[str, Any], prefix: str) -> Dict[str, str]:
     """The published path of this document in every locale — handles are localised (and rotated
     per locale), so the hreflang targets must come from the translations, never from the current URL."""
-    tr = doc.get("translations") or {}
-    base = doc.get("handle")
-    return {loc: f"{prefix}{(tr.get(loc) or {}).get('handle') or base}" for loc in LOCALES}
+    return {loc: f"{prefix}{published_handle(doc, loc)}" for loc in LOCALES}
 
 
 async def _page_alt_routes(base_slug: str) -> Dict[str, str]:
@@ -321,9 +325,8 @@ async def _catalog_route(locale: str) -> str:
     """The "all peptides" collection as it is published right now — rotation-proof."""
     doc = await _db.collections_cat.find_one({"$or": [{"link_key": "catalog"},
                                                       {"handle": "2all-the-peptides-1"}]},
-                                             {"_id": 0, "handle": 1, "translations": 1})
-    handle = (((doc or {}).get("translations") or {}).get(locale) or {}).get("handle") \
-        or (doc or {}).get("handle") or "2all-the-peptides-1"
+                                             {"_id": 0, "handle": 1, "translations": 1, "rotations": 1})
+    handle = published_handle(doc or {}, locale) or "2all-the-peptides-1"
     return url_for(locale, f"/collections/{handle}")
 
 
@@ -410,10 +413,13 @@ async def _collection(locale: str, handle: str) -> Optional[Dict[str, str]]:
     items = [localize_doc(p, locale) for p in products]
     title = c.get("seo_title") or f'{c.get("title")}'
     description = c.get("seo_description") or _text(c.get("description"))
-    trail = [(_t(locale, "home"), "/"), (c.get("title"), route)]
+    # the catch-all page always says "Всички пептиди" (translated), never the imported body heading
+    is_all = doc.get("link_key") == "catalog" or (doc.get("handle") in _ALL_HANDLES)
+    heading = _t(locale, "catalog") if is_all else c.get("title")
+    trail = [(_t(locale, "home"), "/"), (heading, route)]
     body = [
         _crumb_html(locale, trail),
-        f'<h1>{esc(c.get("title"))}</h1>',
+        f'<h1>{esc(heading)}</h1>',
         f'<p>{esc(description)}</p>',
         "<ul>" + "".join(_product_li(locale, p) for p in items) + "</ul>",
     ]
