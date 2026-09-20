@@ -35,13 +35,12 @@ map $host $pp_apex {
 }
 
 # ---------- countries we do not serve ----------
-# Owner's call (17.06.2026): visitors from the US and Canada must not see the store. Cloudflare
-# hands the country over in CF-IPCountry, so the decision is made here, at the origin — the free
-# Cloudflare plan cannot serve our own page, and its branded "you have been blocked" page tells the
-# visitor there IS a site behind it. This one looks like a domain that was never set up.
+# Empty by default (owner's call 20.06.2026: the US/CA block is off again). Cloudflare hands the
+# country over in CF-IPCountry, so the decision can be made here at the origin — list the codes in
+# `blocked_countries` (group_vars/all.yml) to switch it back on for a country.
 map $http_cf_ipcountry $pp_geo_blocked {
     default   0;
-{% for c in blocked_countries | default(['US', 'CA']) %}    {{ c }}        1;
+{% for c in blocked_countries | default([]) %}    {{ c }}        1;
 {% endfor %}}
 
 # Googlebot, Bingbot and the AI crawlers all crawl from US addresses: blocking them would end the
