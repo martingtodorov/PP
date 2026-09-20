@@ -71,7 +71,7 @@ export const CookieConsent = () => {
           <h2 className="pp-cookie__title" data-testid="cookie-title">{c.title}</h2>
           <p className="pp-cookie__text">
             {c.body}{" "}
-            <Link to={lp(link("terms"))} className="underline hover:text-coral-600" data-testid="cookie-privacy-link">
+            <Link to={lp(link("privacy"))} className="underline hover:text-coral-600" data-testid="cookie-privacy-link">
               {c.privacy}
             </Link>
           </p>

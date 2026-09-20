@@ -48,6 +48,20 @@ def normalize_locale(locale: str | None) -> str:
     return loc if loc in LOCALES else DEFAULT_LOCALE
 
 
+def published_handle(doc: Dict[str, Any], loc: str) -> str:
+    """The one handle this document is published under right now for that locale.
+
+    Single source of truth for canonical, hreflang, /api/links, sitemaps and the SSR HTML — they
+    used to disagree after a rotation. A catalog re-import can put a retired handle back into the
+    translations, so a rotation for this locale always wins over the translated handle it retired.
+    """
+    handle = ((doc.get("translations") or {}).get(loc) or {}).get("handle") or doc.get("handle") or ""
+    rotations = [r for r in (doc.get("rotations") or []) if r.get("locale") == loc]
+    if rotations and any(r.get("from") == handle for r in rotations):
+        return rotations[-1].get("to") or handle
+    return handle
+
+
 def localize_doc(doc: Dict[str, Any], locale: str) -> Dict[str, Any]:
     """Overlay translations[locale] onto the base document.
 
@@ -59,9 +73,7 @@ def localize_doc(doc: Dict[str, Any], locale: str) -> Dict[str, Any]:
     out = dict(doc)
     translations = out.get("translations") or {}
     out["base_handle"] = out.get("handle")
-    out["handles"] = {
-        loc: (translations.get(loc) or {}).get("handle") or out.get("handle") for loc in LOCALES
-    }
+    out["handles"] = {loc: published_handle(doc, loc) for loc in LOCALES}
     chain = [translations.get(locale) or {}]
     if locale not in ("bg", "en"):
         chain.append(translations.get("en") or {})

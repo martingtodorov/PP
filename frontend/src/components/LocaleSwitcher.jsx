@@ -3,6 +3,7 @@ import { Globe, Check } from "lucide-react";
 import { LOCALES, LOCALE_META } from "../i18n/locales";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { rememberLocale } from "../i18n/geoLocale";
+import { alternateHref } from "../lib/seo";
 
 /** Language button + dropdown, shown on every domain. The choice is remembered so the
  *  purepeptide.eu apex never overrides it with the IP country again. */
@@ -10,6 +11,10 @@ export const LocaleSwitcher = ({ testId = "locale-switcher" }) => {
   const { locale, localeUrl, basePath } = useLocaleCtx();
   const [open, setOpen] = useState(false);
   const box = useRef(null);
+
+  /* one source of truth for the localised URL: the hreflang alternates the page already declared
+     (they carry the translated / rotated handle). The head and the switcher used to disagree. */
+  const localeHref = (l) => alternateHref(LOCALE_META[l].hreflang) || localeUrl(l, basePath);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -40,7 +45,7 @@ export const LocaleSwitcher = ({ testId = "locale-switcher" }) => {
           {enabled.map((l) => (
             <a
               key={l}
-              href={localeUrl(l, basePath)}
+              href={localeHref(l)}
               hrefLang={LOCALE_META[l].hreflang}
               onClick={() => rememberLocale(l)}
               className={`flex items-center justify-between gap-2 px-4 py-2 text-sm transition-colors ${
