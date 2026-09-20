@@ -1,7 +1,8 @@
-"""US/CA visitors must see an unconfigured domain, crawlers must still get the store.
+"""The country block still works when a country is listed, but the list is EMPTY by default.
 
-The rule lives in the nginx template, so the test renders the real template, validates it with
-nginx and drives a throw-away nginx on a spare port with the CF-IPCountry header Cloudflare sends.
+20.06.2026: the owner switched the US/CA block off — `blocked_countries: []`. The tests below still
+render the template WITH ["US", "CA"] to prove the mechanism works if it is ever turned back on;
+`test_nobody_is_blocked_by_default` guards the default.
 """
 import os
 import shutil
@@ -111,8 +112,22 @@ def test_the_nextlevel_integration_endpoint_is_not_geoblocked():
 
 def test_the_blocked_list_is_a_deploy_variable():
     example = (ANSIBLE / "group_vars/all.yml.example").read_text()
-    assert 'blocked_countries: ["US", "CA"]' in example
-    assert "blocked_countries | default(['US', 'CA'])" in TEMPLATE.read_text()
+    assert "blocked_countries: []" in example
+    assert "blocked_countries | default([])" in TEMPLATE.read_text()
+
+
+def test_nobody_is_blocked_by_default():
+    """The US/CA block is off (20.06.2026) — an empty list must render a map without countries."""
+    rendered = jinja2.Template(TEMPLATE.read_text(), undefined=jinja2.StrictUndefined).render(
+        app_name="purepeptide", web_root="/tmp/x", backend_private_ip="127.0.0.1",
+        frontend_private_ip="127.0.0.1", nginx_http2_directive="listen",
+        site_domains=["purepeptide.bg"], site_tls_certs={},
+        ssl_cert_path="/tmp/c.pem", ssl_key_path="/tmp/k.pem")
+    geo = rendered[rendered.index("map $http_cf_ipcountry"):]
+    geo = geo[:geo.index("}")]
+    assert "default   0;" in geo
+    for country in ("US", "CA"):
+        assert f"    {country} " not in geo
 
 
 def test_the_error_page_gives_nothing_away():

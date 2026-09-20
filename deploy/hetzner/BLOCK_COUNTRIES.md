@@ -1,14 +1,14 @@
-# Блокиране на държави (САЩ и Канада)
+# Блокиране на държави (изключено)
 
-Решение на собственика (17.06.2026): посетител от **САЩ или Канада** не вижда магазина, а страница
-„този домейн не е конфигуриран“ — така изглежда като домейн, който сочи към сървър без сайт.
+**20.06.2026: блокът за САЩ и Канада е ИЗКЛЮЧЕН.** `blocked_countries` е празен списък, тоест никой
+не се блокира. Механизмът остава в шаблона и се включва само като изредиш кодове на държави.
 
 ## Как работи
 
 Cloudflare подава държавата в заглавката `CF-IPCountry`, а nginx решава на входа:
 
 ```
-map $http_cf_ipcountry $pp_geo_blocked { default 0; US 1; CA 1; }   # от blocked_countries
+map $http_cf_ipcountry $pp_geo_blocked { default 0; }               # празно = никой не се блокира
 map $http_user_agent   $pp_crawler     { … googlebot|bingbot|gptbot … }
 map "$pp_geo_blocked:$pp_crawler" $pp_block { default 0; "1:0" 1; }
 ```
@@ -29,9 +29,9 @@ map "$pp_geo_blocked:$pp_crawler" $pp_block { default 0; "1:0" 1; }
 | `/wp-json/…` | интеграционната точка, по която NextLevel чете поръчките |
 | `/robots.txt`, `/sitemap*.xml`, `/llms.txt`, `/agents.md` | нямат смисъл да се крият и се ползват от ботовете |
 
-## Как се сменя списъкът
+## Как се включва отново
 
-`group_vars/all.yml` → `blocked_countries: ["US", "CA"]`, после:
+`group_vars/all.yml` → `blocked_countries: ["US", "CA"]` (или други кодове), после:
 
 ```bash
 ansible-playbook playbooks/deploy_nginx.yml --tags config
@@ -43,12 +43,9 @@ ansible-playbook playbooks/deploy_nginx.yml --tags config
 ## Проверка
 
 ```bash
-# от сървъра (симулира заглавката на Cloudflare)
-curl -sI https://purepeptide.bg/ -H "CF-IPCountry: US" | head -1     # → 403
-curl -s  https://purepeptide.bg/ -H "CF-IPCountry: US" | grep -o "not configured"
+# от сървъра — при празен списък всички минават
+curl -sI https://purepeptide.bg/ -H "CF-IPCountry: US" | head -1     # → 200
 curl -sI https://purepeptide.bg/ -H "CF-IPCountry: BG" | head -1     # → 200
-curl -sI https://purepeptide.bg/ -H "CF-IPCountry: US" \
-     -H "User-Agent: Googlebot/2.1" | head -1                        # → 200
 ```
 
 Автоматично: `pytest backend/tests/test_geoblock_us_ca.py` вдига истински nginx с този шаблон и
@@ -56,8 +53,8 @@ curl -sI https://purepeptide.bg/ -H "CF-IPCountry: US" \
 
 ## Какво да знаеш
 
-- **Ти самият** няма да отваряш сайта (нито админ панела) през американски или канадски VPN.
-- Работи само докато трафикът минава през Cloudflare (оттам идва `CF-IPCountry`). При директна
+- При празен списък сайтът се отваря отвсякъде, включително през американски или канадски VPN.
+- Ако някога го включиш пак: работи само докато трафикът минава през Cloudflare (оттам идва `CF-IPCountry`). При директна
   заявка към сървъра заглавката липсва и никой не се блокира — Cloudflare Origin сертификатите вече
   затварят този път.
 - **Не включвай „Cache Everything“** в Cloudflare за HTML: кеширана страница може да се отдаде на

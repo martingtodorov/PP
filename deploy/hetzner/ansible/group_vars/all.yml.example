@@ -136,7 +136,7 @@ backup_offsite: ""
 nextlevel_app_id: ""
 nextlevel_app_secret: ""
 
-# Countries that must not see the store (owner's call 17.06.2026). The visitor gets the
-# "domain is not configured" page; verified crawlers (Googlebot, Bingbot, …) are never blocked.
-# Empty list = nobody is blocked.
-blocked_countries: ["US", "CA"]
+# Countries that must not see the store. Empty list = nobody is blocked (the US/CA block was
+# switched off on 20.06.2026). A blocked visitor gets the "domain is not configured" page;
+# crawlers (Googlebot, Bingbot, …) are never blocked.
+blocked_countries: []
