@@ -11,6 +11,7 @@ import uuid
 
 import server
 from conftest import run
+from i18n import localize_doc
 from prerender import drop_leading_heading
 
 
@@ -99,6 +100,48 @@ def test_the_repair_leaves_a_normal_rotation_alone():
         assert len(after["rotations"]) == 1
     finally:
         run(server.db.products.delete_one({"id": doc["id"]}))
+
+
+def test_the_storefront_gets_the_published_url_not_the_retired_one():
+    """The Retatrutide report: the card linked to the retired translated handle, so it 404'd."""
+    doc = {"handle": "retatrutide-tnn", "title": "Retatrutide",
+           "translations": {"bg": {"handle": "21-retatrutide-5-tnn", "title": "Ретатрутид"}},
+           "rotations": [{"locale": "bg", "from": "21-retatrutide-5-tnn", "to": "retatrutide-tnn"}]}
+    localized = localize_doc(doc, "bg")
+    assert localized["handle"] == "retatrutide-tnn"
+    assert localized["title"] == "Ретатрутид"                 # the copy still comes from bg
+    assert server.retired_handle(doc, "bg", "21-retatrutide-5-tnn")
+
+
+def test_the_repair_normalises_a_retired_translated_handle():
+    doc = {"id": f"stale-{uuid.uuid4().hex[:6]}", "handle": "retatrutide-pytest-tnn",
+           "title": "Retatrutide", "price_eur": 99.0, "active": True,
+           "translations": {"bg": {"handle": "21-retatrutide-5-pytest"}},
+           "rotations": [{"locale": "bg", "from": "21-retatrutide-5-pytest", "to": "retatrutide-pytest-tnn"}]}
+    run(server.db.products.insert_one(doc.copy()))
+    try:
+        run(server.repair_handle_drift())
+        after = run(server.db.products.find_one({"id": doc["id"]}, {"_id": 0}))
+        assert after["translations"]["bg"]["handle"] == "retatrutide-pytest-tnn"
+        assert after["handle"] == "retatrutide-pytest-tnn"
+    finally:
+        run(server.db.products.delete_one({"id": doc["id"]}))
+
+
+def test_only_the_exact_handle_is_retargeted_in_the_copy():
+    """A handle that merely starts with the renamed one must stay untouched."""
+    col = {"id": f"col-{uuid.uuid4().hex[:6]}", "handle": f"pytest-col-{uuid.uuid4().hex[:4]}",
+           "title": "Pytest",
+           "description": '<a href="/products/aaa-old">1</a><a href="/products/aaa-old-2">2</a>'
+                          '<a href="https://purepeptide.bg/en/products/aaa-old">3</a>'}
+    run(server.db.collections_cat.insert_one(col.copy()))
+    try:
+        assert run(server.retarget_internal_links([("/products/aaa-old", "/products/aaa-new")])) >= 1
+        after = run(server.db.collections_cat.find_one({"id": col["id"]}, {"_id": 0}))
+        assert after["description"] == ('<a href="/products/aaa-new">1</a><a href="/products/aaa-old-2">2</a>'
+                                        '<a href="https://purepeptide.bg/en/products/aaa-new">3</a>')
+    finally:
+        run(server.db.collections_cat.delete_one({"id": col["id"]}))
 
 
 def test_the_copy_does_not_repeat_the_page_heading():

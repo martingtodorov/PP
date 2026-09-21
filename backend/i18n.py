@@ -83,6 +83,9 @@ def localize_doc(doc: Dict[str, Any], locale: str) -> Dict[str, Any]:
             if val:
                 out[field] = val
                 break
+    # the storefront must link to the URL this document is published under: a translated handle that
+    # a rotation has retired would send every card and every internal link straight into a 404
+    out["handle"] = out["handles"].get(locale) or out.get("handle")
     out.pop("translations", None)
     out.pop("admin_tags", None)         # internal labels stay in the admin panel
     return out
