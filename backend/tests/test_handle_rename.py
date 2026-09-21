@@ -68,6 +68,39 @@ def test_an_order_saved_before_a_translated_url_still_matches():
         "one", "ghk-cu-new"]
 
 
+def test_a_half_finished_rename_is_repaired_at_boot():
+    """The exact production state: the typed URL 404s, the old one is still served."""
+    doc = {"id": f"drift-{uuid.uuid4().hex[:6]}", "handle": "retatrutide-pytest-tnn",
+           "title": "Retatrutide", "price_eur": 99.0, "active": True,
+           "translations": {"bg": {"handle": "21-retatrutide-5-pytest"}},
+           "rotations": [{"locale": "bg", "from": "retatrutide-5", "to": "21-retatrutide-5-pytest"}]}
+    run(server.db.products.insert_one(doc.copy()))
+    try:
+        assert server.retired_handle(doc, "bg", "retatrutide-pytest-tnn")      # the bug
+        assert run(server.repair_handle_drift()) >= 1
+        after = run(server.db.products.find_one({"id": doc["id"]}, {"_id": 0}))
+        assert server.published_handle(after, "bg") == "retatrutide-pytest-tnn"
+        assert not server.retired_handle(after, "bg", "retatrutide-pytest-tnn")
+        assert server.retired_handle(after, "bg", "21-retatrutide-5-pytest")
+    finally:
+        run(server.db.products.delete_one({"id": doc["id"]}))
+
+
+def test_the_repair_leaves_a_normal_rotation_alone():
+    doc = {"id": f"rot-{uuid.uuid4().hex[:6]}", "handle": "ghk-cu-pytest", "title": "GHK-Cu",
+           "price_eur": 49.0, "active": True,
+           "translations": {"bg": {"handle": "ghk-cu-pytest-brk"}},
+           "rotations": [{"locale": "bg", "from": "ghk-cu-pytest", "to": "ghk-cu-pytest-brk"}]}
+    run(server.db.products.insert_one(doc.copy()))
+    try:
+        run(server.repair_handle_drift())
+        after = run(server.db.products.find_one({"id": doc["id"]}, {"_id": 0}))
+        assert server.published_handle(after, "bg") == "ghk-cu-pytest-brk"
+        assert len(after["rotations"]) == 1
+    finally:
+        run(server.db.products.delete_one({"id": doc["id"]}))
+
+
 def test_the_copy_does_not_repeat_the_page_heading():
     copy = "<h1>Всички пептиди</h1><p>Разгледайте селекция от пептиди.</p>"
     assert drop_leading_heading(copy, "Всички пептиди") == "<p>Разгледайте селекция от пептиди.</p>"

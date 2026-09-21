@@ -459,6 +459,47 @@ async def fix_bg_typos() -> int:
     return fixed
 
 
+async def repair_handle_drift() -> int:
+    """Heal a rename that failed half-way (the bug fixed in `_republish_handle`).
+
+    Back then the typed handle was written onto the document before the rotation ran, the rotation
+    then could not find the document and raised, so the document was left with its own handle
+    pointing at one URL and `translations[bg].handle` at another: the URL the owner typed 404s while
+    the old one is still served. The typed handle is the intended URL, so the default locale is
+    republished under it and the old one retires properly.
+
+    A normal rotation is NOT touched: there the document's own handle is the retired URL, i.e. it
+    appears as the `from` of a rotation.
+    """
+    fixed = 0
+    for name in ("products", "collections_cat"):
+        async for doc in db[name].find({}, {"_id": 0}):
+            base = doc.get("handle")
+            live = published_handle(doc, DEFAULT_LOCALE)
+            rotations = list(doc.get("rotations") or [])
+            if not base or not live or live == base:
+                continue
+            if any(r.get("locale") == DEFAULT_LOCALE and r.get("from") == base for r in rotations):
+                continue
+            tr = dict(doc.get("translations") or {})
+            entry = dict(tr.get(DEFAULT_LOCALE) or {})
+            entry["handle"] = base
+            tr[DEFAULT_LOCALE] = entry
+            rotations = [r for r in rotations
+                         if not (r.get("locale") == DEFAULT_LOCALE and r.get("from") == live)]
+            rotations.append({"locale": DEFAULT_LOCALE, "from": live, "to": base,
+                              "code": base.split("-")[-1], "rewritten": False,
+                              "at": now_utc(), "by": "handle-drift-repair"})
+            await db[name].update_one({"id": doc["id"]},
+                                      {"$set": {"translations": tr, "rotations": rotations,
+                                                "updated_at": now_utc()}})
+            log.info("handle drift repaired in %s: %s -> %s", name, live, base)
+            fixed += 1
+    if fixed:
+        _links_cache.clear()
+    return fixed
+
+
 async def seed_pages():
     """Insert the default Bulgarian/English static page content once."""
     # the imported Shopify slug aliases answered 200 in every locale with Bulgarian copy and
@@ -523,6 +564,7 @@ async def on_startup():
     await backfill_settings()
     await seed_pages()
     await fix_bg_typos()
+    await repair_handle_drift()
     await backfill_rotation_log()
     await restore_product_orders()
     await run_once("adopt_imported_redirects", adopt_imported_redirects)
