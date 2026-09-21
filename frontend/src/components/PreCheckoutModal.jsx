@@ -320,6 +320,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [showMissing, setShowMissing] = useState(false);
+  const placed = useRef(false);
 
   // lock the page behind the overlay, the overlay itself scrolls
   useEffect(() => {
@@ -546,9 +547,9 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                    dialTouched: dialTouched.current });
   }, [open, cfg, contact, method, methodKey, provider, pickup, addr, payment]);
 
-  // abandoned cart capture — as soon as we have a usable email
+  // abandoned cart capture — as soon as we have a usable email, never after the order is placed
   useEffect(() => {
-    if (!open || !items.length || !EMAIL_RE.test(contact.email)) return undefined;
+    if (!open || placed.current || !items.length || !EMAIL_RE.test(contact.email)) return undefined;
     const id = setTimeout(() => {
       api.post("/cart/track", {
         email: contact.email,
@@ -606,6 +607,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
         locale,
       });
       track("checkout_completed", { order: data.order?.order_number, total });
+      placed.current = true;          // no cart snapshot may follow a paid order
       clear();
       onClose();
       nav(lp(`/checkout/success/${data.order.id}`));
