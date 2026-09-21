@@ -25,7 +25,7 @@ from urllib.parse import quote, urlparse, unquote
 from datetime import datetime, timezone, timedelta
 from datetime import time as dt_time
 from zoneinfo import ZoneInfo
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 import bcrypt
 import jwt
@@ -469,7 +469,9 @@ async def repair_handle_drift() -> int:
     republished under it and the old one retires properly.
 
     A normal rotation is NOT touched: there the document's own handle is the retired URL, i.e. it
-    appears as the `from` of a rotation.
+    appears as the `from` of a rotation. The second half of the repair normalises translated handles
+    that a rotation retired — `localize_doc` used to hand those to the storefront, so every product
+    card linked to a URL that 404s (the Retatrutide report of 21.06.2026).
     """
     fixed = 0
     for name in ("products", "collections_cat"):
@@ -477,11 +479,23 @@ async def repair_handle_drift() -> int:
             base = doc.get("handle")
             live = published_handle(doc, DEFAULT_LOCALE)
             rotations = list(doc.get("rotations") or [])
-            if not base or not live or live == base:
+            if not base or not live:
+                continue
+            # a translated handle that a rotation retired still sits in the document and used to be
+            # handed to the storefront as the product url — normalise it to the published one
+            tr = dict(doc.get("translations") or {})
+            stale = {loc: published_handle(doc, loc) for loc, entry in tr.items()
+                     if (entry or {}).get("handle") and (entry or {}).get("handle") != published_handle(doc, loc)}
+            if stale:
+                for loc, correct in stale.items():
+                    tr[loc] = {**(tr.get(loc) or {}), "handle": correct}
+                await db[name].update_one({"id": doc["id"]}, {"$set": {"translations": tr}})
+                log.info("stale translated handles normalised in %s/%s: %s", name, base, stale)
+                fixed += 1
+            if live == base:
                 continue
             if any(r.get("locale") == DEFAULT_LOCALE and r.get("from") == base for r in rotations):
                 continue
-            tr = dict(doc.get("translations") or {})
             entry = dict(tr.get(DEFAULT_LOCALE) or {})
             entry["handle"] = base
             tr[DEFAULT_LOCALE] = entry
@@ -498,6 +512,57 @@ async def repair_handle_drift() -> int:
     if fixed:
         _links_cache.clear()
     return fixed
+
+
+def _swap_links(value: Any, subs: List[Any]) -> Any:
+    if isinstance(value, str):
+        for pattern, new in subs:
+            value = pattern.sub(new, value)
+        return value
+    if isinstance(value, dict):
+        return {k: _swap_links(v, subs) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_swap_links(v, subs) for v in value]
+    return value
+
+
+async def retarget_internal_links(pairs: List[Tuple[str, str]]) -> int:
+    """Point the links written INSIDE the copy at the new URL after a rename.
+
+    Renaming a product moves the generated links (cards, menus, sitemaps) by itself, but an `<a
+    href="/products/old-handle">` typed into a description, a page or an article keeps pointing at a
+    URL that now 404s. The collections and pages that mention the product are rewritten here.
+    """
+    subs = [(re.compile(re.escape(old) + r"(?![\w\-])"), new) for old, new in pairs if old and new and old != new]
+    if not subs:
+        return 0
+    changed = 0
+    for name in ("products", "collections_cat", "pages", "articles", "settings"):
+        async for doc in db[name].find({}):
+            body = {k: v for k, v in doc.items() if k != "_id"}
+            patched = _swap_links(body, subs)
+            if patched != body:
+                await db[name].update_one({"_id": doc["_id"]}, {"$set": patched})
+                changed += 1
+    if changed:
+        log.info("internal links retargeted in %d documents: %s", changed,
+                 ", ".join(f"{old} -> {new}" for old, new in pairs))
+        _links_cache.clear()
+    return changed
+
+
+async def retarget_rotated_links() -> int:
+    """Every handle a rotation retired must not be linked to from the copy any more."""
+    pairs: List[Tuple[str, str]] = []
+    for name, segment in (("products", "products"), ("collections_cat", "collections")):
+        async for doc in db[name].find({"rotations.0": {"$exists": True}},
+                                       {"_id": 0, "handle": 1, "translations": 1, "rotations": 1}):
+            for rot in doc.get("rotations") or []:
+                loc = rot.get("locale") or DEFAULT_LOCALE
+                live = published_handle(doc, loc)
+                if rot.get("from") and live and rot["from"] != live:
+                    pairs.append((f"/{segment}/{rot['from']}", f"/{segment}/{live}"))
+    return await retarget_internal_links(sorted(set(pairs)))
 
 
 async def seed_pages():
@@ -565,6 +630,7 @@ async def on_startup():
     await seed_pages()
     await fix_bg_typos()
     await repair_handle_drift()
+    await retarget_rotated_links()
     await backfill_rotation_log()
     await restore_product_orders()
     await run_once("adopt_imported_redirects", adopt_imported_redirects)
@@ -2178,6 +2244,10 @@ async def _republish_handle(kind: str, doc: Dict[str, Any], typed: str, user_ema
     if typed and typed != live:
         await rotate_content(kind, live, loc, user_email, to=typed)
     final = typed or live
+    segment = "products" if kind == "products" else "collections"
+    # the links typed into the copy move with the rename, otherwise they point at a 404
+    if final != live:
+        await retarget_internal_links([(f"/{segment}/{live}", f"/{segment}/{final}")])
     # the handle in the admin IS the live URL, so the document's own handle follows the rename —
     # the saved product order survives it through `_apply_manual_order` (it matches rotations too)
     if final != doc.get("handle"):
@@ -2462,6 +2532,50 @@ async def admin_import_job(job_id: str, user=Depends(require_admin)):
 async def admin_imports_log(user=Depends(require_admin)):
     docs = await db.imports.find({}, {"_id": 0}).sort("at", -1).limit(50).to_list(50)
     return {"imports": docs}
+
+
+@api.get("/admin/handle-health")
+async def admin_handle_health(q: str = "", user=Depends(require_admin)):
+    """Where a product/collection really lives: own handle vs published handle vs rotations.
+
+    Open it in the browser while logged in (the admin cookie is enough):
+    `/api/admin/handle-health?q=retatrutide` — it shows every handle the document answers on, which
+    of them 404, and whether a second document holds one of those handles.
+    """
+    needle = q.strip().lower()
+    out: Dict[str, Any] = {"products": [], "collections": [], "duplicates": []}
+    seen: Dict[str, List[str]] = {}
+    for name, key in (("products", "products"), ("collections_cat", "collections")):
+        async for doc in db[name].find({}, {"_id": 0}):
+            handles = sorted(set(_order_handles(doc)))
+            for h in handles:
+                owner = f'{key}:{doc.get("id")}'
+                if owner not in seen.setdefault(h, []):
+                    seen[h].append(owner)
+            if needle and not any(needle in (h or "").lower() for h in handles) \
+                    and needle not in (doc.get("title") or "").lower():
+                continue
+            live = published_handle(doc, DEFAULT_LOCALE)
+            out[key].append({
+                "id": doc.get("id"), "title": doc.get("title"),
+                "own_handle": doc.get("handle"), "live_handle": live,
+                "drift": live != doc.get("handle"),
+                "translated_handles": {loc: (entry or {}).get("handle")
+                                       for loc, entry in (doc.get("translations") or {}).items()
+                                       if (entry or {}).get("handle")},
+                "rotations": [{"locale": r.get("locale"), "from": r.get("from"), "to": r.get("to")}
+                              for r in doc.get("rotations") or []],
+                "urls_that_404": sorted({h for h in handles if retired_handle(doc, DEFAULT_LOCALE, h)}),
+                "delisted": bool(doc.get("delisted")), "active": doc.get("active") is not False,
+            })
+    out["duplicates"] = [{"handle": h, "documents": ids} for h, ids in seen.items() if len(ids) > 1]
+    return out
+
+
+@api.post("/admin/handle-repair")
+async def admin_handle_repair(user=Depends(require_admin)):
+    """Republish documents left with two different handles and retarget links to retired URLs."""
+    return {"repaired": await repair_handle_drift(), "links_retargeted": await retarget_rotated_links()}
 
 
 @api.get("/admin/products/{product_id}")
