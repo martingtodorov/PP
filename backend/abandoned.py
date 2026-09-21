@@ -76,6 +76,10 @@ async def track_cart(payload: CartTrackIn):
     subtotal = round(sum(i["price_eur"] * i["quantity"] for i in items), 2)
     email = payload.email.lower()
     now = _now()
+    if await _ordered_around(email, now):
+        # they have just paid; this snapshot is the cart they checked out with
+        await mark_recovered(email)
+        return {"ok": True, "skipped": "ordered"}
     existing = await _db.abandoned_carts.find_one({"email": email, "status": "open"}, {"_id": 0})
     doc = {
         "email": email,
@@ -105,6 +109,22 @@ async def mark_recovered(email: str) -> None:
     )
 
 
+# a cart snapshot can land right AFTER the order (the checkout form debounces by 1.5 s), so an order
+# placed shortly before the snapshot still counts as "this cart was paid for" — never remind a buyer
+ORDER_GRACE = timedelta(hours=2)
+
+
+async def _ordered_around(email: str, when: Any) -> bool:
+    """Did this customer place an order around the time of this cart?"""
+    if isinstance(when, str):
+        when = datetime.fromisoformat(when)
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return bool(await _db.orders.find_one(
+        {"customer_email": (email or "").lower(),
+         "created_at": {"$gte": (when - ORDER_GRACE).isoformat()}}))
+
+
 async def send_reminder(cart: Dict[str, Any], settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     settings = settings if settings is not None else await _site_settings()
     code = (settings.get("abandoned_discount_code") or "").strip()
@@ -130,11 +150,9 @@ async def sweep() -> int:
     settings = await _site_settings()
     sent = 0
     for cart in carts:
-        if await _db.orders.find_one({"customer_email": cart["email"],
-                                      "created_at": {"$gte": cart["created_at"].isoformat()
-                                                     if hasattr(cart["created_at"], "isoformat")
-                                                     else cart["created_at"]}}):
-            await _db.abandoned_carts.update_one({"id": cart["id"]}, {"$set": {"status": "recovered"}})
+        if await _ordered_around(cart["email"], cart["created_at"]):
+            await _db.abandoned_carts.update_one({"id": cart["id"]},
+                                                 {"$set": {"status": "recovered"}})
             continue
         res = await send_reminder(cart, settings)
         sent += 1 if res.get("sent") else 0
