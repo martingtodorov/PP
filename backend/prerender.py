@@ -135,6 +135,16 @@ def demote(markup: str) -> str:
     return re.sub(r"</h1>", "</h2>", out, flags=re.I)
 
 
+def drop_leading_heading(markup: str, heading: str) -> str:
+    """Drops the opening heading of the copy when it only repeats the page H1 (no title twice)."""
+    if not markup or not heading:
+        return markup or ""
+    match = re.match(r"\s*<h[1-3](\s[^>]*)?>([\s\S]*?)</h[1-3]>", str(markup), flags=re.I)
+    if match and _text(match.group(2)).casefold() == _text(heading).casefold():
+        return str(markup)[match.end():]
+    return str(markup)
+
+
 def esc(value: Any) -> str:
     return html.escape(str(value or ""), quote=True)
 
@@ -412,10 +422,11 @@ async def _collection(locale: str, handle: str) -> Optional[Dict[str, str]]:
     products = await _db.products.find(query, {"_id": 0}).to_list(60)
     items = [localize_doc(p, locale) for p in products]
     title = c.get("seo_title") or f'{c.get("title")}'
-    description = c.get("seo_description") or _text(c.get("description"))
     # the catch-all page always says "Всички пептиди" (translated), never the imported body heading
     is_all = doc.get("link_key") == "catalog" or (doc.get("handle") in _ALL_HANDLES)
     heading = _t(locale, "catalog") if is_all else c.get("title")
+    copy = drop_leading_heading(c.get("description") or "", heading)
+    description = c.get("seo_description") or _text(copy)
     trail = [(_t(locale, "home"), "/"), (heading, route)]
     body = [
         _crumb_html(locale, trail),

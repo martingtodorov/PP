@@ -11,7 +11,7 @@ import { LOCALES } from "../i18n/locales";
 import { isAllCollection } from "../lib/collections";
 import { useSeo } from "../lib/seo";
 import { graph, itemListLd, breadcrumbLd, organizationLd, websiteLd } from "../lib/schema";
-import { demoteHeadings } from "../lib/richText";
+import { demoteHeadings, dropLeadingHeading } from "../lib/richText";
 
 export default function CollectionPage() {
   const { handle = "2all-the-peptides-1" } = useParams();
@@ -87,6 +87,7 @@ export default function CollectionPage() {
   }
 
   const isAll = isAllCollection(c);   // base_handle survives URL rotation
+  const heading = isAll ? t("catalog") : c.title;
 
   return (
     <Layout>
@@ -96,14 +97,13 @@ export default function CollectionPage() {
             ? [{ label: t("catalog") }]
             : [{ label: t("catalog"), to: lp(link("catalog")) }, { label: c.title }]}
         />
-        {/* like purepeptide.bg: the description carries the page H1 ("Пептиди, изследвани за…") */}
-        {(isAll || !/<h1[\s>]/i.test(c.description || "")) && (
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-3"
-            data-testid="collection-title">{isAll ? t("catalog") : c.title}</h1>
-        )}
+        {/* exactly one H1 per page: ours. A heading in the imported copy that only repeats it is
+            dropped, any other heading is demoted to H2. */}
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-3"
+          data-testid="collection-title">{heading}</h1>
         {c.description && (
           <div className="pp-rte pp-rte--tight text-slate-600 mt-2 max-w-3xl leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: demoteHeadings(c.description) }} data-testid="collection-description" />
+            dangerouslySetInnerHTML={{ __html: demoteHeadings(dropLeadingHeading(c.description, heading)) }} data-testid="collection-description" />
         )}
       </div>
 

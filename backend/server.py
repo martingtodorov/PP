@@ -706,12 +706,29 @@ async def restore_product_orders() -> int:
 
 
 
+def _order_handles(p: Dict[str, Any]) -> List[str]:
+    """Every handle this product has ever been saved under (rename, rotation, translated url)."""
+    out = [p.get("handle")]
+    for r in p.get("rotations") or []:
+        out += [r.get("from"), r.get("to")]
+    for entry in (p.get("translations") or {}).values():
+        out.append((entry or {}).get("handle"))
+    return [h for h in out if h]
+
+
 def _apply_manual_order(prods: List[Dict[str, Any]], order: Optional[List[str]]) -> List[Dict[str, Any]]:
-    """Sort products by the manual order saved in the admin; unknown handles keep their position at the end."""
+    """Sort products by the manual order saved in the admin; unknown handles keep their position at the end.
+
+    The saved order is a list of handles, so a renamed or rotated product used to drop to the end of
+    the collection. Every handle the product has ever had is matched, which also heals orders saved
+    before a rename.
+    """
     if not order:
         return prods
     index = {h: i for i, h in enumerate(order)}
-    return sorted(prods, key=lambda p: (index.get(p.get("handle"), len(index)), p.get("title", "")))
+    def position(p: Dict[str, Any]) -> int:
+        return min((index[h] for h in _order_handles(p) if h in index), default=len(index))
+    return sorted(prods, key=lambda p: (position(p), p.get("title", "")))
 
 
 def collection_handles(col: Dict[str, Any]) -> List[str]:
@@ -2108,23 +2125,27 @@ async def admin_create_product(payload: ProductIn, user=Depends(require_admin)):
 async def _republish_handle(kind: str, doc: Dict[str, Any], typed: str, user_email: str) -> None:
     """Keep the admin handle field and the live URL the same thing.
 
-    After a URL rotation the document is published under translations[loc].handle, so the handle in
-    the admin looked stale and editing it changed nothing. Now the typed handle is compared with the
-    live one and, when they differ, the default locale is republished under exactly what was typed —
-    the old URL retires (404) and lands on the delisted-links board.
+    The caller must NOT have written the typed handle yet: the rotation looks the document up by
+    the handle it is published under right now (that is what retires the old URL and puts it on the
+    delisted board). Writing it first is what made a rename answer 404 „Няма съдържание с handle“
+    while the handle had already changed underneath — the URL then vanished with no rotation at all.
     """
     loc = DEFAULT_LOCALE
+    coll = db.products if kind == "products" else db.collections_cat
     live = published_handle(doc, loc)
     if typed and typed != live:
         await rotate_content(kind, live, loc, user_email, to=typed)
     final = typed or live
+    # the handle in the admin IS the live URL, so the document's own handle follows the rename —
+    # the saved product order survives it through `_apply_manual_order` (it matches rotations too)
+    if final != doc.get("handle"):
+        await coll.update_one({"id": doc["id"]}, {"$set": {"handle": final}})
     # the saved product ordering is keyed by the collection handle — move it with the rename
     if kind == "collections" and final != doc.get("handle"):
         await db.product_orders.update_one({"key": doc.get("handle")},
                                            {"$set": {"key": final}})
     # invariant: whatever is published right now must never be listed as retired — otherwise the
     # owner types a handle he used before and still lands on a 404
-    coll = db.products if kind == "products" else db.collections_cat
     await coll.update_one({"handle": final},
                           {"$pull": {"rotations": {"locale": loc, "from": final}}})
     path = f"/{'products' if kind == 'products' else 'collections'}/{final}"
@@ -2144,6 +2165,7 @@ async def admin_update_product(product_id: str, payload: ProductIn, user=Depends
         raise HTTPException(400, "Handle вече съществува")
 
     fields = await adopt_external_images(payload.model_dump())
+    fields.pop("handle", None)          # the URL is rotated below, never overwritten blindly
     await db.products.update_one({"id": product_id}, {"$set": fields})
     await _republish_handle("products", old, typed, user["email"])
     _links_cache.clear()
@@ -2420,8 +2442,9 @@ async def admin_update_collection(collection_id: str, payload: CollectionIn, use
             {"handle": new_handle, "id": {"$ne": collection_id}}):
         raise HTTPException(400, "Handle вече съществува")
 
-    await db.collections_cat.update_one({"id": collection_id},
-                                        {"$set": await adopt_external_images(payload.model_dump())})
+    fields = await adopt_external_images(payload.model_dump())
+    fields.pop("handle", None)          # the URL is rotated below, never overwritten blindly
+    await db.collections_cat.update_one({"id": collection_id}, {"$set": fields})
     await _republish_handle("collections", old, new_handle, user["email"])
     _links_cache.clear()
     return {"ok": True, "handle": new_handle}

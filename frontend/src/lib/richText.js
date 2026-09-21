@@ -3,3 +3,14 @@ export const demoteHeadings = (markup) =>
   String(markup || "")
     .replace(/<h1(\s[^>]*)?>/gi, "<h2>")
     .replace(/<\/h1>/gi, "</h2>");
+
+const plain = (s) => String(s || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+
+/** Drops the opening heading of the copy when it only repeats the page H1 (no title twice). */
+export const dropLeadingHeading = (markup, heading) => {
+  if (!markup || !heading) return markup;
+  return String(markup).replace(
+    /^\s*<h[1-3](\s[^>]*)?>([\s\S]*?)<\/h[1-3]>/i,
+    (match, _attrs, inner) => (plain(inner) === plain(heading) ? "" : match),
+  );
+};
