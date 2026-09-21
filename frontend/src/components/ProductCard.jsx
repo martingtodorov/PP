@@ -6,7 +6,7 @@ import { useCart } from "../context/CartContext";
 
 /** Port of the _product-list.liquid `products_grid` preset (gallery → title → price). */
 export default function ProductCard({ product, showAddToCart = false, priority = false }) {
-  const { lp, t } = useLocaleCtx();
+  const { lp, t, locale } = useLocaleCtx();
   const { add } = useCart();
   const variants = product.variants || [];
   const cheapest = variants.length
@@ -64,8 +64,9 @@ export default function ProductCard({ product, showAddToCart = false, priority =
         <h3 className="product-card__title">{product.title}</h3>
 
         <div className="product-card__price">
-          {variants.length > 1 && <span className="text-slate-500 mr-1">{t("from")}</span>}
-          <span>{fmtPrice(minPrice)}</span>
+          {/* Hungarian "from" is the suffix -tól and glues to the end of the price: 21 590 Ft-tól */}
+          {variants.length > 1 && locale !== "hu" && <span className="text-slate-500 mr-1">{t("from")}</span>}
+          <span>{fmtPrice(minPrice)}{variants.length > 1 && locale === "hu" ? t("from") : ""}</span>
           {hasCompare && <s className="text-slate-400 font-normal ml-1.5">{fmtPrice(compareAt)}</s>}
           {showsBGN() && <span className="text-slate-500 ml-1.5 text-[12px]">({fmtBGN(minPrice)})</span>}
         </div>

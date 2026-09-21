@@ -14,7 +14,7 @@ import pathlib
 import re
 import time
 import unicodedata
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -313,8 +313,15 @@ LOCALE_COUNTRY = {"bg": "BG", "gr": "GR", "ro": "RO", "cz": "CZ", "hu": "HU", "p
                   "sk": "SK", "si": "SI", "de": "DE", "fr": "FR", "en": "DE"}
 
 RETURN_DAYS = 14          # EU right of withdrawal
-HANDLING_DAYS = (1, 3)
-TRANSIT_DAYS = (1, 3)
+# what the storefront promises: 1-3 working days in the markets we ship from the region (BG, RO, GR),
+# 5-8 working days everywhere else. Handling is inside that promise, so the schema adds no days.
+HANDLING_DAYS = (0, 0)
+TRANSIT_DAYS = (5, 8)
+DOMESTIC_TRANSIT = {"BG": (1, 3), "RO": (1, 3), "GR": (1, 3)}
+
+
+def transit_days(country: str) -> Tuple[int, int]:
+    return DOMESTIC_TRANSIT.get((country or "").upper(), TRANSIT_DAYS)
 
 
 async def shipping_summary(locale: str) -> Dict[str, Any]:
@@ -330,7 +337,7 @@ async def shipping_summary(locale: str) -> Dict[str, Any]:
     except Exception as exc:
         log.info("shipping_summary for %s failed: %s", country, exc)
     return {"country": country, "currency": currency, "price": price,
-            "handling_days": list(HANDLING_DAYS), "transit_days": list(TRANSIT_DAYS),
+            "handling_days": list(HANDLING_DAYS), "transit_days": list(transit_days(country)),
             "return_days": RETURN_DAYS}
 
 

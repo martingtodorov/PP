@@ -95,8 +95,11 @@ const dedupeCity = (city, text) => {
 
 /** Checkout details are remembered for 90 days (see lib/checkoutPrefetch.js). */
 
+/** How many offices the distance-ranked list shows before the visitor starts typing. */
+const NEAREST_SHOWN = 4;
+
 /** Searchable dropdown over the full pickup list (Econt offices / BoxNow lockers / GLS points). */
-const PickupSelect = ({ options, value, onChange, placeholder, loading, geoCity }) => {
+const PickupSelect = ({ options, value, onChange, placeholder, loading, geoCity, autoOpenKey = 0 }) => {
   const { t: tr } = useLocaleCtx();
   const loadingLabel = tr("loadingText");
   const noResultsText = tr("noResults");
@@ -104,6 +107,15 @@ const PickupSelect = ({ options, value, onChange, placeholder, loading, geoCity 
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const box = useRef(null);
+  const opened = useRef(0);
+
+  // "find the offices near me" opens the list itself, with the nearest ones on top — no extra tap
+  useEffect(() => {
+    if (!autoOpenKey || autoOpenKey === opened.current || loading || !options.length) return;
+    opened.current = autoOpenKey;
+    setQ("");
+    setOpen(true);
+  }, [autoOpenKey, loading, options.length]);
 
   useEffect(() => {
     const away = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
@@ -116,7 +128,7 @@ const PickupSelect = ({ options, value, onChange, placeholder, loading, geoCity 
     const tokens = tokensOf(q);
     const ranked = options.some((o) => typeof o.distance_km === "number");   // server sorted by distance
     if (!tokens.length) {
-      if (ranked) return options.slice(0, 80);
+      if (ranked) return options.slice(0, NEAREST_SHOWN);   // the four closest, the rest via search
       // no query yet — offices in the visitor's own city (from IP) come first
       return [...options]
         .sort((a, b) => (norm(b.city) === here ? 1 : 0) - (norm(a.city) === here ? 1 : 0))
@@ -320,12 +332,16 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   /** The device position is the only accurate source of the visitor's city. */
   const [locateErr, setLocateErr] = useState("");
   const [locateFramed, setLocateFramed] = useState(false);
+  const [locatedAt, setLocatedAt] = useState(0);
   const locate = useCallback(({ prompt = true } = {}) => {
     setLocating(true);
     setLocateErr("");
     setLocateFramed(false);
     pfDeviceGeo({ prompt })
-      .then((d) => setGeo((g) => ({ ...(g || {}), ...d, country: d.country || g?.country })))
+      .then((d) => {
+        setGeo((g) => ({ ...(g || {}), ...d, country: d.country || g?.country }));
+        if (prompt) setLocatedAt(Date.now());   // opens the office list on the four nearest
+      })
       .catch((e) => {
         if (!prompt) return; // silent warm-up: never nag, never prompt
         if (e?.message === "geolocation-framed") { setLocateFramed(true); return; }
@@ -709,7 +725,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
 
                 {needsPickup && (
                   <PickupSelect options={pickups} value={pickup} onChange={setPickup} loading={loadingPickups}
-                    geoCity={geo?.city}
+                    geoCity={geo?.city} autoOpenKey={locatedAt}
                     placeholder={`${method.destination_type === "locker" ? t("chooseLocker") : t("chooseOffice")}`
                       + ` (${pickups.length})`
                       + (geo?.city ? ` — ${t("nearestTo", { city: geo.city })}` : "")} />

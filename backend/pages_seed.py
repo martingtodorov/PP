@@ -93,7 +93,7 @@ DEFAULT_PAGES = {
     },
     "delivery-and-payment": {
         "bg": {"title": "Доставка и плащане", "html": "<p>Поръчките се обработват в рамките на 1–3 работни дни и се изпращат със Спиди до офис или адрес. Получавате имейл с товарителница след изпращане.</p>"},
-        "en": {"title": "Shipping & payment", "html": "<p>Orders are processed within 1–3 business days and shipped with a tracked courier. A tracking email is sent once the parcel leaves our facility.</p>"},
+        "en": {"title": "Shipping & payment", "html": "<p>Orders are shipped with a tracked courier and delivered within 5–8 business days. A tracking email is sent once the parcel leaves our facility.</p>"},
     },
     "faq": {
         "bg": {
@@ -113,7 +113,7 @@ DEFAULT_PAGES = {
                 {"q": "What makes PurePeptide peptides different?", "a": "Transparency and quality control. Every product is lyophilised for a longer shelf life and has passed HPLC and LC-MS analysis with purity above 99%, tested by the Czech Janoshik laboratory."},
                 {"q": "How can I check the certificates of analysis?", "a": "Every product has a certificate of analysis (CoA) from Janoshik Labs, available on the product page including the batch number."},
                 {"q": "How long are unreconstituted peptides stable?", "a": "Lyophilised at 2–8°C peptides remain stable for up to 24 months; at room temperature roughly 3–4 months."},
-                {"q": "How long does shipping take?", "a": "Parcels are shipped with a tracked courier and usually arrive within 1–3 business days."},
+                {"q": "How long does shipping take?", "a": "Parcels are shipped with a tracked courier and usually arrive within 5–8 business days."},
             ],
         },
     },
