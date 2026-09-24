@@ -252,7 +252,8 @@ export default function AdminOrderDetailPage() {
           <CopyField
             label="Адрес за доставка"
             multiline
-            value={[order.customer.name, addr.line1, `${addr.zip} ${addr.city}`.trim(), addr.country]
+            value={[order.customer.name, addr.line1, `${addr.zip} ${addr.city}`.trim(), addr.country,
+                    addr.note ? `Пояснение: ${addr.note}` : ""]
               .filter(Boolean).join("\n")}
             testId="order-copy-address"
           />
