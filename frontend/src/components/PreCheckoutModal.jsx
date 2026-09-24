@@ -312,7 +312,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   const [pickupErr, setPickupErr] = useState("");
   const [pickup, setPickup] = useState(saved.current?.pickup || null);
   const [addr, setAddr] = useState(saved.current?.addr
-    || { city: "", postal_code: "", place_id: null, street: "", number: "" });
+    || { city: "", postal_code: "", place_id: null, street: "", number: "", note: "" });
   const [payment, setPayment] = useState(saved.current?.payment || "cod");
   const [geo, setGeo] = useState(null);
   const [locating, setLocating] = useState(false);
@@ -585,6 +585,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
           city: pickup ? pickup.city : addr.city,
           postal_code: (pickup ? pickup.postal_code : addr.postal_code) || "0000",
           country: contact.country,
+          note: needsAddress ? (addr.note || "").trim() : "",
         },
         customer_email: contact.email,
         customer_name: fullName,
@@ -765,6 +766,9 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                       <input className="nc2-inp" placeholder={t("postalPh")} value={addr.postal_code}
                         onChange={(e) => setAddr({ ...addr, postal_code: e.target.value })} data-testid="pc-postal" />
                     </div>
+                    {/* entrance / floor / flat — goes to the courier on the waybill */}
+                    <input className="nc2-inp" placeholder={t("addrNotePh")} value={addr.note || ""} maxLength={200}
+                      onChange={(e) => setAddr({ ...addr, note: e.target.value })} data-testid="pc-addr-note" />
                   </div>
                 )}
 

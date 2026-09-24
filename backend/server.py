@@ -1820,6 +1820,8 @@ def _order_view(o: Dict[str, Any]) -> Dict[str, Any]:
                 "city": ship.get("city") or info.get("city") or "",
                 "zip": ship.get("postal_code") or info.get("zip") or "",
                 "country": ship.get("country") or info.get("country") or "",
+                # what the customer added for the courier (entrance, floor, flat, landmark)
+                "note": ship.get("note") or "",
             },
         },
         "items": items,

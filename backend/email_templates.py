@@ -491,6 +491,8 @@ def render_order(order: Dict[str, Any], bank: Optional[Dict[str, Any]], locale: 
     addr_html = "<br>".join(x for x in [
         ship.get("full_name") or order.get("customer_name") or "",
         office.get("name") or ship.get("line1") or "",
+        # what the customer added for the courier (entrance, floor, flat) — only for address delivery
+        "" if office else (ship.get("note") or ""),
         f'{ship.get("postal_code", "")} {ship.get("city", "")}'.strip(),
         ship.get("country") or "",
         order.get("customer_phone") or "",
