@@ -341,8 +341,11 @@ async def _catalog_route(locale: str) -> str:
 
 
 async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
-    doc = await _db.products.find_one({"handle": handle, "active": True}, {"_id": 0}) \
-        or await _db.products.find_one({f"translations.{locale}.handle": handle}, {"_id": 0})
+    # mirrors GET /api/products/{handle}: an inactive product is off the storefront, so it must 404
+    # here as well — otherwise the crawler gets 200 + index and the React page says noindex
+    live = {"active": {"$ne": False}}
+    doc = await _db.products.find_one({"handle": handle, **live}, {"_id": 0}) \
+        or await _db.products.find_one({f"translations.{locale}.handle": handle, **live}, {"_id": 0})
     if not doc or _retired(doc, locale, handle):
         return None
     p = localize_doc(doc, locale)
@@ -568,8 +571,8 @@ async def _html_sitemap(locale: str, slug: str) -> Optional[Dict[str, str]]:
     label = {"products": _t(locale, "catalog"), "collections": _t(locale, "collections"),
              "articles": _t(locale, "articles"), "pages": _t(locale, "pages")}
     heading = "HTML sitemap" if not section else f"HTML sitemap — {label[kinds[0]]}"
-    sources = {"products": (_db.products, "/products/", {"active": True}),
-               "collections": (_db.collections_cat, "/collections/", {}),
+    sources = {"products": (_db.products, "/products/", {"active": {"$ne": False}}),
+               "collections": (_db.collections_cat, "/collections/", {"delisted": {"$ne": True}}),
                "articles": (_db.articles, "/articles/", {"published": {"$ne": False}}),
                "pages": (_db.pages, "/pages/", {"locale": DEFAULT_LOCALE})}
     blocks = []

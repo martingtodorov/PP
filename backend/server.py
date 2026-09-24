@@ -944,7 +944,8 @@ async def list_products(
 async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
     p = await db.products.find_one(
-        {"$or": [{"handle": handle}, {f"translations.{loc}.handle": handle}]}, {"_id": 0}
+        {"$or": [{"handle": handle}, {f"translations.{loc}.handle": handle}],
+         "active": {"$ne": False}}, {"_id": 0}
     )
     if not p or retired_handle(p, loc, handle):
         raise HTTPException(404, "Продуктът не е намерен")

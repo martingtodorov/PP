@@ -116,11 +116,16 @@ def test_sitemap_lastmod_is_the_record_date():
     assert days and len(days) > 1, "every url carrying today's date is a worthless lastmod signal"
 
 
-def test_retired_url_is_a_hard_404_that_walks_the_human_on():
-    """Owner's call (08.06.2026): the dead URL keeps its 404 + noindex, but a human is taken
-    straight to the catalogue instead of being left on a dead end."""
+def test_retired_url_is_a_hard_404_shown_in_place():
+    """Owner's call (24.06.2026): NO client-side redirect any more.
+
+    `navigate(catalog, { replace: true })` finished Google's render on the catalogue, so the dead
+    product URL inherited the collection's canonical and GSC reported „Excluded by 'noindex'" with
+    a user-declared canonical pointing at /collections/…. The 404 is now shown on the dead URL with
+    links out of it.
+    """
     block = open(os.path.join(ROOT, "frontend", "src", "components", "NotFoundBlock.jsx")).read()
-    assert "navigate(catalog, { replace: true })" in block
+    assert "navigate(" not in block
     assert 'data-testid="not-found-catalog-link"' in block
     r = requests.get(f"{API}/seo/prerender", params={"path": "/products/gone-for-good"},
                      headers={"Host": "purepeptide.bg"}, timeout=30)
