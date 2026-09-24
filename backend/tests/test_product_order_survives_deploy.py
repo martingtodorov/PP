@@ -64,13 +64,14 @@ def test_the_import_keeps_admin_fields_under_the_rotated_handle():
 
 
 def test_a_deploy_never_wipes_a_live_catalogue():
-    """A new SEED_VERSION used to delete the collections and products (and with them the ordering).
-    Now a catalogue with content is left alone unless ALLOW_RESEED=1 is set on purpose."""
+    """Startup cannot erase even a partial catalog, regardless of maintenance flags/version."""
     src = open(os.path.join(os.path.dirname(__file__), "..", "server.py")).read()
     guard = src.split("async def seed_catalog")[1].split("async def ")[0]
-    assert 'os.environ.get("ALLOW_RESEED") != "1"' in guard
+    assert 'for name in ("products", "collections_cat", "articles"):' in guard
+    assert 'count_documents({}, limit=1)' in guard
     assert "not re-seeding" in guard
-    assert "stale = False" in guard
+    assert "delete_many" not in guard
+    assert "ALLOW_RESEED" not in guard
 
 
 def test_the_import_keeps_stock_and_admin_fields_on_products():

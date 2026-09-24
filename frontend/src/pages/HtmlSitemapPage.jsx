@@ -40,12 +40,13 @@ export default function HtmlSitemapPage() {
     });
   }, [locale]);
 
-  const title = section ? `HTML sitemap — ${t(section.label)}` : "HTML sitemap";
   const path = section ? `/pages/html-sitemap-${kind}` : "/pages/html-sitemap";
+  const meta = index?.seo?.[path.split("/").pop()];
+  const title = meta?.title || (section ? `HTML sitemap — ${t(section.label)}` : "HTML sitemap");
 
   useSeo({
     title: `${title}`,
-    description: t("smDesc"),
+    description: meta?.description ?? t("smDesc"),
     locale,
     path,
     jsonLd: graph(
@@ -55,11 +56,11 @@ export default function HtmlSitemapPage() {
     ),
   });
 
-  const list = (items, to, keyName = "handle") => (
-    <ul className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2" data-testid="sitemap-list">
+  const list = (items, to, group, keyName = "handle") => (
+    <ul className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2" data-testid={`sitemap-${group}-list`}>
       {items.map((it) => (
         <li key={it[keyName]} className="text-sm">
-          <Link to={lp(to(it[keyName]))} className="text-slate-700 hover:text-coral-600 hover:underline underline-offset-4">
+          <Link to={lp(to(it[keyName]))} data-testid={`sitemap-${group}-link-${it[keyName]}`} className="text-slate-700 hover:text-coral-600 hover:underline underline-offset-4">
             {it.title || it[keyName]}
           </Link>
         </li>
@@ -70,39 +71,39 @@ export default function HtmlSitemapPage() {
   return (
     <Layout>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-16">
-        <Breadcrumbs items={[{ label: "HTML sitemap", to: lp("/pages/html-sitemap") }, ...(section ? [{ label: section.title }] : [])]} />
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-4">{title}</h1>
+        <Breadcrumbs items={[{ label: "HTML sitemap", to: lp("/pages/html-sitemap") }, ...(section ? [{ label: title }] : [])]} />
+        <h1 data-testid="sitemap-title" className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-4">{title}</h1>
 
         <div className="flex flex-wrap gap-2 mt-6" data-testid="sitemap-hub-links">
           {HUB.map(([to, labelKey]) => (
-            <Link key={to} to={lp(to)}
+            <Link key={to} to={lp(to)} data-testid={`sitemap-hub-${labelKey}`}
               className="px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-700 hover:border-coral-500 hover:text-coral-700 transition-colors">
               {t(labelKey)}
             </Link>
           ))}
         </div>
 
-        {!index && <p className="mt-8 text-sm text-slate-400">{t("loadingText")}</p>}
+        {!index && <p data-testid="sitemap-loading" className="mt-8 text-sm text-slate-400">{t("loadingText")}</p>}
 
-        {index && section && list(index[section.key] || [], section.to, section.key === "pages" ? "slug" : "handle")}
+        {index && section && list(index[section.key] || [], section.to, section.key, section.key === "pages" ? "slug" : "handle")}
 
         {index && !section && (
           <div className="mt-8 space-y-10">
             <section>
               <h2 className="text-lg font-bold text-slate-900">{t("smCollections")} ({index.collections.length})</h2>
-              {list(index.collections, (h) => `/collections/${h}`)}
+              {list(index.collections, (h) => `/collections/${h}`, "collections")}
             </section>
             <section>
               <h2 className="text-lg font-bold text-slate-900">{t("smProducts")} ({index.products.length})</h2>
-              {list(index.products, (h) => `/products/${h}`)}
+              {list(index.products, (h) => `/products/${h}`, "products")}
             </section>
             <section>
               <h2 className="text-lg font-bold text-slate-900">{t("smArticles")} ({index.articles.length})</h2>
-              {list(index.articles, (h) => `/articles/${h}`)}
+              {list(index.articles, (h) => `/articles/${h}`, "articles")}
             </section>
             <section>
               <h2 className="text-lg font-bold text-slate-900">{t("smPages")} ({index.pages.length})</h2>
-              {list(index.pages, (s) => `/pages/${s}`, "slug")}
+              {list(index.pages, (s) => `/pages/${s}`, "pages", "slug")}
             </section>
           </div>
         )}

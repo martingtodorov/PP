@@ -324,26 +324,16 @@ async def backfill_settings():
 
 
 async def seed_catalog():
-    """Seed / re-seed the catalog. A change of SEED_VERSION rebuilds the mirrored Shopify catalog."""
+    """Initialize an empty catalog only. Startup must never replace existing shop data."""
     current = await db.settings.find_one({"key": "site"})
     if ((current or {}).get("value") or {}).get("catalog_imported"):
         return
-    seeded_version = (current or {}).get("value", {}).get("seed_version")
-    stale = seeded_version != SEED_VERSION
-
-    live = await db.products.count_documents({})
-    if stale and live and os.environ.get("ALLOW_RESEED") != "1":
-        # a new SEED_VERSION used to wipe the catalog on deploy, which threw away the owner's
-        # product ordering (and anything else edited in the admin). Never touch a catalog that has
-        # content — an intentional rebuild needs ALLOW_RESEED=1.
-        log.warning("SEED_VERSION changed to %s but %d products are live — not re-seeding",
-                    SEED_VERSION, live)
-        stale = False
-    if stale:
-        await db.collections_cat.delete_many({})
-        await db.products.delete_many({})
-        await db.articles.delete_many({})
-        log.info("Re-seeding catalog for version %s", SEED_VERSION)
+    # Even a partial catalog is owner data. Neither a version change nor a forgotten maintenance
+    # flag may delete it or fill the rest with demo records. Imports remain explicit admin actions.
+    for name in ("products", "collections_cat", "articles"):
+        if await db[name].count_documents({}, limit=1):
+            log.info("Existing catalog found — not re-seeding")
+            return
 
     if await db.collections_cat.count_documents({}) == 0:
         for c in COLLECTIONS:
@@ -384,10 +374,8 @@ async def seed_catalog():
                 "translations": ARTICLE_TR.get(a["handle"], {}),
             })
 
-    if not current or stale:
+    if not current:
         merged = {**DEFAULT_SETTINGS, **(current or {}).get("value", {}), "seed_version": SEED_VERSION}
-        if stale:
-            merged = {**DEFAULT_SETTINGS}
         await db.settings.update_one(
             {"key": "site"}, {"$set": {"value": merged, "updated_at": now_utc()}}, upsert=True
         )
@@ -567,14 +555,8 @@ async def retarget_rotated_links() -> int:
 
 async def seed_pages():
     """Insert the default Bulgarian/English static page content once."""
-    # the imported Shopify slug aliases answered 200 in every locale with Bulgarian copy and
-    # duplicated the real page — they are gone for good (owner's decision: hard 404)
-    async def drop_aliases():
-        dropped = await db.pages.delete_many({"$or": [{"canonical_slug": {"$nin": [None, ""]}},
-                                                      {"slug": {"$in": LEGACY_PAGE_ALIASES}}]})
-        return dropped.deleted_count
-
-    await run_once("drop_page_aliases", drop_aliases)
+    # Public routes reject LEGACY_PAGE_ALIASES and sitemaps exclude aliases already. Keep their
+    # stored records intact; booting a release must not run a destructive cleanup migration.
     for slug, per_locale in DEFAULT_PAGES.items():
         for locale, content in per_locale.items():
             existing = await db.pages.find_one({"slug": slug, "locale": locale})
@@ -950,13 +932,11 @@ async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     if not p or retired_handle(p, loc, handle):
         raise HTTPException(404, "Продуктът не е намерен")
     related = await db.products.find(
-        {"handle": {"$ne": p["handle"]}, "collections": {"$in": p.get("collections", [])}},
+        {"handle": {"$ne": p["handle"]}, "collections": {"$in": p.get("collections", [])},
+         "active": {"$ne": False}},
         {"_id": 0},
     ).limit(8).to_list(8)
-    cols = await db.collections_cat.find(
-        {"$or": [{"handle": {"$in": p.get("collections", [])}},
-                 {"rotations.from": {"$in": p.get("collections", [])}}]}, {"_id": 0}
-    ).to_list(20)
+    cols = await product_collections(p, loc)
     articles = await db.articles.find(
         {"product_handle": p["handle"], "published": {"$ne": False}},
         {"_id": 0, "author": 0}).to_list(5)
@@ -976,9 +956,16 @@ async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     return {
         "product": localize_doc(p, loc),
         "related": localize_list(related, loc),
-        "collections": localize_list(cols, loc),
+        "collections": cols,
         "articles": localize_list(articles, loc),
     }
+
+
+async def product_collections(product: Dict[str, Any], loc: str) -> List[Dict[str, Any]]:
+    """Membership can store historical handles; links always use the current locale's URL."""
+    memberships = set(product.get("collections") or [])
+    docs = await db.collections_cat.find({"delisted": {"$ne": True}}, {"_id": 0}).to_list(200)
+    return [localize_doc(doc, loc) for doc in docs if memberships.intersection(collection_handles(doc))]
 
 
 @api.get("/articles")
@@ -987,7 +974,7 @@ async def list_articles(locale: str = Query(DEFAULT_LOCALE)):
     # drafts (Published = False in Shopify) stay out of the storefront
     # the by-line is never sent to the storefront — no author names on the site (owner's rule)
     docs = await db.articles.find({"published": {"$ne": False}}, {"_id": 0, "author": 0}).to_list(50)
-    return {"articles": slim(localize_list(docs, loc), "body")}
+    return {"articles": slim(localize_list(docs, loc), "body"), "seo": prerender.articles_index_meta(loc)}
 
 
 @api.get("/articles/{handle}")
@@ -1248,6 +1235,7 @@ async def rotate_page(link: Dict[str, Any], handle: str, loc: str, user_email: s
         update.update({k: v for k, v in frozen.items() if not doc.get(k)})
     await db.pages.update_one({"slug": doc["slug"], "locale": loc}, {"$set": update})
     _links_cache.clear()
+    prerender.bump()
     return {"kind": "pages", "handle": new_slug, "path": f"/pages/{new_slug}", "rewritten": rewritten}
 
 
@@ -1302,6 +1290,7 @@ async def rotate_content(kind: str, handle: str, loc: str, user_email: str, to: 
     await coll.update_one({"handle": doc["handle"]}, {"$set": {"translations": tr, "rotations": rotations,
                                                               "updated_at": now_utc(), **base_updates}})
     _links_cache.clear()
+    prerender.bump()
     return {"kind": kind, "handle": new_handle, "path": f"/{kind}/{new_handle}", "rewritten": rewritten}
 
 
@@ -3151,6 +3140,7 @@ def _page_out(doc: Dict[str, Any]) -> Dict[str, Any]:
         "faq_items": doc.get("faq_items", []),
         "seo_title": doc.get("seo_title", ""),
         "seo_description": doc.get("seo_description", ""),
+        "seo": prerender.page_meta(doc),
         "updated_at": doc.get("updated_at"),
     }
 
@@ -4499,6 +4489,8 @@ async def link_index(locale: str = Query(DEFAULT_LOCALE)):
         "pages": [{"slug": (d.get("pub_slug") if d.get("locale") == loc and d.get("pub_slug") else s),
                    "title": (d.get("title") or PAGE_LABELS.get(s, s))}
                   for s, d in by_slug.items() if s in PAGE_SLUGS and not d.get("canonical_slug")],
+        "seo": {f"html-sitemap{section}": prerender.sitemap_meta(loc, f"html-sitemap{section}")
+                for section in prerender._SITEMAP_SECTIONS},
     }
 
 

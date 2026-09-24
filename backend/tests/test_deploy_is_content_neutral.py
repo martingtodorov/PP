@@ -20,12 +20,14 @@ SRC = (BACKEND / "server.py").read_text()
 def test_content_migrations_run_through_run_once():
     assert 'await run_once("adopt_imported_redirects", adopt_imported_redirects)' in SRC
     assert 'await run_once("restore_body_headings", lambda: restore_headings(db, storage))' in SRC
-    assert 'await run_once("drop_page_aliases", drop_aliases)' in SRC
+    page_seed = SRC.split("async def seed_pages")[1].split("async def ")[0]
+    assert "delete_many" not in page_seed
+    assert 'await run_once("drop_page_aliases"' not in SRC
 
 
 def test_the_migrations_are_recorded_so_a_restart_skips_them():
     done = {d["name"] for d in DB.migrations.find({}, {"_id": 0, "name": 1})}
-    assert {"adopt_imported_redirects", "restore_body_headings", "drop_page_aliases"} <= done
+    assert {"adopt_imported_redirects", "restore_body_headings"} <= done
 
 
 def test_the_catalog_import_is_the_only_db_write_of_a_deploy_and_is_opt_in():

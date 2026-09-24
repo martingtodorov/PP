@@ -182,16 +182,10 @@ export default function ProductPage() {
 
           {/* Purchase panel */}
           <div className="space-y-5">
-            {/* like purepeptide.bg: the body's "Какво е X?" is the H1, the product name an H2 */}
-            {/<h1[\s>]/i.test(p.description || "") ? (
-              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight py-1.5" data-testid="product-title">
-                {p.title}
-              </h2>
-            ) : (
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight py-1.5" data-testid="product-title">
-                {p.title}
-              </h1>
-            )}
+            {/* Match the prerender: the product name is the sole H1; body headings are demoted. */}
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight py-1.5" data-testid="product-title">
+              {p.title}
+            </h1>
             {p.subtitle && <p className="text-sm text-slate-500 -mt-3">{p.subtitle}</p>}
 
             <div className="space-y-2 text-sm text-slate-700">

@@ -15,6 +15,7 @@ import sys
 from urllib.parse import unquote, urlsplit
 
 import httpx
+from check_internal_links import audit
 
 HOSTS = ("purepeptide.bg", "purepeptide.eu", "purepeptide.ro", "purepeptide.gr")
 
@@ -61,6 +62,7 @@ async def main() -> int:
     args = ap.parse_args()
     async with httpx.AsyncClient(follow_redirects=False) as client:
         results = [await check_host(client, args.base, h) for h in (args.hosts or HOSTS)]
+        internal = await audit(client, args.base.rstrip("/"))
     bad = [row for rows in results for row in rows]
     if bad:
         print("\nBROKEN SITEMAP ENTRIES:", file=sys.stderr)
@@ -68,7 +70,11 @@ async def main() -> int:
             print(f"  {host}{path} -> {status}", file=sys.stderr)
         return 1
     print("every sitemap URL answers 200")
-    return 0
+    errors = internal["broken"] + internal["noncanonical"] + internal["sitemap_errors"]
+    print(f"Internal links: {internal['checked']} URLs, {len(errors)} broken/noncanonical")
+    for error in errors:
+        print(error, file=sys.stderr)
+    return int(bool(errors))
 
 
 if __name__ == "__main__":
