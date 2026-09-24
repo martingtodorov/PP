@@ -511,10 +511,17 @@ async def _page(locale: str, slug: str) -> Optional[Dict[str, str]]:
     route = f"/pages/{slug}"
     title, description = doc["seo"]["title"], doc["seo"]["description"]
     trail = [(_t(locale, "home"), "/"), (doc.get("title"), route)]
+    faq_items = doc.get("faq_items") or [] if doc.get("slug") == "faq" else []
+    faq_schema = {"@type": "FAQPage", "@id": f'{url_for(locale, route)}#faq', "mainEntity": [
+        {"@type": "Question", "name": item["q"], "acceptedAnswer": {"@type": "Answer", "text": item["a"]}}
+        for item in faq_items]} if faq_items else None
     ld = _ld({"@type": "WebPage", "@id": f'{url_for(locale, route)}#page', "name": doc.get("title"),
               "description": _text(description, 500), "url": url_for(locale, route)},
-             _breadcrumbs(locale, trail), _organization(locale), _website(locale))
+             _breadcrumbs(locale, trail), _organization(locale), _website(locale), faq_schema)
     body = [_crumb_html(locale, trail), f'<h1>{esc(doc.get("title"))}</h1>', demote(doc.get("html"))]
+    if faq_items:
+        body.append('<section data-testid="faq-prerender">' + "".join(
+            f'<h2>{esc(item["q"])}</h2><p>{esc(item["a"])}</p>' for item in faq_items) + "</section>")
     return {"head": _head(locale, route, title, description, "", extra=ld,
                           alt=await _page_alt_routes(doc.get("slug") or slug)),
             "body": "".join(body)}
@@ -532,8 +539,9 @@ _SITEMAP_SECTIONS = {
 
 def page_meta(doc: Dict[str, Any]) -> Dict[str, str]:
     """Resolved, unbranded metadata; the API and prerender never truncate it differently."""
+    faq_text = " ".join(f'{item.get("q", "")} {item.get("a", "")}' for item in (doc.get("faq_items") or []))
     return {"title": doc.get("seo_title") or doc.get("title") or "",
-            "description": doc.get("seo_description") or _text(doc.get("html"))}
+            "description": doc.get("seo_description") or _text(doc.get("html")) or _text(faq_text)}
 
 
 def articles_index_meta(locale: str) -> Dict[str, str]:

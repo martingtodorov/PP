@@ -43,6 +43,8 @@ from i18n import (
     ai_rewrite_html, published_handle,
 )
 from pages_seed import PAGE_SLUGS, PAGE_LABELS, DEFAULT_PAGES, LEGACY_PAGE_ALIASES
+from page_content import resolve_page_content
+from literature_copy import LITERATURE_COPY
 import storage
 import email_service
 from starlette.concurrency import run_in_threadpool
@@ -3160,6 +3162,13 @@ async def _page_slugs(base_slug: str) -> Dict[str, str]:
     return {loc: published.get(loc, base_slug) for loc in LOCALES}
 
 
+async def _resolved_public_page(doc, loc, source_locale):
+    content, source_locale = await resolve_page_content(db, doc, loc, source_locale)
+    out = _page_out(content)
+    out.update(locale=loc, source_locale=source_locale, slugs=await _page_slugs(content["slug"]))
+    return {"page": out}
+
+
 @api.get("/pages/{slug}")
 async def public_page(slug: str, locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
@@ -3168,24 +3177,18 @@ async def public_page(slug: str, locale: str = Query(DEFAULT_LOCALE)):
     # a rotated page is published under its new slug only; the old one must 404 for that locale
     moved = await db.pages.find_one({"locale": loc, "pub_slug": slug}, {"_id": 0})
     if moved:
-        out = _page_out(moved)
-        out["locale"] = loc
-        out["source_locale"] = loc
-        out["slugs"] = await _page_slugs(moved["slug"])
-        return {"page": out}
+        return await _resolved_public_page(moved, loc, loc)
     if await db.pages.find_one({"locale": loc, "rotations.from": slug}, {"_id": 0, "slug": 1}):
         raise HTTPException(404, "Страницата не е намерена")
     chain = [loc] + [l for l in ("en", "bg") if l != loc]
     for candidate in chain:
         doc = await db.pages.find_one({"slug": slug, "locale": candidate}, {"_id": 0})
+        if doc and candidate == loc and doc.get("pub_slug"):
+            raise HTTPException(404, "Страницата не е намерена")
         if _has_content(doc) and not doc.get("canonical_slug"):
-            if candidate == loc and doc.get("pub_slug"):
-                raise HTTPException(404, "Страницата не е намерена")
-            out = _page_out(doc)
-            out["locale"] = loc
-            out["source_locale"] = candidate
-            out["slugs"] = await _page_slugs(doc["slug"])
-            return {"page": out}
+            return await _resolved_public_page(doc, loc, candidate)
+    if slug == "scientific-literature" or (slug == "faq" and loc == "en"):
+        return await _resolved_public_page({"slug": slug, "locale": loc}, loc, loc)
     raise HTTPException(404, "Страницата не е намерена")
 
 
@@ -4481,6 +4484,7 @@ async def link_index(locale: str = Query(DEFAULT_LOCALE)):
     for p in pages:
         if p["slug"] not in by_slug or p["locale"] == loc:
             by_slug[p["slug"]] = p
+    by_slug.setdefault("scientific-literature", {"title": LITERATURE_COPY[loc]["title"]})
     slim = lambda d: {"handle": d.get("handle"), "title": d.get("title", "")}
     return {
         "collections": [slim(c) for c in localize_list(cols, loc)],
@@ -4587,6 +4591,8 @@ async def _sitemap_groups(request: Request):
     newest = max(doc_days) if doc_days else datetime.now(timezone.utc).date().isoformat()
 
     groups: Dict[str, List[tuple]] = {k: [] for k in SITEMAP_KINDS}
+    groups["collections"].append(({loc: {"path": "/collections", "src": ""} for loc in wanted},
+                                  "daily", newest))
     for path in static_pages:
         slug = path.rsplit("/", 1)[-1]
         meta = {loc: {"path": (page_path(path, loc) if path else path), "src": ""} for loc in wanted}

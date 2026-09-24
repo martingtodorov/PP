@@ -1158,3 +1158,18 @@ handle на документа е новият (`retatrutide-tnn`), а `translat
 - Повторната проверка: WARN (само производителност на startup cursor обходи), няма blocker,
   няма destructive startup. .env НЕ е добавен в Git: конфигурацията се подава отделно от Ansible.
 - Менюто остава непроменено. Продукционен деплой НЕ е извършен.
+
+## 2026-09-24 — Попълване на научната страница/EN FAQ, 301 index.html, sitemap index
+- По избор „Попълване“: scientific-literature има локализиран контекст + публикувани статии,
+  откъси и текущи relative локализирани линкове; динамично API/SSR попълване без записи в Mongo.
+  Собствен непразен текст и explicit SEO се запазват. Няма генерирани фиктивни публикации.
+- EN FAQ: съществуващите faq_items вече се рендерират в SSR, с FAQPage JSON-LD и описание.
+  Ако EN копието е празно, се използват съществуващите EN defaults. React държи Q&A в DOM,
+  със затворени hidden отговори и работещо разгъване. Ротационните 404 остават непроменени.
+- /collections е добавен веднъж за всеки от 11-те езика в collections sitemap.
+- Публичният /index.html получава 301 в HTTP/TLS/www Nginx към / (EU директно /en/), query е
+  запазено. Частният шаблон и SPA fallback не пренасочват. Не е прилаган на реалните сървъри.
+- Тестване: 162 pytest PASS, истински временен Nginx GET/HEAD/public/private/error fallback;
+  browser FAQ, science content и реална навигация към статия PASS; build PASS със стари warnings.
+- Нов ASGI read-only audit: 547 URLs, 0 broken anchor targets, 0 noncanonical; 22 sitemap 404
+  само за липсващи demo about-1/cookies. Менюто остава непокътнато.
