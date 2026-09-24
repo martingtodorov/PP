@@ -50,7 +50,7 @@ def init(db) -> None:
 def bump() -> None:
     """Any admin write invalidates the prerendered HTML (called from the middleware)."""
     global _stamp
-    _stamp = time.time()
+    _stamp += 1
     _pages.clear()
 
 
@@ -349,6 +349,8 @@ async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
     if not doc or _retired(doc, locale, handle):
         return None
     p = localize_doc(doc, locale)
+    from server import product_collections
+    collections = await product_collections(doc, locale)
     route = f"/products/{p.get('handle') or handle}"
     origin = SITE_ORIGINS.get(locale, SITE_ORIGINS[DEFAULT_LOCALE])["origin"]
     variants = p.get("variants") or []
@@ -389,8 +391,8 @@ async def _product(locale: str, handle: str) -> Optional[Dict[str, str]]:
          f'{"В наличност" if in_stock else "Изчерпан"}</p>' if prices else ""),
         "".join(f'<img src="{src}" alt="{esc(p.get("title"))}" width="600" height="600">' for src in images),
         demote(p.get("description")),
-        "".join(f'<a href="{url_for(locale, f"/collections/{c}")}">{esc(c)}</a> '
-                for c in (p.get("collections") or [])[:6]),
+        "<ul>" + "".join(_link_li(locale, "/collections/", c["handle"], c.get("title"))
+                         for c in collections[:6]) + "</ul>",
     ]
     ld = _ld(
         {"@type": "Product", "@id": f'{url_for(locale, route)}#product', "name": p.get("title"),
@@ -463,7 +465,7 @@ async def _catalog(locale: str) -> Dict[str, str]:
                    "url": url_for(locale, f'/products/{p.get("handle")}')} for i, p in enumerate(items)]}},
              _breadcrumbs(locale, trail), _organization(locale), _website(locale))
     body = [_crumb_html(locale, trail), f'<h1>{esc(_t(locale, "catalog"))}</h1>',
-            "<ul>" + "".join(_link_li(locale, "/collections/", c.get("handle"),
+            "<ul>" + "".join(_link_li(locale, "/collections/", published_handle(c, locale),
                                       localize_doc(c, locale).get("title")) for c in collections) + "</ul>",
             "<ul>" + "".join(_product_li(locale, p) for p in items) + "</ul>"]
     return {"head": _head(locale, "/collections", title, description, "", extra=ld), "body": "".join(body)}
@@ -497,23 +499,17 @@ async def _article(locale: str, handle: str) -> Optional[Dict[str, str]]:
 
 
 async def _page(locale: str, slug: str) -> Optional[Dict[str, str]]:
-    if slug in LEGACY_PAGE_ALIASES:   # imported Shopify duplicate — removed for good
-        return None
-    # mirrors GET /api/pages/{slug}: a rotated page lives under `pub_slug` only, the old slug 404s
-    doc = await _db.pages.find_one({"slug": slug, "locale": locale, "pub_slug": slug}, {"_id": 0}) \
-        or await _db.pages.find_one({"locale": locale, "pub_slug": slug}, {"_id": 0})
-    if not doc:
-        if await _db.pages.find_one({"locale": locale, "rotations.from": slug}, {"_id": 0, "slug": 1}):
+    # Share the API's per-locale publication and content-fallback rules, including metadata.
+    from fastapi import HTTPException
+    from server import public_page
+    try:
+        doc = (await public_page(slug, locale))["page"]
+    except HTTPException as exc:
+        if exc.status_code == 404:
             return None
-        doc = await _db.pages.find_one({"slug": slug, "locale": locale}, {"_id": 0})
-        if doc and doc.get("pub_slug"):
-            return None
-        doc = doc or await _db.pages.find_one({"slug": slug, "locale": DEFAULT_LOCALE}, {"_id": 0})
-    if not doc:
-        return None
+        raise
     route = f"/pages/{slug}"
-    title = doc.get("seo_title") or f'{doc.get("title")}'
-    description = doc.get("seo_description") or _text(doc.get("html"))
+    title, description = doc["seo"]["title"], doc["seo"]["description"]
     trail = [(_t(locale, "home"), "/"), (doc.get("title"), route)]
     ld = _ld({"@type": "WebPage", "@id": f'{url_for(locale, route)}#page', "name": doc.get("title"),
               "description": _text(description, 500), "url": url_for(locale, route)},
@@ -534,6 +530,24 @@ _SITEMAP_SECTIONS = {
 }
 
 
+def page_meta(doc: Dict[str, Any]) -> Dict[str, str]:
+    """Resolved, unbranded metadata; the API and prerender never truncate it differently."""
+    return {"title": doc.get("seo_title") or doc.get("title") or "",
+            "description": doc.get("seo_description") or _text(doc.get("html"))}
+
+
+def articles_index_meta(locale: str) -> Dict[str, str]:
+    return {"title": _t(locale, "articles"), "description": _t(locale, "articlesIndexDesc")}
+
+
+def sitemap_meta(locale: str, slug: str) -> Dict[str, str]:
+    section = slug[len("html-sitemap"):]
+    kinds = _SITEMAP_SECTIONS[section]
+    key = "catalog" if kinds[0] == "products" else kinds[0]
+    return {"title": f"HTML sitemap — {_t(locale, key)}" if section else "HTML sitemap",
+            "description": _t(locale, "sitemapDesc")}
+
+
 async def _articles_index(locale: str) -> Dict[str, str]:
     """The article index the header and footer link to — a router page, not a DB page."""
     route = "/pages/articles"
@@ -547,13 +561,14 @@ async def _articles_index(locale: str) -> Dict[str, str]:
         items.append(_link_li(locale, "/articles/", handle, title))
         parts.append({"@type": "Article", "headline": title,
                       "url": url_for(locale, f"/articles/{handle}")})
-    heading = _t(locale, "articles")
+    meta = articles_index_meta(locale)
+    heading = meta["title"]
     trail = [(_t(locale, "home"), "/"), (heading, route)]
     ld = _ld({"@type": "CollectionPage", "@id": f"{url_for(locale, route)}#page", "name": heading,
               "url": url_for(locale, route), "hasPart": parts[:50]},
              _breadcrumbs(locale, trail), _organization(locale), _website(locale))
     return {"head": _head(locale, route, heading,
-                          _t(locale, "articlesIndexDesc"), "", extra=ld),
+                          meta["description"], "", extra=ld),
             "body": _crumb_html(locale, trail) + f"<h1>{esc(heading)}</h1><ul>{''.join(items)}</ul>"}
 
 
@@ -568,25 +583,21 @@ async def _html_sitemap(locale: str, slug: str) -> Optional[Dict[str, str]]:
     if kinds is None:
         return None
     route = f"/pages/{slug}"
+    from server import link_index
+    index = await link_index(locale)
+    meta = index["seo"][slug]
     label = {"products": _t(locale, "catalog"), "collections": _t(locale, "collections"),
              "articles": _t(locale, "articles"), "pages": _t(locale, "pages")}
-    heading = "HTML sitemap" if not section else f"HTML sitemap — {label[kinds[0]]}"
-    sources = {"products": (_db.products, "/products/", {"active": {"$ne": False}}),
-               "collections": (_db.collections_cat, "/collections/", {"delisted": {"$ne": True}}),
-               "articles": (_db.articles, "/articles/", {"published": {"$ne": False}}),
-               "pages": (_db.pages, "/pages/", {"locale": DEFAULT_LOCALE})}
+    heading = meta["title"]
     blocks = []
     for kind in kinds:
-        coll, prefix, query = sources[kind]
+        prefix = f"/{kind}/"
         field = "slug" if kind == "pages" else "handle"
-        docs = await coll.find(query, {"_id": 0, field: 1, "title": 1, "translations": 1,
-                                       "pub_slug": 1}).to_list(500)
         items = []
-        for doc in docs:
-            local = localize_doc(doc, locale)
-            handle = local.get("pub_slug") or local.get(field)
+        for doc in index[kind]:
+            handle = doc.get(field)
             if handle:
-                items.append(_link_li(locale, prefix, handle, local.get("title") or handle))
+                items.append(_link_li(locale, prefix, handle, doc.get("title") or handle))
         if items:
             blocks.append(f"<h2>{esc(label[kind])}</h2><ul>{''.join(items)}</ul>")
     trail = [(_t(locale, "home"), "/"), (heading, route)]
@@ -594,7 +605,7 @@ async def _html_sitemap(locale: str, slug: str) -> Optional[Dict[str, str]]:
               "url": url_for(locale, route)},
              _breadcrumbs(locale, trail), _organization(locale), _website(locale))
     body = [_crumb_html(locale, trail), f"<h1>{esc(heading)}</h1>"] + blocks
-    return {"head": _head(locale, route, heading, _t(locale, "sitemapDesc"),
+    return {"head": _head(locale, route, heading, meta["description"],
                           "", extra=ld),
             "body": "".join(body)}
 
@@ -657,7 +668,7 @@ async def _home(locale: str) -> Dict[str, str]:
         # the hero shows the brand word, so the prerendered H1 must say exactly the same
         f'<h1>{esc(_SITE.get("hero_title") or "PurePeptide")}</h1>',
         f'<p>{esc(description)}</p>',
-        "<ul>" + "".join(_link_li(locale, "/collections/", c.get("handle"),
+        "<ul>" + "".join(_link_li(locale, "/collections/", published_handle(c, locale),
                                    localize_doc(c, locale).get("title")) for c in collections) + "</ul>",
         "<ul>" + "".join(_link_li(locale, "/products/", p.get("handle"), p.get("title")) for p in items) + "</ul>",
     ]
@@ -784,6 +795,7 @@ async def render(path: str, host: str) -> Optional[Tuple[str, int]]:
     hit = _pages.get(key)
     if hit and time.time() - hit[0] < PAGE_TTL:
         return hit[1]
+    generation = _stamp
     shell = await _shell()
     if not shell:
         return None
@@ -810,5 +822,7 @@ async def render(path: str, host: str) -> Optional[Tuple[str, int]]:
                 f'<p><a href="{catalog}">{esc(_t(locale, "catalog"))}</a></p>')
         return _inject(shell, head, body, locale), 404
     out = (_inject(shell, rendered["head"], rendered["body"], locale), 200)
-    _pages[key] = (time.time(), out)
+    # A rotation may finish while this request is rendering: don't restore a stale cache entry.
+    if generation == _stamp:
+        _pages[key] = (time.time(), out)
     return out

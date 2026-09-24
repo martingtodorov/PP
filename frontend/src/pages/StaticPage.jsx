@@ -74,17 +74,27 @@ export default function StaticPage() {
   const { slug } = useParams();
   const { lp, t, locale } = useLocaleCtx();
   const [articles, setArticles] = useState([]);
+  const [articlesSeo, setArticlesSeo] = useState(null);
   const [collections, setCollections] = useState([]);
   const [remote, setRemote] = useState(null);
 
   useEffect(() => {
-    api.get("/articles").then(({ data }) => setArticles(data.articles));
+    let active = true;
+    setArticlesSeo(null);
+    api.get("/articles").then(({ data }) => {
+      if (active) { setArticles(data.articles); setArticlesSeo(data.seo); }
+    });
     api.get("/collections").then(({ data }) => setCollections(data.collections.filter((c) => !isAllCollection(c) && !c.nav_hidden)));
+    return () => { active = false; };
   }, [locale]);
 
   useEffect(() => {
     setRemote(null);
-    api.get(`/pages/${slug}`).then(({ data }) => setRemote(data.page)).catch(() => setRemote(null));
+    if (slug === "articles") return;
+    let active = true;
+    api.get(`/pages/${slug}`).then(({ data }) => { if (active) setRemote(data.page); })
+      .catch(() => { if (active) setRemote(null); });
+    return () => { active = false; };
   }, [slug, locale]);
 
   const table = BODY[locale] || BODY.en;
@@ -101,7 +111,7 @@ export default function StaticPage() {
   const untranslated = !!remote && remote.source_locale !== locale;
   const faqItems = remote?.faq_items?.length && !untranslated ? remote.faq_items : pick(FAQ_ITEMS, locale);
   const loading = remote === null && !fallback && !isArticles;
-  const title = isArticles ? t("articles")
+  const title = isArticles ? articlesSeo?.title || t("articles")
     : (isFaq && (untranslated || !remote?.title) ? t("faq") : remote?.title)
       || page?.title || (loading ? "" : PAGE_TITLES[baseSlug] || baseSlug);
 
@@ -110,11 +120,11 @@ export default function StaticPage() {
   const alternates = {};
   if (remote?.slugs) LOCALES.forEach((l) => { alternates[l] = `/pages/${remote.slugs[l]}`; });
 
+  const meta = isArticles ? articlesSeo : remote?.seo;
   useSeo({
-    title: remote?.seo_title || `${title}`,
+    title: meta?.title ?? (remote?.seo_title || `${title}`),
     description:
-      remote?.seo_description ||
-      (page?.html || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 155),
+      meta?.description ?? (remote?.seo_description || ""),
     locale,
     path: `/pages/${slug}`,
     alternates,
@@ -154,7 +164,7 @@ export default function StaticPage() {
     <Layout>
       <div key="page-content" className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-14">
         <Breadcrumbs items={[{ label: title }]} />
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-4">{title}</h1>
+        <h1 data-testid="static-page-title" className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-4">{title}</h1>
 
         {isFaq && (untranslated || remote?.faq_items?.length > 0 || !remote?.html) && (
           <Accordion type="single" collapsible className="space-y-3 mt-8" data-testid="static-faq">
