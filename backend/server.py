@@ -995,7 +995,8 @@ async def get_article(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
     doc = await db.articles.find_one({"handle": handle, "published": {"$ne": False}},
                                      {"_id": 0, "author": 0}) \
-        or await db.articles.find_one({f"translations.{loc}.handle": handle}, {"_id": 0, "author": 0})
+        or await db.articles.find_one({f"translations.{loc}.handle": handle,
+                                       "published": {"$ne": False}}, {"_id": 0, "author": 0})
     if not doc:
         raise HTTPException(404, "Статията не е намерена")
     return {"article": localize_doc(doc, loc)}
@@ -1154,6 +1155,19 @@ def rotation_code(taken: set) -> str:
             return code
 
 
+def rotation_stem(live: str, rotations: List[Dict[str, Any]], loc: str) -> str:
+    """The stem the next 3-letter rotation code hangs on.
+
+    It is the handle published RIGHT NOW with its own rotation code stripped, so a manual rename
+    carries over: after `21-retatrutide-5-tnn` → `retatrutide-tnn` the next rotation is
+    `retatrutide-abc`, not `21-retatrutide-5-abc` (owner's call, 24.06.2026). Before that the stem
+    was frozen at the first rotation's handle and manual renames were ignored forever.
+    """
+    codes = {r.get("code") for r in rotations if r.get("locale") == loc and r.get("code")}
+    stem, _, last = (live or "").rpartition("-")
+    return stem if stem and last in codes else (live or "")
+
+
 async def _handle_ever_used(kind: str, handle: str) -> bool:
     """True when this exact URL has ever been published anywhere — a rotation must never reuse one."""
     if await db.rotation_log.find_one({"handle": handle}, {"_id": 1}):
@@ -1211,7 +1225,7 @@ async def rotate_page(link: Dict[str, Any], handle: str, loc: str, user_email: s
         raise HTTPException(404, f"Няма съдържание за страница „{handle}“ на език {loc}")
 
     rotations = list(doc.get("rotations") or [])
-    base = rotations[0]["from"] if rotations else (doc.get("pub_slug") or doc["slug"])
+    base = rotation_stem(doc.get("pub_slug") or doc["slug"], rotations, loc)
     new_slug = await next_rotation_handle("pages", base, doc, loc)
 
     rewritten = False
@@ -1247,7 +1261,8 @@ async def rotate_content(kind: str, handle: str, loc: str, user_email: str, to: 
     tr = dict(doc.get("translations") or {})
     entry = dict(tr.get(loc) or {})
     history = [r for r in (doc.get("rotations") or []) if r.get("locale") == loc]
-    base = history[0]["from"] if history else (entry.get("handle") or doc["handle"])
+    base = rotation_stem(published_handle(doc, loc) or entry.get("handle") or doc["handle"],
+                         history, loc)
     new_handle = to.strip() or await next_rotation_handle(kind, base, doc, loc)
     if new_handle == handle:
         raise HTTPException(400, "Новият handle е същият като стария")

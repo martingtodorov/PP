@@ -102,6 +102,38 @@ def test_the_repair_leaves_a_normal_rotation_alone():
         run(server.db.products.delete_one({"id": doc["id"]}))
 
 
+def test_a_manual_rename_becomes_the_stem_of_future_rotations():
+    """21-retatrutide-5-tnn → retatrutide-tnn: the next rotation must be retatrutide-xxx."""
+    rotations = [{"locale": "bg", "from": "21-retatrutide-5", "to": "21-retatrutide-5-qwe", "code": "qwe"},
+                 {"locale": "bg", "from": "21-retatrutide-5-qwe", "to": "retatrutide-tnn", "code": "tnn"}]
+    assert server.rotation_stem("retatrutide-tnn", rotations, "bg") == "retatrutide"
+    assert server.rotation_stem("21-retatrutide-5-qwe", rotations, "bg") == "21-retatrutide-5"
+
+
+def test_a_handle_without_a_rotation_code_is_the_stem_itself():
+    rotations = [{"locale": "bg", "from": "ghk-cu", "to": "ghk-cu-abc", "code": "abc"}]
+    assert server.rotation_stem("retatrutide-5mg", rotations, "bg") == "retatrutide-5mg"
+    assert server.rotation_stem("bpc-157-5", [], "bg") == "bpc-157-5"
+    # another locale's code must not be stripped
+    assert server.rotation_stem("ghk-cu-abc", rotations, "en") == "ghk-cu-abc"
+
+
+def test_a_rotation_after_a_rename_uses_the_new_path():
+    """End to end: rename, then rotate — the fresh code hangs on the renamed path."""
+    doc = _product(f"21-retatrutide-5-{uuid.uuid4().hex[:3]}")
+    run(server.db.products.insert_one(doc.copy()))
+    try:
+        renamed = _rename(doc, f"retatrutide-pytest{uuid.uuid4().hex[:2]}-tnn")
+        stem = renamed["handle"].rsplit("-", 1)[0]
+        run(server.rotate_content("products", renamed["handle"], "bg", "pytest@purepeptide.bg"))
+        after = run(server.db.products.find_one({"id": doc["id"]}, {"_id": 0}))
+        live = server.published_handle(after, "bg")
+        assert live.startswith(f"{stem}-") and live != renamed["handle"]
+        assert "21-retatrutide" not in live
+    finally:
+        run(server.db.products.delete_one({"id": doc["id"]}))
+
+
 def test_the_storefront_gets_the_published_url_not_the_retired_one():
     """The Retatrutide report: the card linked to the retired translated handle, so it 404'd."""
     doc = {"handle": "retatrutide-tnn", "title": "Retatrutide",

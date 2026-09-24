@@ -25,7 +25,10 @@ api.interceptors.request.use((cfg) => {
 
 // EUR -> BGN conversion (peg)
 export const FX = 1.95583;
-/** Ask the API for a resized WebP variant (big win on mobile). */
+
+/** Only a real HTTP 404 means the URL is gone. A timeout or a 5xx must never turn a live page into
+ *  "noindex" — Google renders the page and would keep that verdict (GSC report, 24.06.2026). */
+export const isMissing = (err) => err?.response?.status === 404;/** Ask the API for a resized WebP variant (big win on mobile). */
 /**
  * Media revision. nginx used to stamp a one-year "immutable" Cache-Control on 404s too, so every
  * missing image got cached as broken by Cloudflare and by the visitors' browsers. Bumping this
