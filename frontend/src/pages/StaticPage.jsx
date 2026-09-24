@@ -77,6 +77,7 @@ export default function StaticPage() {
   const [articlesSeo, setArticlesSeo] = useState(null);
   const [collections, setCollections] = useState([]);
   const [remote, setRemote] = useState(null);
+  const [faqOpen, setFaqOpen] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -90,6 +91,7 @@ export default function StaticPage() {
 
   useEffect(() => {
     setRemote(null);
+    setFaqOpen("");
     if (slug === "articles") return;
     let active = true;
     api.get(`/pages/${slug}`).then(({ data }) => { if (active) setRemote(data.page); })
@@ -167,11 +169,11 @@ export default function StaticPage() {
         <h1 data-testid="static-page-title" className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mt-4">{title}</h1>
 
         {isFaq && (untranslated || remote?.faq_items?.length > 0 || !remote?.html) && (
-          <Accordion type="single" collapsible className="space-y-3 mt-8" data-testid="static-faq">
+          <Accordion type="single" collapsible value={faqOpen} onValueChange={setFaqOpen} className="space-y-3 mt-8" data-testid="static-faq">
             {faqItems.map((f, i) => (
-              <AccordionItem key={i} value={`q${i}`} className="bg-white border border-slate-200 rounded-2xl px-5">
-                <AccordionTrigger className="font-semibold text-left text-slate-900 hover:no-underline">{f.q}</AccordionTrigger>
-                <AccordionContent className="text-slate-600 leading-relaxed">{f.a}</AccordionContent>
+              <AccordionItem key={i} value={`q${i}`} data-testid={`faq-item-${i}`} className="bg-white border border-slate-200 rounded-2xl px-5">
+                <AccordionTrigger data-testid={`faq-question-${i}`} className="font-semibold text-left text-slate-900 hover:no-underline">{f.q}</AccordionTrigger>
+                <AccordionContent forceMount hidden={faqOpen !== `q${i}`} data-testid={`faq-answer-${i}`} className="text-slate-600 leading-relaxed">{f.a}</AccordionContent>
               </AccordionItem>
             ))}
           </Accordion>

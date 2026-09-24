@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 
 import requests
 from conftest import run  # noqa: F401
+from test_iteration54_ssr_links_and_metadata import isolated_db  # noqa: F401
 
 API = "http://localhost:8001/api"
 NS = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
@@ -106,19 +107,22 @@ def test_the_canonical_matches_the_sitemap_character_for_character():
         assert re.findall(r'rel="canonical" href="([^"]+)"', html)[0] == u
 
 
-def test_a_rotated_or_delisted_url_is_in_no_sitemap():
-    import matrixify_import as mi
+def test_a_rotated_or_delisted_url_is_in_no_sitemap(isolated_db):  # noqa: F811 - imported pytest fixture
+    """Exercise the real handler with isolated records, not an assumption about the live catalog."""
+    import server
+    from starlette.requests import Request
 
-    rotated = mi.db.collections_cat.find_one({"rotations.0": {"$exists": True}},
-                                             {"_id": 0, "rotations": 1, "handle": 1})
-    assert rotated, "no rotated collection in the database"
-    dead = {r["from"] for r in rotated["rotations"]} - {rotated["handle"]}
-    body = get("/sitemap_collections_1.xml", "purepeptide.bg").text
-    for handle in dead:
-        assert f"/collections/{handle}<" not in body, handle
-    delisted = mi.db.collections_cat.find_one({"delisted": True}, {"_id": 0, "handle": 1})
-    if delisted:
-        assert f"/collections/{delisted['handle']}<" not in body
+    run(isolated_db.collections_cat.insert_many([
+        {"handle": "sitemap-current", "title": "Current",
+         "rotations": [{"locale": "bg", "from": "sitemap-retired", "to": "sitemap-current"}]},
+        {"handle": "sitemap-delisted", "title": "Delisted", "delisted": True},
+    ]))
+    request = Request({"type": "http", "headers": [(b"host", b"purepeptide.bg")]})
+    response = run(server.sitemap_child("collections", 1, request))
+    body = response.body.decode()
+    assert "/collections/sitemap-current<" in body
+    assert "/collections/sitemap-retired<" not in body
+    assert "/collections/sitemap-delisted<" not in body
 
 
 SHAPE = re.compile(

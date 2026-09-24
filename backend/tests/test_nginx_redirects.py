@@ -37,17 +37,18 @@ VARS = {
 }
 
 
-def _plain_http(conf: str) -> str:
+def _plain_http(conf: str, port: int = PORT, private_port: int = 8098) -> str:
     """Same server blocks, served over plain HTTP on a test port instead of TLS."""
-    conf = conf.replace("listen 443 ssl http2;", f"listen 127.0.0.1:{PORT};")
+    conf = conf.replace("listen 443 ssl http2;", f"listen 127.0.0.1:{port};")
     conf = re.sub(r"^\s*listen \[::\]:443 ssl http2;\n", "", conf, flags=re.M)
     conf = re.sub(r"^\s*(ssl_certificate|ssl_certificate_key|ssl_protocols|"
                   r"ssl_prefer_server_ciphers|ssl_session_cache|ssl_session_timeout).*\n", "",
                   conf, flags=re.M)
-    conf = re.sub(r"^\s*listen 80;\n\s*listen \[::\]:80;\n", "", conf, flags=re.M)
+    conf = conf.replace("listen 80;", "listen 127.0.0.1:8097;")
+    conf = conf.replace("listen [::]:80;", "")
     # the port-80 redirect block would clash with the test port, and the private shell block binds
     # an address that does not exist here
-    conf = conf.replace("listen 127.0.0.1:8080;", "listen 127.0.0.1:8098;")
+    conf = conf.replace(":8080;", f":{private_port};")
     return conf
 
 
@@ -56,11 +57,14 @@ def nginx():
     if not shutil.which("nginx"):
         pytest.skip("nginx is not installed in this environment")
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="pp-nginx-"))
+    tmp.chmod(0o755)  # nginx workers must be able to read the test build's raw HTML shell
     (tmp / "build/static").mkdir(parents=True)
     (tmp / "build/index.html").write_text("<html lang=\"bg\"><body><div id=\"root\"></div></body></html>")
     (tmp / "build/robots.txt").write_text("User-agent: *\n")
     (tmp / "logs").mkdir()
     body = Template(TEMPLATE.read_text(encoding="utf-8")).render(**{**VARS, "web_root": str(tmp)})
+    # Test-only failure injection in the real named location, without stopping the app backend.
+    body = body.replace("location @prerender {", 'location @prerender {\n        if ($http_x_test_prerender_failure) { return 503; }')
     conf = ("worker_processes 1;\nerror_log %s/logs/error.log;\npid %s/nginx.pid;\n"
             "events { worker_connections 64; }\nhttp {\n"
             "  access_log off;\n  client_body_temp_path %s/logs;\n  proxy_temp_path %s/logs/proxy;\n"
@@ -98,6 +102,22 @@ def get(host: str, path: str):
     body = r.read().decode("utf-8", "replace")
     conn.close()
     return r.status, r.getheader("Location"), body
+
+
+def request_on(port: int, host: str, path: str, method: str = "GET", extra_headers=None):
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=15)
+    conn.request(method, path, headers={"Host": host, **(extra_headers or {})})
+    r = conn.getresponse()
+    body = r.read().decode("utf-8", "replace")
+    out = {
+        "status": r.status,
+        "location": r.getheader("Location"),
+        "content_type": r.getheader("Content-Type"),
+        "version": r.version,
+        "body": body,
+    }
+    conn.close()
+    return out
 
 
 @pytest.mark.parametrize("path,expected", [
@@ -305,3 +325,60 @@ def test_head_answers_like_get_on_html_pages(nginx, host, path):
     assert h_status != 405, f"HEAD {host}{path} -> 405"
     assert h_status == g_status, (host, path, g_status, h_status)
     assert (h_type or "").startswith("text/html"), h_type
+
+
+@pytest.mark.parametrize("host,expected", [
+    ("purepeptide.bg", "https://purepeptide.bg/"),
+    ("purepeptide.ro", "https://purepeptide.ro/"),
+    ("purepeptide.gr", "https://purepeptide.gr/"),
+    ("purepeptide.eu", "https://purepeptide.eu/en/"),
+    ("www.purepeptide.bg", "https://purepeptide.bg/"),
+    ("www.purepeptide.ro", "https://purepeptide.ro/"),
+    ("www.purepeptide.gr", "https://purepeptide.gr/"),
+    ("www.purepeptide.eu", "https://purepeptide.eu/en/"),
+])
+def test_public_index_html_redirects_to_canonical_home_with_query_on_get_and_head(nginx, host, expected):
+    path = "/index.html?utm_source=iter56&utm_medium=qa"
+    expected_full = f"{expected}?utm_source=iter56&utm_medium=qa"
+
+    g = request_on(PORT, host, path, "GET")
+    assert g["status"] == 301
+    assert g["location"] == expected_full
+    assert g["version"] in (10, 11)
+
+    h = request_on(PORT, host, path, "HEAD")
+    assert h["status"] == 301
+    assert h["location"] == expected_full
+    assert h["version"] in (10, 11)
+    for method in ("GET", "HEAD"):
+        plain_http = request_on(8097, host, path, method)
+        assert plain_http["status"] == 301
+        assert plain_http["location"] == expected_full
+
+
+def test_private_listener_keeps_raw_shell_for_index_html_without_redirect(nginx):
+    conf = render()
+    # private shell listener keeps /index.html as a raw shell endpoint (no 301)
+    assert "listen {{ frontend_private_ip }}:8080;" not in conf  # template already rendered
+    assert "location = /index.html {" in conf
+    assert "try_files $uri =404;" in conf
+    assert "return 301 https://$pp_apex$pp_home_path$is_args$args;" in conf  # public listener rule still present
+    result = request_on(8098, "localhost", "/index.html")
+    assert result["status"] == 200
+    assert result["location"] is None
+    assert '<div id="root">' in result["body"]
+
+
+def test_spa_fallback_serves_shell_when_prerender_upstream_fails_without_loop(nginx):
+    conf = render()
+    # When prerender upstream errors, nginx must serve raw shell via @spa without redirect loops.
+    assert "location @prerender" in conf
+    assert "error_page 500 502 503 504 = @spa;" in conf
+    assert "location @spa" in conf
+    assert "try_files /index.html =404;" in conf
+    assert "return 301" not in conf.split("location @spa", 1)[1].split("}", 1)[0]
+    result = request_on(PORT, "purepeptide.bg", "/forced-prerender-failure",
+                        extra_headers={"X-Test-Prerender-Failure": "1"})
+    assert result["status"] == 200
+    assert result["location"] is None
+    assert '<div id="root">' in result["body"]

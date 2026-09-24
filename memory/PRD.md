@@ -95,3 +95,37 @@ and Shopify-level technical SEO: server-rendered HTML, structured data and canon
 - `.env` остава извън Git. Ansible подава продукционната конфигурация отделно от хранилището.
 - **Не е извършен деплой.** Готовността е за кода; реалните production secrets/data и
   пълният live crawl остават проверки за средата на съществуващия сайт.
+
+## Допълнение — празни страници, /index.html и /collections (2026-09-24)
+- Потребителят поиска scientific-literature (11 езика) и /en/pages/faq да се **попълнят**,
+  не да се noindex-ват/махат от sitemap. Изрично поиска също 301 за /index.html и добавяне
+  на /collections за 11-те езика в XML sitemap. Това е разрешеното допълнение към старото
+  ограничение да не се променят работещите sitemap/URL правила.
+- Истинската причина за празния EN FAQ: faq_items вече съществуват, но SSR показваше само html.
+  SSR вече включва въпросите/отговорите и FAQPage JSON-LD; описанието е попълнено. Ако преводът
+  е действително празен, ползва съществуващите EN въпроси от DEFAULT_PAGES. Изрично зададените
+  собствени въпроси/HTML/SEO се запазват. В React отговорите остават в DOM, но са hidden, когато
+  accordion е затворен; отваряне/затваряне е проверено.
+- `backend/page_content.py` и `literature_copy.py`: научната страница получава локализиран
+  контекст на 11 езика + откъси/линкове към истинските публикувани articles с текущи handles.
+  Няма измислени научни източници/статии. Само празният публичен отговор се попълва динамично;
+  **няма DB миграция/презапис на собствено съдържание**. Редактиран непразен текст има предимство.
+  Чернови не се показват; старите ротационни адреси остават 404. Линковете са same-origin с
+  правилния locale prefix и са проверени с реално отваряне в браузъра.
+- /collections се добавя точно веднъж на език в **collections** XML sitemap, не /pages/collections.
+- Nginx template: публичен /index.html GET/HEAD → 301 към canonical начална страница на BG/RO/GR,
+  а EU директно към /en/ (за да няма междинен redirect през /). Работи и за www и HTTP,
+  запазва query параметрите. Вътрешният shell listener :8080/index.html остава 200; @spa fallback
+  остава raw HTML, без redirect loop. **Preview CRA /index.html не използва този Nginx template.**
+- **162 теста успешни**, `test_reports/pytest/iter56_final.xml`; проверени реален временен Nginx,
+  HTTP+GET/HEAD, private shell и симулирана SSR 503 → работещ SPA fallback. Тестовите случаи са
+  в test_iteration56_scientific_faq_and_sitemap.py и test_nginx_redirects.py. Стар data-dependent
+  тест за ротация е заменен с изолирани records, без промени по preview/live данните.
+- Build успешен със съществуващи warnings; браузър FAQ/съдържание/отваряне на статия — успешно.
+- Нов read-only обход: **547 адреса, 0 неканонични, 0 счупени HTML anchor цели**. Остават само
+  22 липсващи demo sitemap страници (about-1 и cookies × 11). Scientific-literature вече е 200.
+  Отчет `test_reports/internal-links-iter56-final.json`; използва се --in-process заради preview
+  ingress, който заменя Host. Няма поправяне на production canonical заради този preview ефект.
+- Менюто/дизайнът не са променени. Външните интеграции са без ключове и не са тествани.
+- **Не е извършен деплой**. Следващо: обновяване на Nginx заедно с приложението и read-only
+  проверка върху реалните домейни/данни.

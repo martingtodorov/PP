@@ -14,6 +14,12 @@ map $host $pp_shared_host {
     "~*^(www\.)?purepeptide\.eu$"       1;
 }
 
+# /index.html is an obsolete public alias. Go directly to the canonical homepage, including EU.
+map $pp_shared_host $pp_home_path {
+    default /;
+    1       /en/;
+}
+
 # 1 = the URI already carries a locale prefix or must never be redirected (API, assets, admin)
 map $uri $pp_reserved {
     default                                                          0;
@@ -64,7 +70,8 @@ server {
     listen 80;
     listen [::]:80;
     server_name {{ site_domains | join(' ') }} www.{{ site_domains | join(' www.') }};
-    return 301 https://$pp_apex$request_uri;
+    location = /index.html { return 301 https://$pp_apex$pp_home_path$is_args$args; }
+    location / { return 301 https://$pp_apex$request_uri; }
 }
 
 {#
@@ -215,10 +222,9 @@ server {
         proxy_set_header X-Forwarded-Proto https;
     }
 
-    # the shell the prerenderer starts from — must be served straight off disk, never proxied
+    # Only the private listener below serves the raw shell. Public copies must not be indexed.
     location = /index.html {
-        add_header Cache-Control "no-cache" always;
-        try_files $uri =404;
+        return 301 https://$pp_apex$pp_home_path$is_args$args;
     }
 
     # ---------- server-side prerender ----------
@@ -315,6 +321,8 @@ server {
     ssl_certificate     {{ pair.split('|')[0] }};
     ssl_certificate_key {{ pair.split('|')[1] }};
     ssl_protocols TLSv1.2 TLSv1.3;
+
+    location = /index.html { return 301 https://$pp_apex$pp_home_path$is_args$args; }
 
     # www root: same "#geo" marker as the apex, so the IP check still runs for a bare www visit
     location = / {
