@@ -8,7 +8,7 @@ import NotFoundBlock from "../components/NotFoundBlock";
 import ProductsCarousel from "../components/ProductsCarousel";
 import Breadcrumbs from "../components/Breadcrumbs";
 import StickyBuyBar from "../components/StickyBuyBar";
-import { api, fmtPrice, fmtBGN, showsBGN, img } from "../lib/api";
+import { api, fmtPrice, fmtBGN, showsBGN, img, isMissing } from "../lib/api";
 import { useCart } from "../context/CartContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { PRODUCT_BLOCKS, pick, LOCALES } from "../i18n/locales";
@@ -74,7 +74,7 @@ export default function ProductPage() {
     setImgIdx(0);
     setQty(1);
     setGone(false);
-    api.get(`/products/${handle}`).then(({ data }) => setData(data)).catch(() => setGone(true));
+    api.get(`/products/${handle}`).then(({ data }) => setData(data)).catch((e) => setGone(isMissing(e)));
   }, [handle, locale]);
 
   const p = data.product;

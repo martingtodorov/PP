@@ -1,18 +1,13 @@
-import { useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { link } from "../lib/links";
 
-/* A removed or rotated URL stays a hard 404 — the server answers 404 with noindex on that URL — but
-   a human is taken straight to the catalogue instead of staring at a dead end. */
+/* A removed or rotated URL stays a hard 404 — the server answers 404 with noindex on that URL — and
+   the page is shown right here. No client-side redirect: it used to finish Google's render on the
+   catalogue, so the dead URL inherited the collection's canonical (GSC report, 24.06.2026). */
 export const NotFoundBlock = () => {
   const { lp, t } = useLocaleCtx();
-  const navigate = useNavigate();
   const catalog = lp(link("catalog"));
-
-  useEffect(() => {
-    navigate(catalog, { replace: true });
-  }, [catalog, navigate]);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-32 text-center" data-testid="not-found-block">

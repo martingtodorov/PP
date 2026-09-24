@@ -4,7 +4,7 @@ import { useParams, Link } from "react-router-dom";
 import Layout, { USPRow } from "../components/Layout";
 import Breadcrumbs from "../components/Breadcrumbs";
 import ProductCard from "../components/ProductCard";
-import { api, img } from "../lib/api";
+import { api, img, isMissing } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { useSeo } from "../lib/seo";
 import { graph, articleLd, breadcrumbLd, organizationLd } from "../lib/schema";
@@ -13,6 +13,7 @@ import { demoteHeadings } from "../lib/richText";
 export default function ArticlePage() {
   const { handle } = useParams();
   const [article, setArticle] = useState(null);
+  const [gone, setGone] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [product, setProduct] = useState(null);
   const [others, setOthers] = useState([]);
@@ -26,9 +27,10 @@ export default function ArticlePage() {
 
   useEffect(() => {
     setLoaded(false);
+    setGone(false);
     api.get(`/articles/${handle}`, { params: { locale } })
       .then(({ data }) => setArticle(data.article))
-      .catch(() => setArticle(null))
+      .catch((e) => { setArticle(null); setGone(isMissing(e)); })
       .finally(() => setLoaded(true));
   }, [handle, locale]);
 
@@ -40,7 +42,7 @@ export default function ArticlePage() {
 
   useSeo({
     title: article ? (article.seo_title || `${article.title}`) : "PurePeptide",
-    robots: loaded && !article ? "noindex, follow" : undefined,
+    robots: gone ? "noindex, follow" : undefined,
     description: article?.seo_description || article?.excerpt || "",
     ogType: "article",
     locale,

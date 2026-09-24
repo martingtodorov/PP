@@ -467,8 +467,11 @@ async def _catalog(locale: str) -> Dict[str, str]:
 
 
 async def _article(locale: str, handle: str) -> Optional[Dict[str, str]]:
-    doc = await _db.articles.find_one({"handle": handle}, {"_id": 0}) \
-        or await _db.articles.find_one({f"translations.{locale}.handle": handle}, {"_id": 0})
+    # an unpublished article must 404 here too: the API hides it, so the React page turned itself
+    # into "noindex, follow" while this HTML said 200 / index — a soft 404 for Google
+    live = {"published": {"$ne": False}}
+    doc = await _db.articles.find_one({"handle": handle, **live}, {"_id": 0}) \
+        or await _db.articles.find_one({f"translations.{locale}.handle": handle, **live}, {"_id": 0})
     if not doc or _retired(doc, locale, handle):
         return None
     a = localize_doc(doc, locale)
@@ -531,7 +534,7 @@ _SITEMAP_SECTIONS = {
 async def _articles_index(locale: str) -> Dict[str, str]:
     """The article index the header and footer link to — a router page, not a DB page."""
     route = "/pages/articles"
-    docs = await _db.articles.find({}, {"_id": 0}).sort("published_at", -1).to_list(200)
+    docs = await _db.articles.find({"published": {"$ne": False}}, {"_id": 0}).sort("published_at", -1).to_list(200)
     items, parts = [], []
     for doc in docs:
         a = localize_doc(doc, locale)
@@ -567,7 +570,7 @@ async def _html_sitemap(locale: str, slug: str) -> Optional[Dict[str, str]]:
     heading = "HTML sitemap" if not section else f"HTML sitemap — {label[kinds[0]]}"
     sources = {"products": (_db.products, "/products/", {"active": True}),
                "collections": (_db.collections_cat, "/collections/", {}),
-               "articles": (_db.articles, "/articles/", {}),
+               "articles": (_db.articles, "/articles/", {"published": {"$ne": False}}),
                "pages": (_db.pages, "/pages/", {"locale": DEFAULT_LOCALE})}
     blocks = []
     for kind in kinds:

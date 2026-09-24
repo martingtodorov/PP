@@ -5,7 +5,7 @@ import Layout, { USPRow } from "../components/Layout";
 import ProductCard from "../components/ProductCard";
 import NotFoundBlock from "../components/NotFoundBlock";
 import Breadcrumbs from "../components/Breadcrumbs";
-import { api } from "../lib/api";
+import { api, isMissing } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { LOCALES } from "../i18n/locales";
 import { isAllCollection } from "../lib/collections";
@@ -22,7 +22,7 @@ export default function CollectionPage() {
 
   useEffect(() => {
     setGone(false);
-    api.get(`/collections/${handle}`).then(({ data }) => setData(data)).catch(() => setGone(true));
+    api.get(`/collections/${handle}`).then(({ data }) => setData(data)).catch((e) => setGone(isMissing(e)));
   }, [handle, locale]);
 
   const c = data.collection;

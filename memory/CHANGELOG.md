@@ -1083,3 +1083,22 @@ handle на документа е новият (`retatrutide-tnn`), а `translat
   като „Пояснение: …“ и в имейла с потвърждение под адреса (само при доставка до адрес).
 - Проверено e2e: полето се показва само при „До адрес с Еконт“, поръчка през API запазва текста,
   админ панелът го показва в копируемия адрес.
+
+## 24.06.2026 — Клиентският noindex сваляше живи страници (GSC доклад)
+Диагноза на собственика, потвърдена: HTML-ът от сървъра е index/follow, но след като Google
+рендерира JS, React слагаше `noindex` и пренасочваше към каталога, затова GSC показваше
+„Excluded by 'noindex'“ + user-declared canonical на колекция върху жив продуктов URL.
+- `lib/api.isMissing(err)` — само истински HTTP 404 значи „няма го“. `ProductPage`,
+  `CollectionPage` и `ArticlePage` вече слагат `noindex` само при 404; при timeout/5xx не пипат
+  robots (преди `.catch(() => setGone(true))` хващаше всяка грешка).
+- `NotFoundBlock` вече НЕ прави `navigate(catalog, {replace:true})` — 404-ката се показва на място
+  с линкове към каталога и началната страница, така че мъртвият URL не наследява canonical-а на
+  колекцията.
+- Бонус, намерен по пътя: непубликувана статия даваше 200 + index от пререндера, а API-то 404 →
+  soft 404 (точно случаите bremelanotide-pt-141…, melanotan-ii…, epitalon…). `prerender._article`,
+  индексът на статиите, HTML sitemap-ът и `GET /api/articles/{handle}` вече филтрират
+  `published != False` — и двете страни връщат 404 + noindex.
+- Проверено в preview: (1) жив продукт при провален API → robots остава `index,follow`, без
+  пренасочване; (2) мъртъв URL → `noindex, follow`, 404 блок на място, canonical = мъртвия URL;
+  (3) жив продукт → `index,follow`. Непубликувана статия: API 404 и пререндер `noindex`.
+- Бележка: `/track`, `/cart`, `/checkout`, `/account` са с noindex НАМЕРЕНО (тънки/лични страници).
