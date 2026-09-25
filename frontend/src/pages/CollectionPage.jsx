@@ -15,7 +15,7 @@ import { graph, itemListLd, breadcrumbLd, organizationLd, websiteLd } from "../l
 import { demoteHeadings, dropLeadingHeading } from "../lib/richText";
 
 export default function CollectionPage() {
-  const { handle = "2all-the-peptides-1" } = useParams();
+  const { handle } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState({ collection: null, products: [], siblings: [] });
   const [sort, setSort] = useState("featured");
@@ -25,36 +25,43 @@ export default function CollectionPage() {
   useEffect(() => {
     setGone(false);
     let active = true;
-    api.get(`/collections/${handle}`).then((response) => {
+    const request = handle ? api.get(`/collections/${handle}`) : api.get("/links").then(({ data }) => {
+      if (data.catalog) return api.get(data.catalog);
+      return api.get("/collections").then(({ data: list }) => ({ data: {
+        collection: { title: t("smCollections"), description: "" }, products: [], siblings: list.collections,
+      } }));
+    });
+    request.then((response) => {
       if (active && !followRotation(response, "collections", handle, navigate)) setData(response.data);
     }).catch((e) => { if (active) setGone(isMissing(e)); });
     return () => { active = false; };
-  }, [handle, locale, navigate]);
+  }, [handle, locale, navigate, t]);
 
   const c = data.collection;
+  const route = handle ? `/collections/${handle}` : "/collections";
   const descText = (c?.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   const alternates = {};
-  if (c?.handles) LOCALES.forEach((l) => { alternates[l] = `/collections/${c.handles[l]}`; });
+  if (handle && c?.handles) LOCALES.forEach((l) => { alternates[l] = `/collections/${c.handles[l]}`; });
 
   useSeo({
     title: c ? (c.seo_title || `${c.title}`) : "PurePeptide",
     robots: gone ? "noindex, follow" : undefined,
     description: c?.seo_description || descText,
     locale,
-    path: `/collections/${handle}`,
+    path: route,
     alternates,
     jsonLd: c && graph(
       {
         "@type": "CollectionPage",
         name: c.title,
         description: c.seo_description || descText,
-        url: `${window.location.origin}/collections/${handle}`,
+        url: `${window.location.origin}${route}`,
         isPartOf: { "@id": `${window.location.origin}/#website` },
         mainEntity: itemListLd(data.products || [], (p) => `/products/${p.handle}`),
       },
       breadcrumbLd([
         { name: t("home"), path: "/" },
-        { name: c.title, path: `/collections/${handle}` },
+        { name: c.title, path: route },
       ]),
       organizationLd(),
       websiteLd(locale),

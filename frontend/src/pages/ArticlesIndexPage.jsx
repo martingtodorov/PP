@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
+import Layout from "../components/Layout";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { useSeo } from "../lib/seo";
 import { breadcrumbLd, graph, organizationLd, websiteLd } from "../lib/schema";
@@ -39,7 +40,8 @@ export default function ArticlesIndexPage() {
   });
 
   return (
-    <main className="max-w-5xl mx-auto px-5 sm:px-8 py-14" data-testid="articles-index">
+    <Layout>
+    <div className="max-w-5xl mx-auto px-5 sm:px-8 py-14" data-testid="articles-index">
       <nav className="text-xs text-slate-500 mb-6" aria-label="breadcrumb">
         <Link to={lp("/")} className="hover:text-coral-600">{t("home")}</Link>
         <span className="mx-2">/</span>
@@ -82,6 +84,7 @@ export default function ArticlesIndexPage() {
       {articles.length === 0 && (
         <p className="mt-12 text-sm text-slate-500" data-testid="articles-index-empty">{t("noResults")}</p>
       )}
-    </main>
+    </div>
+    </Layout>
   );
 }
