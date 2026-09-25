@@ -4,7 +4,7 @@
  * cannot break the navigation. The defaults keep the UI intact before the first response.
  */
 const DEFAULTS = {
-  catalog: "/collections/2all-the-peptides-1",
+  catalog: "/collections",
   retatrutide: "/collections/retatrutide-price",
   terms: "/pages/terms-conditions",
   privacy: "/pages/privacy-policy",

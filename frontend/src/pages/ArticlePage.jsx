@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { link } from "../lib/links";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { followRotation } from "../lib/rotationRedirect";
 import Layout, { USPRow } from "../components/Layout";
 import Breadcrumbs from "../components/Breadcrumbs";
 import ProductCard from "../components/ProductCard";
@@ -12,6 +13,7 @@ import { demoteHeadings } from "../lib/richText";
 
 export default function ArticlePage() {
   const { handle } = useParams();
+  const navigate = useNavigate();
   const [article, setArticle] = useState(null);
   const [gone, setGone] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -28,11 +30,15 @@ export default function ArticlePage() {
   useEffect(() => {
     setLoaded(false);
     setGone(false);
+    let active = true;
     api.get(`/articles/${handle}`, { params: { locale } })
-      .then(({ data }) => setArticle(data.article))
-      .catch((e) => { setArticle(null); setGone(isMissing(e)); })
-      .finally(() => setLoaded(true));
-  }, [handle, locale]);
+      .then((response) => {
+        if (active && !followRotation(response, "articles", handle, navigate)) setArticle(response.data.article);
+      })
+      .catch((e) => { if (active) { setArticle(null); setGone(isMissing(e)); } })
+      .finally(() => { if (active) setLoaded(true); });
+    return () => { active = false; };
+  }, [handle, locale, navigate]);
 
   useEffect(() => {
     setProduct(null);

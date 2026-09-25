@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { link } from "../lib/links";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { followRotation } from "../lib/rotationRedirect";
 import { Truck, Minus, Plus, ShieldCheck, Droplets } from "lucide-react";
 import { toast } from "sonner";
 import Layout, { USPRow } from "../components/Layout";
@@ -60,6 +61,7 @@ export const variantGallery = (images, variants, index) => {
 
 export default function ProductPage() {
   const { handle } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState({ product: null, related: [], collections: [], articles: [] });
   const [gone, setGone] = useState(false);
   const [variantIdx, setVariantIdx] = useState(0);
@@ -74,8 +76,12 @@ export default function ProductPage() {
     setImgIdx(0);
     setQty(1);
     setGone(false);
-    api.get(`/products/${handle}`).then(({ data }) => setData(data)).catch((e) => setGone(isMissing(e)));
-  }, [handle, locale]);
+    let active = true;
+    api.get(`/products/${handle}`).then((response) => {
+      if (active && !followRotation(response, "products", handle, navigate)) setData(response.data);
+    }).catch((e) => { if (active) setGone(isMissing(e)); });
+    return () => { active = false; };
+  }, [handle, locale, navigate]);
 
   const p = data.product;
   const v = p?.variants?.[variantIdx];

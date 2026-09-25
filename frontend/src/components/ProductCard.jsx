@@ -41,7 +41,7 @@ export default function ProductCard({ product, showAddToCart = false, priority =
       <Link to={lp(`/products/${product.handle}`)} className="product-card__link" title={product.title}>
         <div className="product-card__media">
           <img src={img(primary, 480)} alt={product.title} className="product-card__image product-card__image--primary"
-            loading={priority ? "eager" : "lazy"} fetchpriority={priority ? "high" : undefined} decoding="async" />
+            loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : undefined} decoding="async" />
           {hasAlt && (
             <img src={img(alt, 480)} alt="" className="product-card__image product-card__image--alt" loading="lazy" decoding="async" aria-hidden="true" />
           )}

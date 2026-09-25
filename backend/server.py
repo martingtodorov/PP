@@ -45,6 +45,7 @@ from i18n import (
 from pages_seed import PAGE_SLUGS, PAGE_LABELS, DEFAULT_PAGES, LEGACY_PAGE_ALIASES
 from page_content import resolve_page_content
 from literature_copy import LITERATURE_COPY
+from rotation_redirects import KINDS as ROTATION_KINDS, LATEST_ROTATION_301, content_path, latest_rotation_path
 import storage
 import email_service
 from starlette.concurrency import run_in_threadpool
@@ -594,6 +595,8 @@ async def ensure_indexes():
     await db.orders.create_index("order_number", unique=True)
     await db.pages.create_index([("slug", 1), ("locale", 1)], unique=True)
     await db.rotation_log.create_index("handle", unique=True)
+    for name in ROTATION_KINDS.values():
+        await db[name].create_index("rotations.from", name="rotation_source_handle")
 
 
 async def backfill_rotation_log():
@@ -851,11 +854,11 @@ def collection_handles(col: Dict[str, Any]) -> List[str]:
 
 
 def retired_handle(doc: Dict[str, Any], loc: str, requested: str) -> bool:
-    """A handle that was rotated away must 404 for that locale (delisted URL).
+    """A retired handle must not serve a duplicate document for that locale.
 
     Once a document has been rotated in a locale it serves exactly ONE url there: the published
-    handle. Every earlier code in the chain 404s — otherwise an intermediate rotation
-    (…-lrp next to the live …-brk) stays online as a duplicate of the same product.
+    handle. HTTP boundaries redirect future rotations marked latest_301 directly to that handle;
+    unmarked historical rotations remain 404. This predicate only controls content serving.
     """
     rotations = doc.get("rotations") or []
     published = published_handle(doc, loc)
@@ -880,6 +883,7 @@ async def catalog_handle(loc: str = DEFAULT_LOCALE) -> str:
 
 
 @api.get("/collections/{handle}")
+@api.head("/collections/{handle}", include_in_schema=False)
 async def get_collection(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
     if handle == LEGACY_ALL:
@@ -934,6 +938,7 @@ async def list_products(
 
 
 @api.get("/products/{handle}")
+@api.head("/products/{handle}", include_in_schema=False)
 async def get_product(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
     p = await db.products.find_one(
@@ -989,6 +994,7 @@ async def list_articles(locale: str = Query(DEFAULT_LOCALE)):
 
 
 @api.get("/articles/{handle}")
+@api.head("/articles/{handle}", include_in_schema=False)
 async def get_article(handle: str, locale: str = Query(DEFAULT_LOCALE)):
     """Full article including the body — the list endpoint strips it to stay small."""
     loc = normalize_locale(locale)
@@ -1237,14 +1243,18 @@ async def rotate_page(link: Dict[str, Any], handle: str, loc: str, user_email: s
             log.warning("rotation rewrite failed for page %s: %s", handle, exc)
 
     rotations.append({"locale": loc, "from": doc.get("pub_slug") or doc["slug"], "to": new_slug,
-                      "code": new_slug.split("-")[-1], "rewritten": rewritten, "at": now_utc(), "by": user_email})
+                      "code": new_slug.split("-")[-1], "rewritten": rewritten, "at": now_utc(), "by": user_email,
+                      "redirect_mode": LATEST_ROTATION_301})
     update = {"pub_slug": new_slug, "rotations": rotations, "updated_at": now_utc()}
     if rewritten:
         update["html"] = html
         frozen = _frozen_meta(doc.get("title") or "", doc.get("html") or "",
                               doc.get("seo_title") or "", doc.get("seo_description") or "")
         update.update({k: v for k, v in frozen.items() if not doc.get(k)})
-    await db.pages.update_one({"slug": doc["slug"], "locale": loc}, {"$set": update})
+    result = await db.pages.update_one({"slug": doc["slug"], "locale": loc,
+                                       "rotations": doc.get("rotations")}, {"$set": update})
+    if not result.matched_count:
+        raise HTTPException(409, "Страницата е променена по време на ротацията. Опитайте отново.")
     _links_cache.clear()
     prerender.bump()
     return {"kind": "pages", "handle": new_slug, "path": f"/pages/{new_slug}", "rewritten": rewritten}
@@ -1264,7 +1274,8 @@ async def rotate_content(kind: str, handle: str, loc: str, user_email: str, to: 
     base = rotation_stem(published_handle(doc, loc) or entry.get("handle") or doc["handle"],
                          history, loc)
     new_handle = to.strip() or await next_rotation_handle(kind, base, doc, loc)
-    if new_handle == handle:
+    previous = published_handle(doc, loc) or handle
+    if new_handle == previous:
         raise HTTPException(400, "Новият handle е същият като стария")
     entry["handle"] = new_handle
 
@@ -1293,13 +1304,16 @@ async def rotate_content(kind: str, handle: str, loc: str, user_email: str, to: 
 
     # the entry retires the handle that WAS published (not the delisted url the board still shows),
     # so a second rotation cannot leave the previous code online
-    previous = published_handle(doc, loc) or handle
     rotations = [r for r in (doc.get("rotations") or [])
                  if not (r.get("locale") == loc and r.get("from") == previous)]
     rotations.append({"locale": loc, "from": previous, "to": new_handle, "code": new_handle.split("-")[-1],
-                      "rewritten": rewritten, "at": now_utc(), "by": user_email})
-    await coll.update_one({"handle": doc["handle"]}, {"$set": {"translations": tr, "rotations": rotations,
-                                                              "updated_at": now_utc(), **base_updates}})
+                      "rewritten": rewritten, "at": now_utc(), "by": user_email,
+                      "redirect_mode": LATEST_ROTATION_301})
+    result = await coll.update_one({"handle": doc["handle"], "rotations": doc.get("rotations")},
+                                  {"$set": {"translations": tr, "rotations": rotations,
+                                            "updated_at": now_utc(), **base_updates}})
+    if not result.matched_count:
+        raise HTTPException(409, "Съдържанието е променено по време на ротацията. Опитайте отново.")
     _links_cache.clear()
     prerender.bump()
     return {"kind": kind, "handle": new_handle, "path": f"/{kind}/{new_handle}", "rewritten": rewritten}
@@ -3179,6 +3193,7 @@ async def _resolved_public_page(doc, loc, source_locale):
 
 
 @api.get("/pages/{slug}")
+@api.head("/pages/{slug}", include_in_schema=False)
 async def public_page(slug: str, locale: str = Query(DEFAULT_LOCALE)):
     loc = normalize_locale(locale)
     if slug in LEGACY_PAGE_ALIASES:          # imported Shopify duplicate — removed for good
@@ -4914,22 +4929,40 @@ prerender.init(db)
 
 # HEAD as well as GET: unfurlers (Facebook, LinkedIn, Slack) and uptime monitors probe with HEAD,
 # and a GET-only route answered 405 for every HTML page. Starlette drops the body for HEAD itself.
-async def find_redirect(path: str) -> str:
-    """A 301 target from the redirects list, or "" when there is none.
+async def _rotation_url(path: str, host: str = "") -> str:
+    parsed = urlparse(path)
+    route = prerender.strip_prefix(parsed.path)
+    content = content_path(route)
+    if not content:
+        return ""
+    loc = normalize_locale(prerender.locale_of(parsed.netloc or host, parsed.path))
+    current = await latest_rotation_path(db, content[0], loc, content[1])
+    if not current:
+        return ""
+    site = await db.settings.find_one({"key": "site"}, {"_id": 0, "value.locale_routes": 1})
+    routes = ((site or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
+    target = _loc_url(loc, current, routes)
+    return target + (f"?{parsed.query}" if parsed.query else "")
 
-    Redirects live in their own collection, on purpose: a rotated URL is a dead end (hard 404) and
-    must never quietly become a redirect. The two lists are separate features.
-    """
+
+async def find_redirect(path: str, host: str = "") -> str:
+    """Explicit redirects are preserved; opted-in future rotations use their current live target."""
     clean = _redirect_path(path)
     if clean == "/":
         return ""
     doc = await db.redirects.find_one({"from_path": clean, "active": {"$ne": False}},
                                       {"_id": 0, "to_url": 1})
     if not doc:
-        return ""
+        return await _rotation_url(path, host)
     await db.redirects.update_one({"from_path": clean}, {"$inc": {"hits": 1},
                                                          "$set": {"last_hit": now_utc()}})
-    return (doc.get("to_url") or "").strip()
+    target = (doc.get("to_url") or "").strip()
+    # A manually configured link into a subsequently rotated local URL must not add a hop.
+    destination = urlparse(target)
+    owned_hosts = {urlparse(route["origin"]).hostname for route in SITE_ORIGINS.values()}
+    if not destination.netloc or destination.hostname in owned_hosts:
+        return await _rotation_url(target, host) or target
+    return target
 
 
 @api.api_route("/seo/prerender", methods=["GET", "HEAD"], include_in_schema=False)
@@ -4937,11 +4970,16 @@ async def seo_prerender(request: Request, path: str = "/"):
     """Finished HTML for a page request. 404 keeps its status (no soft 404); only a failure here
     (5xx) makes nginx fall back to the static shell."""
     host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
-    target = await find_redirect(unquote(path))
+    # Nginx passes the original URI as a header too: embedding it in ?path= alone loses later
+    # query parameters at '&'. Decode the pathname only, never turn an encoded '+' into a space.
+    original = urlparse(request.headers.get("x-original-uri") or path)
+    decoded_path = unquote(original.path or "/")
+    target = await find_redirect(decoded_path + (f"?{original.query}" if original.query else ""), host)
     if target:
-        return RedirectResponse(target, status_code=301)
+        # A permanently cached A->B would add a browser-side hop after B rotates to C.
+        return RedirectResponse(target, status_code=301, headers={"Cache-Control": "no-store"})
     # sitemaps publish percent-encoded URLs (Cyrillic page slugs), so a crawler can ask for either
-    result = await prerender.render(unquote(path), host)
+    result = await prerender.render(decoded_path, host)
     if not result:
         raise HTTPException(503, "prerender unavailable")
     body, status = result
@@ -4949,6 +4987,27 @@ async def seo_prerender(request: Request, path: str = "/"):
     headers["Cache-Control"] = ("public, max-age=60, s-maxage=300" if status == 200
                                 else "no-cache")
     return HTMLResponse(body, status_code=status, headers=headers)
+
+
+@app.middleware("http")
+async def _redirect_rotated_api_content(request: Request, call_next):
+    response = await call_next(request)
+    if response.status_code != 404 or request.method not in ("GET", "HEAD"):
+        return response
+    path = request.url.path
+    if not path.startswith("/api/"):
+        return response
+    content = content_path(path[4:])
+    if not content:
+        return response
+    loc = normalize_locale(request.query_params.get("locale") or DEFAULT_LOCALE)
+    current = await latest_rotation_path(db, content[0], loc, content[1])
+    if not current:
+        return response
+    # Preserve the requested API language and other parameters while keeping the request local.
+    query = str(request.query_params)
+    return RedirectResponse(f"/api{current}" + (f"?{query}" if query else ""), status_code=301,
+                            headers={"Cache-Control": "no-store"})
 
 
 @app.middleware("http")

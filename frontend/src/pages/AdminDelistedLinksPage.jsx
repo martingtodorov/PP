@@ -67,7 +67,7 @@ export default function AdminDelistedLinksPage() {
   };
 
   const rotateAll = async () => {
-    if (!window.confirm(`Да ротирам ли всички ${pendingCount} чакащи линка? Старите адреси ще спрат да работят (404).`)) return;
+    if (!window.confirm(`Да ротирам ли всички ${pendingCount} чакащи линка? Старите адреси ще получат 301 директно към последния активен адрес.`)) return;
     setRotating("all");
     try {
       const { data } = await api.post("/admin/delisted-links/rotate-pending");
@@ -155,9 +155,9 @@ export default function AdminDelistedLinksPage() {
           <span className="font-mono"> /articles/</span>, <span className="font-mono">/pages/</span>).
           Езикът и причината се взимат от полетата по-горе.
         </p>
-        <p className="text-xs text-slate-500 mb-3">
-          Ротираните адреси остават <span className="font-semibold text-slate-700">мъртви (404)</span> —
-          тук нищо не се пренасочва. За истински 301 виж отделната страница „301 препратки“.
+        <p className="text-xs text-slate-500 mb-3" data-testid="future-rotation-redirect-policy">
+          Бъдещите ротации дават <span className="font-semibold text-slate-700">301 директно към последния активен адрес</span>,
+          без верига. Старите записи не се променят автоматично; изтритото или скритото съдържание остава 404.
         </p>
         <textarea
           rows={4}

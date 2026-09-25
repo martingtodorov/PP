@@ -10,7 +10,7 @@ LOCALES = list(SITE_ORIGINS)
 BRAND_LOGOS = []
 
 COLLECTIONS = [
-    {"handle": "demo-all", "link_key": "all", "title": "Измислен тестов каталог",
+    {"handle": "demo-all", "link_key": "catalog", "title": "Измислен тестов каталог",
      "description": "Само измислени примери за проверка на приложението.",
      "image": "/demo-fixture.svg", "sort_order": 0, "menu_order": 0,
      "synthetic_fixture": True,

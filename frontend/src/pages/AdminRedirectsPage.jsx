@@ -48,9 +48,9 @@ export default function AdminRedirectsPage() {
 
   return (
     <AdminLayout title="301 препратки">
-      <p className="text-sm text-slate-600 mb-6 max-w-3xl">
-        Стар адрес → нов адрес, с истинска <span className="font-mono">301</span>. Отделно от
-        „Изтеглени линкове“: там ротираните адреси остават мъртви с 404 и никога не се пренасочват.
+      <p className="text-sm text-slate-600 mb-6 max-w-3xl" data-testid="manual-redirect-policy">
+        Ръчни <span className="font-mono">301</span> препратки. Бъдещите ротации в „Изтеглени линкове“
+        автоматично насочват старите си адреси към последния активен адрес, без верига.
       </p>
 
       <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6" data-testid="redirect-form">
