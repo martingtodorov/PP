@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration 50 — SEO polish acceptance suite.
 
 Covers:
@@ -35,8 +36,8 @@ def db():
 def admin():
     s = requests.Session()
     r = s.post(f"{BASE}/api/auth/login",
-               json={"email": "admin@purepeptide.bg",
-                     "password": "Admin@PurePeptide2026"}, timeout=20)
+               json={"email": private_admin_email(),
+                     "password": private_admin_password()}, timeout=20)
     assert r.status_code == 200, r.text[:200]
     return s
 

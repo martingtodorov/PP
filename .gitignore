@@ -118,3 +118,34 @@ frontend/node_modules/.cache/default-development/1.pack_
 
 # Matrixify export (owner shop data — server-side only, see memory/SECRETS.md)
 backend/data/matrixify-export.xlsx
+
+# Private runtime data and generated artifacts never belong in the public source tree.
+/backend/data/
+/backend/.image_cache/
+/backend/.media/
+/backend/uploads/
+/uploads/
+/backups/
+/test_reports/
+/.screenshots/
+/test_result.md
+/memory/*
+!/memory/PRD.md
+!/memory/ROADMAP.md
+!/memory/SECRETS.md
+/.gitconfig
+*.xlsx
+*.xls
+*.csv
+*.jsonl
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+*.bak
+*.dump
+*.archive
+/frontend/public/hero-home.png
+/frontend/public/hero-home.webp
+/frontend/public/og-image.jpg
+/frontend/public/_fav_preview.png

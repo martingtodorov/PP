@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 480" role="img" aria-labelledby="title">
+  <title id="title">Fictional test fixture — not a real product</title>
+  <rect width="720" height="480" fill="#edf1f0"/>
+  <rect x="265" y="120" width="190" height="270" rx="16" fill="#fff" stroke="#648078" stroke-width="5"/>
+  <rect x="285" y="88" width="150" height="58" rx="8" fill="#648078"/>
+  <text x="360" y="250" text-anchor="middle" font-family="sans-serif" font-size="30" fill="#284c42">DEMO</text>
+  <text x="360" y="294" text-anchor="middle" font-family="sans-serif" font-size="17" fill="#284c42">FICTIONAL SAMPLE</text>
+</svg>

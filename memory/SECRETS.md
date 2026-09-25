@@ -1,58 +1,21 @@
-# Ключове и тайни — какво липсва и откъде се взема
+# Private configuration (names only)
 
-**18.06.2026:** по нареждане на собственика всички чужди ключове бяха **изтрити от тази среда**
-(преди акаунтът да се сподели / проектът да се форкне). Кодът работи и без тях — засегнатите
-функции просто са изключени. Долната таблица е всичко, което трябва да се попълни, за да заработят
-пак.
+Keep real values exclusively in private environment files or production settings. Do not copy them
+into chat, repository examples, reports, tests, seed data or frontend bundles.
 
-## `backend/.env`
+- Database: MONGO_URL, DB_NAME. Protected existing names/values are not changed by cleanup.
+- Authentication: JWT_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD. Preview's technical admin is preserved.
+- Email: RESEND_API_KEY and private sender configuration.
+- AI: ANTHROPIC_API_KEY / EMERGENT_LLM_KEY.
+- Shipping: NextLevel credentials and any settings-stored integration credentials.
+- Push: VAPID_PRIVATE_KEY and associated configuration.
+- Bank/company details: runtime settings/environment only.
 
-| Променлива | За какво | Откъде |
-| :--------- | :------- | :----- |
-| `NEXTLEVEL_FF_APP_ID`, `NEXTLEVEL_FF_APP_SECRET` | товарителници и статуси на пратките | таблото на NextLevel → Fulfillment → API |
-| `RESEND_API_KEY` | всички имейли (потвърждение, изоставена количка, дневен отчет) | resend.com → API Keys |
-| `ANTHROPIC_API_KEY` | AI пренаписването при ротация на линк и преводите | console.anthropic.com (или остави празно и се ползва `EMERGENT_LLM_KEY`) |
-| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | push известията в админа | генерира се наново: `python -c "from py_vapid import Vapid01; v=Vapid01(); v.generate_keys(); print(v.public_key, v.private_key)"` — публичният отива и в `frontend/.env` като `REACT_APP_VAPID_PUBLIC_KEY` |
-| `BANK_NAME`, `BANK_IBAN`, `BANK_BIC`, `BANK_HOLDER` | банковите данни в имейла при банков превод | фирмените данни на собственика |
-| `JWT_SECRET` | подписва админ сесиите | генериран е нов, случаен за тази среда — не е същият като на продукцията |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | вход в админ панела | **сменѝ паролата на продукцията** — тази тук е тестова и е описана в `test_credentials.md` |
-| `EMERGENT_LLM_KEY` | платформен ключ на Emergent | управлява се от платформата; **разходът се плаща от акаунта, който го ползва** |
+Production configuration and data are outside Git and are not reset by a routine deployment.
+Privacy preview disables remote managed storage and contains fictional fixtures only. Services
+without private credentials/data are not expected to work there; do not replace them with an
+undisclosed mock or fetch production data automatically.
 
-## В базата (редактират се от админ панела)
-
-`settings` → `integrations.nextlevel`, `integrations.nextlevel_fulfillment` — изчистени са
-`app_id`, `app_secret`, `wc_consumer_key`, `wc_consumer_secret`; `settings.site` — изчистени са
-банковите полета. Попълват се от **Админ → Интеграции** и **Админ → Настройки**, без деплой.
-
-## Какво НЕ работи, докато ключовете липсват
-
-- товарителници, синхронизация на статуси и обновяване на проследяванията (NextLevel)
-- всички изходящи имейли (Resend)
-- push известията (VAPID)
-- банковите данни в имейла/страницата за успешна поръчка (празни)
-- AI пренаписването при ротация на линк — ротацията сменя URL-а, но не преписва текста
-
-Магазинът, чекаутът (наложен платеж), sitemap-ите, SEO-то и админът работят нормално.
-
-## Продукцията НЕ е засегната
-
-Живите ключове стоят на сървъра в `deploy/hetzner/ansible/group_vars/all.yml` (този файл не е в
-git — в repo-то е само `all.yml.example` с празни стойности). Деплой не пипа `.env` на продукцията.
-
-## Matrixify експортът (18.06.2026)
-
-`backend/data/matrixify-export.xlsx` **вече не е в git** (добавен е в `.gitignore`) и е изтрит от
-preview средата заедно с импортираните данни в базата (продукти, колекции, страници, статии,
-клиенти, поръчки, медия). В preview върви само демо каталогът от кода (seed).
-
-На продукцията нищо не се губи:
-- деплоят пази експорта в `{{ app_dir }}/shared/matrixify-export.xlsx` (при първия деплой го
-  „осиновява“ автоматично от предишния release) и го копира в новия release преди старта;
-- ако файлът липсва, деплоят само предупреждава — качва се със `scp` в `shared/` или се качва
-  .xlsx от **Админ → Импорт**;
-- ръчният импорт е както преди: `ansible-playbook ... -e run_catalog_import=true`.
-
-## Правило нататък
-
-Не пиши ключове в чата и в документацията. Слагай ги директно в `.env` на сървъра или от админ
-панела; в кода се ползват само имената на променливите.
+Use separate private TEST_ADMIN_EMAIL and TEST_ADMIN_PASSWORD only when explicitly running
+authorized live-account tests. Do not publish their values. Rotate any actual credentials that
+were exposed in prior public commits; rewriting current files does not revoke a credential.

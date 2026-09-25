@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration 30 — media/repair endpoint, admin blog editor, draft hiding, variant images.
 
 Covers:
@@ -25,8 +26,8 @@ if not BASE_URL:
         if line.startswith("REACT_APP_BACKEND_URL="):
             BASE_URL = line.split("=", 1)[1].strip().rstrip("/")
 
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PASSWORD = "Admin@PurePeptide2026"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PASSWORD = private_admin_password()
 RETA_PRODUCT = "21-retatrutide-5"
 
 

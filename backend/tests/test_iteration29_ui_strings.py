@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Backend tests for iteration 29 — UI strings (checkout copy) admin overlay."""
 import os
 import re
@@ -12,8 +13,8 @@ if not BASE_URL:
         if line.startswith("REACT_APP_BACKEND_URL="):
             BASE_URL = line.split("=", 1)[1].strip().rstrip("/")
 
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PASSWORD = "Admin@PurePeptide2026"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PASSWORD = private_admin_password()
 
 CYR = re.compile(r"[\u0400-\u04FF]")
 

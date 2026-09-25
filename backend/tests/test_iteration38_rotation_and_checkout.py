@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration 38 — Delisted-links rotation + stale-cart checkout self-heal.
 
 Covers:
@@ -22,8 +23,8 @@ from conftest import run          # one shared event loop for the suite
 BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE}/api"
 
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PASSWORD = "Admin@PurePeptide2026"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PASSWORD = private_admin_password()
 
 # A collection that is currently PENDING (not yet rotated) — chosen by the review request.
 TEST_URL = "https://purepeptide.bg/collections/metabolic-studies"

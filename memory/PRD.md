@@ -1,151 +1,85 @@
-# PurePeptide — изисквания и текущо състояние
+# PurePeptide — current engineering handoff
 
-> Актуализирано: 2026-09-24. Комуникация със собственика: **само на български**.
-> Старият PRD (1275 реда история) е запазен без загуба в `PRD_HISTORY.md`.
-> Изпълнени задачи: `CHANGELOG.md`; приоритети: `ROADMAP.md`; достъп: `test_credentials.md`.
+Communication with the owner: Bulgarian. Stack: React/CRA + FastAPI + MongoDB.
+The original task replaces a Shopify storefront/admin with multi-language checkout, fulfillment,
+content editing and technically correct SEO. Environment URLs/credentials are private configuration.
 
-## Първоначална задача
-Replacement of a Shopify storefront (PurePeptide) and admin backend using React, FastAPI,
-and MongoDB. Port Shopify Liquid templates, theme structures, and Matrixify exports to the
-custom stack. Multi-language UI, precise NextLevel/Econt/BoxNow logistics, dynamic checkout,
-and Shopify-level technical SEO: server-rendered HTML, structured data and canonicals.
+## Highest-priority owner instruction
+The repository will be public. **No real customer/order/catalog records, exports, uploaded files,
+caches, secrets, backups or sensitive reports in the current source tree.** Keep only fictional
+test fixtures. The owner also authorized deleting real data from the **local preview only**.
+**Never delete or overwrite production records/media as part of this cleanup or deployment.**
+The owner reports restricting the old repository's visibility. This environment has no Git remote;
+neither its visibility nor remote history has been independently checked or altered.
 
-## Потребители и основни изисквания
-- Купувач: многоезичен каталог, колекции, продуктови страници, статии, гост чекаут,
-  точен офис/автомат/адрес, проследяване и известия.
-- Собственик: редакция и преводи, поръчки/клиенти/наличности, анализи, импорт,
-  ротация на адреси, отделни 301 препратки, настройки на езици и логистика.
-- React + FastAPI + MongoDB; публични API адреси под `/api`.
-- URL на preview се чете от `frontend/.env: REACT_APP_BACKEND_URL`.
-- MongoDB: `backend/.env: MONGO_URL` и `DB_NAME`; запазват се конфигурациите.
-- Домейни: BG root; EU /en /fr /de /cz /hu /pl /sk /si; GR/RO root.
-  11 езика + x-default = 12 hreflang връзки.
+## Current cleanup work (2026-09-24)
+- Removed the real catalog/translations from seed code; replaced with clearly fictional samples.
+  Catalog seeding is opt-in via ENABLE_DEMO_DATA=true and refuses any existing/partial/imported
+  catalog. Production environment template explicitly disables demo seeding.
+- Local preview purge verified standalone loopback Mongo, confirmed exact configured DB, explicit
+  privacy flags, preview origin and checkout-contained media path. Removed catalog, operational
+  records, customer accounts, files and caches. Configured technical admin was preserved unchanged.
+  No remote database, remote objects or production files were deleted. No hidden backups created.
+- Preview blocks managed object-store access so old media cannot be re-imported. Production's
+  existing storage behavior is unchanged. Local technical credentials remain in ignored .env.
+- Removed old reports/probes/screenshots and embedded live-account passwords in legacy tests.
+  Live-account tests now require private TEST_ADMIN_EMAIL/TEST_ADMIN_PASSWORD and otherwise skip.
+- Git ignores runtime datasets/caches/media/reports. `check_repository_privacy.py` is a read-only
+  publication guard for current files. It does not certify or erase historical Git objects.
+- Production preservation helper adopts server-local courier snapshots, image caches and marketing
+  assets into shared directories before rotating releases. Never overwrites existing shared files.
+- See DATA_POLICY.md. Current-checkout cleanup is verified; this is not a certificate for old Git
+  history or the remotely hosted repository. No remote connection or push was performed.
 
-## Неприкосновени решения
-- Публикуваните URL-и, XML sitemap, canonical, hreflang, robots и редиректите не се
-  променят произволно. Собственикът потвърди, че са наред в продукция.
-- Ротацията остава по език; старият ротиран URL връща 404, не автоматично 301.
-- Временна API грешка/timeout/5xx НЕ е основание за noindex.
-- **Продуктовото име е винаги единствен H1** и в React, и в пререндера.
-  H1 в описанието се преобразува в H2.
-- **Не поправяй overflow на менюто**: собственикът изрично отказа на 2026-09-24.
-  Пробните промени в `Layout.jsx`/`index.css` са премахнати; файловете съвпадат с началните.
-- Не променяй наличности, преводи, съдържание, ротации и подредба при рестарт/обновяване.
+## Existing functionality to preserve
+- Product title is the sole H1. Description H1 is demoted to H2 in React and prerender.
+- Temporary API/5xx/network errors never justify noindex. Real removed resources remain 404.
+- Published locale handles are shared across API, SSR navigation and HTML sitemap. Rotations
+  invalidate SSR cache immediately; in-flight old rendering must not repopulate that cache.
+- Shared SSR/React static-page/HTML-sitemap/articles metadata; no client-only description truncation.
+- Scientific-literature fills empty content from published articles plus localized editorial text.
+  English FAQ uses existing questions/answers and renders them in SSR with metadata/FAQPage schema.
+- /collections is included in every locale's XML sitemap. Public /index.html is 301 in production
+  Nginx (EU directly to its canonical locale homepage); private raw shell and SPA fallback stay 200.
+- **Do not change menu overflow/layout**: the owner explicitly declined that work.
+- Normal deploy does not re-seed catalogs, delete alias page records or automatically run Matrixify.
 
-## Архитектура и засегнати файлове
-- `backend/server.py`: API, MongoDB, ротации; `product_collections()` разрешава историческа
-  принадлежност към текущ публикуван локализиран handle, без delisted колекции.
-- `backend/i18n.py`: `published_handle()` е източникът за текущия handle.
-- `backend/prerender.py`: SSR head/body, кеш; началото и /collections използват
-  published_handle; продуктите споделят resolver с API; HTML sitemap използва `/api/link-index`.
-- `page_meta`, `articles_index_meta`, `sitemap_meta` в prerender дават общите метаданни
-  на SSR и API (`page.seo`, `/articles.seo`, `/link-index.seo`). Запазени са SSR текстовете;
-  клиентът вече не реже статичното описание на 155 символа.
-- `rotate_page`/`rotate_content` инвалидира кеша непосредствено; generation guard не
-  допуска започнал преди ротацията рендер да върне стар резултат в кеша.
-- `frontend/src/pages/ProductPage.jsx`, `HtmlSitemapPage.jsx`, `StaticPage.jsx`: съответните
-  клиентски поправки. Няма промени по общия SEO hook, дизайна или менюто.
-- `backend/scripts/check_internal_links.py`: read-only обход на sitemap страниците и
-  вътрешните anchors по всички домейни/езици; директен 200, canonical, източник на счупения линк.
-  Не бърка image:loc с URL на HTML страница; не следва редиректи.
-  Извиква се и от съществуващия `scripts/check_sitemap.py`.
-- `backend/tests/test_iteration54_ssr_links_and_metadata.py`: изолирана временна Mongo база,
-  ротации, кеш, всички езици, дълги описания, ASGI crawl и отрицателни контроли.
+## Source map
+- backend/server.py: API, catalog, settings, rotations, startup and database.
+- backend/prerender.py + i18n.py: SEO rendering, routing and published handles.
+- backend/page_content.py + literature_copy.py: read-only empty-content resolution.
+- backend/scripts/purge_preview_data.py: explicit guarded local-only operator action, never startup.
+- backend/scripts/preserve_runtime_data.py: server-only deployment file preservation.
+- backend/scripts/check_repository_privacy.py: current-checkout artifact/credential guard.
+- backend/scripts/check_internal_links.py: read-only domain-aware crawl; --in-process for preview.
+- backend/tests/: fixtures must be invented and use disposable databases. Test reports are ignored.
 
-## Проверено на 2026-09-24
-- **35 pytest успешни, 1 пропуснат** (стар тест изисква реална колекция с различен RO handle;
-  същият сценарий е покрит с изолирани тестови данни).
-- Браузър: точно един продуктов H1, включително при суров H1 в описанието;
-  съвпадат title/description на 6 HTML sitemap маршрута, /pages/articles и privacy-policy;
-  12 hreflang, parseable JSON-LD, без неочакван noindex. `yarn build` успешен със стари warnings.
-- Обход на **демо базата**: 547 адреса, 0 неканонични, 0 счупени цели на HTML anchors.
-  Общо 33 sitemap 404: about-1/cookies/scientific-literature липсват за 11 езика.
-  Това не е отчет за реалните 679 продукционни URL-а; не са премахвани sitemap entries
-  и не е създавано измислено съдържание, за да мине проверката.
-- Preview ingress заменя X-Forwarded-Host. За пълен домейн-aware локален обход:
-  `python backend/scripts/check_internal_links.py --base "$REACT_APP_BACKEND_URL" --in-process --report audit.json`.
-  In-process използва истинските FastAPI маршрути и базата без startup или запис на съдържание.
-- Отчети: `test_reports/iteration_54.json`, `iteration_54_final.json`,
-  `test_reports/pytest/iter54_final.xml`, `test_reports/internal-links-final.json`.
+## Follow-up
+- Keep the existing production MONGO_URL/DB_NAME when updating. The production environment disables
+  fictional catalog seeding; it shows its existing real database. A new empty database does not
+  magically acquire production records. This was explicitly explained to the owner.
+- Historical commits still need independent handling; no reset/rewrite/push was performed here.
+- Optional Offer.validFrom remains unimplemented: real offer start date is unknown. Do not
+  substitute a product creation timestamp or today's date merely to silence a warning.
+- Deferred: catalog sync throttling, reviews, post-delivery review requests, iOS autofill feedback.
+- External fulfillment/email/AI credentials are intentionally absent; do not claim those flows tested.
 
-## Ограничения и следващи задачи
-- Preview е с демо каталог (16 продукта/5 статии), не продукционният каталог от доклада.
-- NextLevel, Resend, Anthropic и VAPID ключовете са умишлено премахнати: `SECRETS.md`.
-  Външните интеграции не са валидирани тук. SEO реализацията НЕ използва мокнати API.
-  Само тестовете подменят AI rewrite/описание, за да не викат платени услуги.
-- Следващо: същият read-only обход върху пълните продукционни данни.
-- P1: ограничаване на честотата на каталожната синхронизация.
-- P2: истински продуктови ревюта, покана след доставка, Apple/iOS autofill обратна връзка.
-
-## Финална проверка за деплой — 2026-09-24
-- По изричното „Готови ли сме за деплой?“ беше изпълнена проверка за готовност.
-- Премахнати са старите destructive startup пътища: seed_catalog вече инициализира само
-  напълно празен каталог и не изтрива/презаписва данни, независимо от SEED_VERSION или
-  ALLOW_RESEED. Пази и частичен каталог (само колекции/статии, без продукти).
-- seed_pages вече не изтрива legacy alias записи при старт. Публичните legacy адреси остават
-  404 чрез съществуващите правила; sitemap-ите и текущите URL-и не са променени.
-- `tests/test_iteration55_seed_safety.py`: 10 теста с отделна временна Mongo база за тези защити.
-- Финален целеви набор: **48 успешни, 1 пропуснат**, `test_reports/pytest/deploy_final.xml`.
-  По-широки стари тестове очакват несъществуващи в demo SEO полета/catalog link_key;
-  такива data-dependent проверки не бива да се представят за минали.
-- Финален deployment health result: **WARN, без BLOCKER**; compilation/env/CORS/services
-  проверки са OK; destructive_db_startup_confirmed=false. Предупрежденията са за широки
-  startup Mongo cursor обходи в fix_bg_typos/retarget_internal_links/retarget_rotated_links.
-  Не са добавяни произволни limit-и, които биха пропуснали линкове/документи.
-- `.env` остава извън Git. Ansible подава продукционната конфигурация отделно от хранилището.
-- **Не е извършен деплой.** Готовността е за кода; реалните production secrets/data и
-  пълният live crawl остават проверки за средата на съществуващия сайт.
-
-## Допълнение — празни страници, /index.html и /collections (2026-09-24)
-- Потребителят поиска scientific-literature (11 езика) и /en/pages/faq да се **попълнят**,
-  не да се noindex-ват/махат от sitemap. Изрично поиска също 301 за /index.html и добавяне
-  на /collections за 11-те езика в XML sitemap. Това е разрешеното допълнение към старото
-  ограничение да не се променят работещите sitemap/URL правила.
-- Истинската причина за празния EN FAQ: faq_items вече съществуват, но SSR показваше само html.
-  SSR вече включва въпросите/отговорите и FAQPage JSON-LD; описанието е попълнено. Ако преводът
-  е действително празен, ползва съществуващите EN въпроси от DEFAULT_PAGES. Изрично зададените
-  собствени въпроси/HTML/SEO се запазват. В React отговорите остават в DOM, но са hidden, когато
-  accordion е затворен; отваряне/затваряне е проверено.
-- `backend/page_content.py` и `literature_copy.py`: научната страница получава локализиран
-  контекст на 11 езика + откъси/линкове към истинските публикувани articles с текущи handles.
-  Няма измислени научни източници/статии. Само празният публичен отговор се попълва динамично;
-  **няма DB миграция/презапис на собствено съдържание**. Редактиран непразен текст има предимство.
-  Чернови не се показват; старите ротационни адреси остават 404. Линковете са same-origin с
-  правилния locale prefix и са проверени с реално отваряне в браузъра.
-- /collections се добавя точно веднъж на език в **collections** XML sitemap, не /pages/collections.
-- Nginx template: публичен /index.html GET/HEAD → 301 към canonical начална страница на BG/RO/GR,
-  а EU директно към /en/ (за да няма междинен redirect през /). Работи и за www и HTTP,
-  запазва query параметрите. Вътрешният shell listener :8080/index.html остава 200; @spa fallback
-  остава raw HTML, без redirect loop. **Preview CRA /index.html не използва този Nginx template.**
-- **162 теста успешни**, `test_reports/pytest/iter56_final.xml`; проверени реален временен Nginx,
-  HTTP+GET/HEAD, private shell и симулирана SSR 503 → работещ SPA fallback. Тестовите случаи са
-  в test_iteration56_scientific_faq_and_sitemap.py и test_nginx_redirects.py. Стар data-dependent
-  тест за ротация е заменен с изолирани records, без промени по preview/live данните.
-- Build успешен със съществуващи warnings; браузър FAQ/съдържание/отваряне на статия — успешно.
-- Нов read-only обход: **547 адреса, 0 неканонични, 0 счупени HTML anchor цели**. Остават само
-  22 липсващи demo sitemap страници (about-1 и cookies × 11). Scientific-literature вече е 200.
-  Отчет `test_reports/internal-links-iter56-final.json`; използва се --in-process заради preview
-  ingress, който заменя Host. Няма поправяне на production canonical заради този preview ефект.
-- Менюто/дизайнът не са променени. Външните интеграции са без ключове и не са тествани.
-- **Не е извършен деплой**. Следващо: обновяване на Nginx заедно с приложението и read-only
-  проверка върху реалните домейни/данни.
-
-## Уточнение за клиентските данни — 2026-09-24
-- Потребителят поиска `backend/data/matrixify-export.xlsx` извън хранилището и изрично уточни:
-  **не изтривайте реални клиенти/поръчки/данни при деплой върху работеща продукция**.
-- Проверено: конкретният файл вече липсва от файловата система и Git index; `.gitignore:120`
-  го изключва. Предишен commit `a781267` е извършил премахването. В тази задача не са изтривани
-  нито DB данни, нито сървърни файлове; историята на Git не е пренаписвана и може да съдържа
-  старите версии на експорта.
-- Нормалният Ansible deploy не стартира `purge_preview_data.py` и не изпълнява Matrixify import,
-  освен при изрично `run_catalog_import=true`. Съществуващото server-side копие в
-  `{{ app_dir }}/shared/matrixify-export.xlsx` се запазва извън Git и се копира в нов release,
-  ако е налично. Не променяйте това поведение при задачи за прочистване на хранилището.
-- 11 теста за seed safety и opt-in import преминаха. Продукционен деплой/прочистване не е правен.
-
-## Отложено уточнение за Offer.validFrom
-- Потребителят съобщи optional warning за Offer.validFrom. Не е добавяна произволна дата.
-- В текущите product/variant records няма дата на активиране на текущата оферта/цена.
-  created_at е дата на продукта и не доказва validFrom на цената.
-- Изчаква избор: реална начална дата на офертите или записване на дата при бъдещи промени
-  на цената. Потребителят премина към задачата за клиентските данни без този отговор.
+## Final verification — 2026-09-25
+- **75 targeted pytest tests passed**, including loopback/single-host/refusal gates, configured-admin
+  preservation, unknown-collection fail-before-write, production runtime-file adoption/no overwrite,
+  storage network isolation, optional demo-account/catalog seeding, and prior SEO regressions.
+- Testing agent report: local ignored test_reports/iteration_1.json. It initially found a multi-host
+  URI guard gap and a resurrected historically tracked XML report. Both were addressed and retested.
+  Final JUnit is ignored `test_reports/pytest/privacy_iteration57_final.xml` (do not use the old
+  historically tracked pytest_results.xml path for new reports).
+- Publication guard: **0 findings for current checkout**; no weakening of tracked-artifact detection.
+- Browser BG/EN fictional product pages: single H1, working image and content. Homepage shows only
+  the two fictional products. Build passed with existing React hook warnings. Menu/layout unchanged.
+- Preview: no customer/order/visitor records, no non-admin users, no historical local media. Only
+  configured technical admin plus fictional catalog and public UI page templates remain. Analytics
+  collection is disabled in privacy-preview to avoid restoring visitor identifiers after cleanup.
+- Production deployment static check: **PASS, no blockers**. Tested helpers preserve server runtime
+  files. No production database/file operations or deployment were executed in this environment.
+- The testing agent also suggested existing login lockout/CORS hardening. Those are separate
+  follow-up recommendations, not verified regressions in this cleanup; no unrelated production
+  authentication policy was changed and no comprehensive security audit is claimed.

@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration 14: Test URL alignment with live purepeptide.bg, sitemap, agents.md, link-index."""
 import os
 import urllib.parse
@@ -135,7 +136,7 @@ class TestDelistedLinks:
         s = requests.Session()
         login = s.post(
             f"{API}/auth/login",
-            json={"email": "admin@purepeptide.bg", "password": "Admin@PurePeptide2026"},
+            json={"email": private_admin_email(), "password": private_admin_password()},
             timeout=30,
         )
         headers = {}

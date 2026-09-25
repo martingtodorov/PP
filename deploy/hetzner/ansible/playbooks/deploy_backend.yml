@@ -221,6 +221,31 @@
       changed_when: "'adopted' in export_adopt.stdout"
       tags: [code, config, catalog]
 
+    - name: Preserve private runtime snapshots and image cache outside the repository
+      command:
+        argv:
+          - "{{ app_dir }}/venv/bin/python"
+          - "{{ backend_src_dir }}/scripts/preserve_runtime_data.py"
+          - backend
+          - --app-root
+          - "{{ app_dir }}"
+          - --current-backend
+          - "{{ app_dir }}/current/{{ backend_rel_path }}"
+          - --new-backend
+          - "{{ backend_src_dir }}"
+      tags: [code, config, media, publish]
+
+    - name: Runtime data must remain writable outside the release tree
+      file:
+        path: "{{ app_dir }}/shared/{{ item }}"
+        state: directory
+        owner: "{{ backend_service_user }}"
+        group: "{{ backend_service_user }}"
+        mode: "0750"
+        recurse: true
+      loop: [nextcart, image-cache]
+      tags: [code, config, media, publish]
+
     - name: Is the Matrixify export on the server?
       stat: { path: "{{ app_dir }}/shared/matrixify-export.xlsx" }
       register: catalog_export
@@ -268,7 +293,7 @@
       tags: [publish]
 
     - name: Own the release
-      file: { path: "{{ release_dir }}", owner: root, group: "{{ backend_service_user }}", recurse: true }
+      file: { path: "{{ release_dir }}", owner: root, group: "{{ backend_service_user }}", recurse: true, follow: false }
       tags: [publish]
 
     # AFTER "Own the release": the recursive chown above would hand this directory back to root and

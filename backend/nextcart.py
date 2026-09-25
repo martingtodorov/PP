@@ -176,7 +176,7 @@ _client = httpx.AsyncClient(
 _cache: Dict[str, tuple] = {}
 
 # The production server's IP is rejected by the upstream (HTTP 403), so the checkout falls back to
-# the committed snapshot in data/nextcart/ (refresh it with scripts/refresh_nextcart_snapshot.py).
+# a private runtime snapshot in data/nextcart/ (a shared server directory, never committed).
 SNAPSHOT_DIR = pathlib.Path(__file__).resolve().parent / "data" / "nextcart"
 SNAPSHOT_ONLY = os.environ.get("NEXTCART_SNAPSHOT_ONLY", "").lower() in ("1", "true", "yes")
 

@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration 34 — Econt BG methods (locker 3.39, address 4.99), server-side shipping override,
 NextLevel auto-waybill creation, guest order tracking payload, admin shipment endpoints,
 NextLevel integration test, and RO ui-strings trackingTitle."""
@@ -9,8 +10,8 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://shopify-migrate-3.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PASSWORD = "Admin@PurePeptide2026"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PASSWORD = private_admin_password()
 
 
 @pytest.fixture(scope="session")

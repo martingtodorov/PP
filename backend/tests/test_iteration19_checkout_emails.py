@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration-19: checkout shipping requirement, locale persistence, abandoned carts,
 multilingual transactional emails, recovery-on-order."""
 import os
@@ -11,9 +12,9 @@ BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get(
     "REACT_APP_BACKEND_URL=")[1].split("\n")[0].strip()
 API = f"{BASE}/api"
 
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PASS = "Admin@PurePeptide2026"
-TEST_TO = "admin@purepeptide.bg"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PASS = private_admin_password()
+TEST_TO = private_admin_email()
 
 
 # ---------- helpers ----------

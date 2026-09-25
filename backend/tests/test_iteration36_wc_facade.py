@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration 36 — WooCommerce-compatible REST façade for NextLevel Fulfillment.
 
 Covers:
@@ -30,8 +31,8 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
 API = f"{BASE_URL}/api"
 WC = f"{API}/wc/wp-json/wc/v3"
 
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PASSWORD = "Admin@PurePeptide2026"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PASSWORD = private_admin_password()
 
 PREVIEW_ORDER_ID = "4f1deeca-ce40-4da0-a9dc-09ca410b7127"
 SEARCH_ORDER_NUMBER = "SUB29"

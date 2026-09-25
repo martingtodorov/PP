@@ -1,92 +1,28 @@
-# PurePeptide — ROADMAP (актуален backlog)
+# Roadmap
 
-Историята е в `CHANGELOG.md`, изискванията и решенията — в `PRD.md`.
+## P0 — verified; owner publication step remains
+- Current-checkout and local preview cleanup complete; production was not accessed or changed.
+- 75 targeted tests passed; browser/build passed; current publication guard reports 0 findings.
+- Backend/frontend deployment preservation check passed with no blockers. Existing production
+  MongoDB/config must remain the same; fictional samples are disabled there, not a replacement import.
+- Before sharing a new repository, keep only the cleaned current snapshot. Old Git history, forks
+  and remote caches are separate;
+  the owner reports the old repository is no longer public, but this has not been verified here.
 
-## Актуални приоритети — 2026-09-24 (по-старите секции са исторически)
-- Завършено: публикувани локализирани SSR линкове, HTML sitemap без BG pub_slug в друг език,
-  кеш след ротация, продуктовото име като единствен H1, общи SSR/React метаданни, автоматичен crawl.
-- P0 валидация: изпълнение на read-only crawl върху пълния реален каталог. Preview има 33
-  sitemap 404 от три липсващи демо страници × 11 езика; няма счупени HTML anchor цели.
-  Не променяйте продукционния sitemap или съдържание заради тези демо липси.
-- P1: rate limit/backoff на каталожната синхронизация (не е започнато).
-- P2: продуктови ревюта, автоматична покана ден след доставка, iOS Safari autofill обратна връзка.
-- Изрично извън обхват: **не поправяйте overflow на менюто** без ново искане от собственика.
-- Външните интеграции остават без ключове в тази среда; виж `SECRETS.md`.
-- Потенциално подобрение: автоматично известие при нов счупен вътрешен линк (само идея).
-- Готовност на кода: проверка WARN без блокери; 48 успешни целеви теста + 1 skip.
-  Старите автоматични изтривания на каталог/страници при старт са премахнати и тествани.
-- P2 технически: оптимизиране чрез batch-ове на startup обходите за typo/link repair,
-  без отрязване на документи с произволен limit. Това не блокира текущите SEO промени.
-- Последно завършено: scientific-literature на 11 езика от публикувани articles, EN FAQ body/meta,
-  /collections в XML sitemap и 301 /index.html в Nginx. 162 теста минават.
-- Актуалната demo липса вече е **22** sitemap URL-а: само about-1/cookies × 11; scientific е
-  попълнена. Няма счупени HTML anchor цели. Не премахвайте production страници заради demo.
-- Следващо: приложение + Nginx конфигурация да бъдат приложени заедно и проверени на реалните
-  домейни. В preview /index.html минава през CRA, не през продукционния Nginx.
-- Идея за бъдещо подобрение: автоматична проверка за празно основно съдържание на sitemap страници.
-- Правило за всяко прочистване: премахват се само копия от хранилището, **никога production
-  клиенти/поръчки/база при deploy**. Конкретният Matrixify export вече е absent/untracked/ignored;
-  server-side shared export остава запазен. Историческите Git копия са отделен въпрос.
-- На изчакване: optional Offer.validFrom — потребителят още не е дал реалната начална дата
-  или избор за бъдещо проследяване; created_at не се представя като дата на цената.
+## P1
+- Throttle catalog synchronization to avoid external rate limits.
+- Repeat SEO/content/link checks on production after a code/config update; never import private
+  production data into the public source or this demo to obtain a passing test.
 
-## Готово на 2026-06-06
-- COA снимките (химичен анализ) се прехвърлят в продуктовите галерии с един бутон в Админ → Импорт
-  (`POST /api/admin/import/coa-images`, 22 продукта, идемпотентно, снимката е последна в галерията).
-- Prerender: начална страница 200 с H1/canonical/JSON-LD, несъществуващи URL-и → истински 404
-  (проверено с 17 бекенд теста + e2e). Остава само деплоят на продукция.
+## P2 / on hold
+- Offer.validFrom: await real date or a future price-effective-date tracking policy.
+- Product reviews; post-delivery review invitations; iOS Safari autofill feedback.
+- Efficient bounded processing of startup link/typo repair without silently omitting documents.
+- Separately consider existing login lockout and explicit credentialed-CORS policy; do not silently
+  expand a data-cleanup request into production authentication changes.
+- Future enhancement: run the current-checkout privacy guard before every publication.
 
-## P0 — чака валидация (08.06.2026)
-- **BoxNow tracking линк** — кодът тегли публичния номер от NextLevel Fulfillment API, но поръчка
-  GUL07 не е в preview базата, така че не е потвърдено на живо. След деплой: Админ → Поръчки →
-  „Обнови проследяванията“ и провери линка на BoxNow поръчка.
-
-## P0 — чака собственика (06.06.2026)
-1. **Деплой на прод** (без `run_catalog_import=true`, докато не е потвърдено): Save to GitHub →
-   `git pull` → `ansible-playbook -i inventory.ini playbooks/deploy_backend.yml` + `deploy_frontend.yml`.
-2. **Възстановяване на преводите на прод** — предишен каталожен импорт ги е изтрил (проверено:
-   `?locale=ro|de` връщат български). След деплоя: Админ → Преводи → пусни липсващите езици.
-3. **Възстановяване на ротацията на прод**: Админ → Изтеглени линкове → добави
-   `/products/21-retatrutide-5` → бутон „Върни стар handle“ → `21-retatrutide-5-lrp`.
-4. **Cloudflare Origin сертификати** (SSH задача, чака се от по-рано).
-
-## P0 — чака собственика
-- **Деплой на продукция**: prerender-ът тръгва само след деплой на бекенда **и** на nginx
-  (`site.yml` или `deploy_nginx.yml` + `deploy_backend.yml`). Без nginx частта HTML-ът остава празната
-  React обвивка.
-- **Нов Resend ключ** (старият е отменен): Админ → Настройки → Resend API ключ. Без него не тръгва
-  нито един имейл (потвърждение, фактура, товарителница).
-
-## P1 — преводи (голямата дупка след SEO работата)
-Покритие към 2026-06-05 (`translations.<locale>.title`):
-
-| ресурс | ro | de | en | gr | fr | cz/hu/pl/sk/si |
-|---|---|---|---|---|---|---|
-| продукти (23) | 23 | 23 | 0 | 0 | 1 | 0 |
-| колекции (8) | 8 | 1 | 0 | 0 | 0 | 0 |
-| статии (19) | 19 | 0 | 0 | 0 | 0 | 0 |
-| статични страници (19 bg) | 13 | 1 | 9 | 1 | 1 | 1-2 |
-
-Следствие: на `.gr` и `.eu` продуктовите заглавия, описания и статии излизат на български —
-prerender-ът вече е коректен, но подава български текст. Приоритет: **gr, en**, после cz/pl/hu/sk/si.
-Инструменти: `POST /api/admin/translate/bulk` (job с resume), `tools/translate_static_blocks.py`.
-Изисква LLM бюджет — да се пусне след одобрение от собственика.
-
-## P2 — продуктови подобрения
-- Автоматична фактура при маркиране на поръчката като платена.
-- Истинска PDF фактура с номер и данни на купувача.
-- SMS известие с линк за проследяване при издадена товарителница.
-- Ревюта/оценки по продукт (доверие + свежо съдържание за Google).
-- Карта с най-близките офиси/кутии в чекаута.
-- „Поръчай пак“ от страницата за проследяване.
-
-## Технически дълг
-- ~67 стари e2e теста в `backend/tests/` са писани срещу предишните preview данни (23 vs 21 продукта,
-  handles преди ротацията, стари промо кодове) — падат, не са регресии.
-- `PRD.md` е 1200+ реда история; при следващо голямо допълнение да се раздели.
-- Локалните JSON кешове в `backend/data/nextcart/` (градове, офиси, координати) да се следят за размер.
-
-## 18.06.2026
-- P1: rate limit на синхронизацията на каталога (троттлинг + backoff) — още не е пипано.
-- Бележка: в preview вече върви ДЕМО каталог (реалните данни и Matrixify експортът са изтрити),
-  затова тестовете, които разчитат на реални handle-ове/поръчки, ще падат тук. Продукцията е наред.
+## Owner restrictions
+- No menu overflow/layout changes.
+- No production customer/order/media deletion or reset during deployment.
+- No real credentials, catalog exports, snapshots or operational reports in Git.

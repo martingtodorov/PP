@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration 21 — Cookie banner regression + local media-disk regression."""
 import os
 import io
@@ -7,8 +8,8 @@ from pathlib import Path
 
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", "/app/backend/.media"))
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PASSWORD = "Admin@PurePeptide2026"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PASSWORD = private_admin_password()
 
 
 @pytest.fixture(scope="module")
