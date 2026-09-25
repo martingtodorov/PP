@@ -259,6 +259,10 @@ async def create_shipment(order_id: str, force: bool = False) -> Dict[str, Any]:
     except NextLevelError as ex:
         await _db.orders.update_one({"id": order_id}, {"$set": {"shipment_error": str(ex), "shipment_error_at": _now()}})
         raise HTTPException(502, str(ex))
+    if isinstance(res, list):
+        res = res[0] if res else {}
+    if not isinstance(res, dict):
+        raise HTTPException(502, "NextLevel върна неочакван отговор при създаване на товарителница")
     shipment = {**_summary(res), "payload": payload}
     tracking = customer_tracking(shipment)
     await _db.orders.update_one({"id": order_id}, {
@@ -507,17 +511,23 @@ def init(db_, admin_guard) -> APIRouter:
         cfg = await get_config()
         try:
             countries = await _call(cfg, "GET", "/countries")
-            probe = {"sender": {"id": int(cfg["sender_id"]), "office_id": int(cfg.get("sender_office_id") or 1)},
+            probe = {"sender": {"id": int(cfg.get("sender_id") or 0), "office_id": int(cfg.get("sender_office_id") or 1)},
                      "receiver": {"country": "BG", "place": "София", "post_code": "1000", "street": "бул. Витоша", "street_no": "1"},
                      "weight": float(cfg.get("default_weight") or 0.1)}
             price = await _call(cfg, "POST", "/shipments/calculate", json=probe)
             recent = await _call(cfg, "GET", "/shipments", params={"limit": 3})
         except NextLevelError as ex:
             return {"ok": False, "error": str(ex)}
-        return {"ok": True, "countries": len(countries), "sample_price_bg": price.get("total"),
-                "sender_seen": (recent[0].get("sender") or {}).get("name") if recent else None,
+        except (TypeError, ValueError) as ex:
+            return {"ok": False, "error": f"Неочакван отговор от NextLevel: {ex}"}
+        # the API answers either a bare list or a paginated object — both used to be read as a list
+        rows = recent if isinstance(recent, list) else (recent or {}).get("data") or []
+        sender = (rows[0].get("sender") or {}).get("name") if rows and isinstance(rows[0], dict) else None
+        return {"ok": True, "countries": len(countries or []),
+                "sample_price_bg": price.get("total") if isinstance(price, dict) else None,
+                "sender_seen": sender,
                 "recent": [{"awb": (s.get("parcels") or [""])[0], "status": s.get("status"), "courier": s.get("subcontractor"),
-                            "ref": s.get("ref")} for s in recent[:3]]}
+                            "ref": s.get("ref")} for s in rows[:3] if isinstance(s, dict)]}
 
     @router.get("/admin/integrations/nextlevel/preview/{order_id}")
     async def preview(order_id: str, admin=Depends(admin_guard)):
@@ -535,6 +545,8 @@ def init(db_, admin_guard) -> APIRouter:
                 **({"services": payload["services"]} if payload.get("services") else {})})
         except NextLevelError as ex:
             return {"ok": False, "error": str(ex), "payload": payload}
+        except (KeyError, TypeError) as ex:
+            return {"ok": False, "error": f"Непълна товарителница: липсва {ex}", "payload": payload}
         return {"ok": True, "payload": payload, "price": price}
 
     @router.post("/admin/orders/{order_id}/shipment")

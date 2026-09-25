@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+import autolink
+
 from i18n import (DEFAULT_LOCALE, LOCALES, LOCALE_META, SITE_ORIGINS, localize_doc, normalize_locale,
                   published_handle)
 from nextcart import shipping_summary
@@ -45,6 +47,7 @@ _stamp = 0.0
 def init(db) -> None:
     global _db
     _db = db
+    autolink.init(db)
 
 
 def bump() -> None:
@@ -491,7 +494,11 @@ async def _article(locale: str, handle: str) -> Optional[Dict[str, str]]:
               "author": {"@type": "Organization", "name": "PurePeptide"},
               "publisher": {"@id": f"{origin}/#organization"}, "mainEntityOfPage": url_for(locale, route)},
              _breadcrumbs(locale, trail), _organization(locale), _website(locale))
-    body = [_crumb_html(locale, trail), f'<h1>{esc(a.get("title"))}</h1>', demote(a.get("body")) or f'<p>{esc(description)}</p>']
+    body = [_crumb_html(locale, trail), f'<h1>{esc(a.get("title"))}</h1>',
+            autolink.apply(demote(a.get("body")) or f'<p>{esc(description)}</p>',
+                           await autolink.targets(locale),
+                           href_of=lambda p: url_for(locale, p),
+                           skip_path=f"/products/{a.get('product_handle')}" if a.get("product_handle") else "")]
     return {"head": _head(locale, route, title, description, a.get("image") or "",
                           og_type="article", extra=ld, alt=_alt_routes(doc, "/articles/")),
             "body": "".join(body)}
