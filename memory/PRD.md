@@ -83,3 +83,8 @@ neither its visibility nor remote history has been independently checked or alte
 - The testing agent also suggested existing login lockout/CORS hardening. Those are separate
   follow-up recommendations, not verified regressions in this cleanup; no unrelated production
   authentication policy was changed and no comprehensive security audit is claimed.
+## Bugfix — 2026-06 (fork)
+- Fixed P0: /pages/articles (ArticlesIndexPage) rendered without <Layout>, so the header, menu and
+  footer disappeared when clicking "Научни статии" (desktop nav, mobile sliding nav and drawer).
+  Page is now wrapped in Layout; inner <main> changed to <div> to avoid nested main. Verified with
+  browser: header+footer present, drawer navigation works.

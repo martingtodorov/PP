@@ -12,6 +12,12 @@ LATEST_ROTATION_301 = "latest_301"
 KINDS = {"products": "products", "collections": "collections_cat", "articles": "articles", "pages": "pages"}
 
 
+async def rotation_redirects_enabled(db):
+    # Separate from general site settings: saving an older settings form must not reset this switch.
+    policy = await db.settings.find_one({"key": "rotation_policy"}, {"_id": 0, "enabled": 1})
+    return (policy or {}).get("enabled", True) is not False
+
+
 def content_path(path):
     """An exact content route only; a missing file or an arbitrary nested path is not an alias."""
     parts = unquote(urlsplit(path or "/").path).strip("/").split("/")
