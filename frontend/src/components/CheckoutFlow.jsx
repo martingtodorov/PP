@@ -359,6 +359,8 @@ export default function CheckoutFlow() {
       .finally(() => setLocating(false));
   }, [t]);
 
+  const beganCheckout = useRef(false);
+
   useEffect(() => {
     if (!open) return;
     setErr("");
@@ -367,7 +369,10 @@ export default function CheckoutFlow() {
     // the permission dialog is asked for only when the visitor taps "find the nearest to me"
     locate({ prompt: false });
     track("checkout_opened");
-    gaBeginCheckout(items, total);
+    if (!beganCheckout.current) {
+      beganCheckout.current = true;
+      gaBeginCheckout(items, total);
+    }
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // visitor's country from IP — only when the storefront has no country of its own (owner's rule:
@@ -435,8 +440,7 @@ export default function CheckoutFlow() {
   }, [cfg, payment]);
 
   // country -> dial code (until the customer picks a different prefix himself)
-  const dialTouched = useRef(Boolean(saved.current?.dialTouched));
-  useEffect(() => {
+  const dialTouched = useRef(Boolean(saved.current?.dialTouched));  useEffect(() => {
     if (dialTouched.current) return;
     const own = countries.find((c) => c.iso2 === contact.country);
     const t = own?.dial ? own : (cfg?.precheckout_phone_territories || []).find((x) => x.iso2 === contact.country);
