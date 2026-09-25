@@ -23,7 +23,9 @@ EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 APP_NAME = "purepeptide"
 
 MEDIA_ROOT = Path(os.environ["MEDIA_ROOT"]).resolve()
-REMOTE_ENABLED = bool((EMERGENT_KEY or "").strip())
+REMOTE_ENABLED = (bool((EMERGENT_KEY or "").strip())
+                  and os.environ.get("ALLOW_MANAGED_STORAGE") != "false"
+                  and os.environ.get("APP_ENV") != "privacy-preview")
 
 MIME_TYPES = {
     "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",

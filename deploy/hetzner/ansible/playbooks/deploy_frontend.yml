@@ -137,6 +137,18 @@
       delegate_to: "{{ inventory_hostname }}"
       tags: [publish]
 
+    - name: Preserve server-owned marketing media before rotating builds
+      command:
+        argv:
+          - python3
+          - "{{ frontend_src_dir }}/../backend/scripts/preserve_runtime_data.py"
+          - frontend
+          - --web-root
+          - "{{ web_root }}"
+          - --stage
+          - "{{ web_root }}/build.new"
+      tags: [publish]
+
     - name: Rotate build -> build.previous -> build
       shell: |
         set -e

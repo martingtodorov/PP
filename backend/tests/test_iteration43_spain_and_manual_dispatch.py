@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration 43 — Spain market, prepaid-only server-side guard, waybill contents default,
 bank-transfer never auto-pushed to NextLevel, bank details only after confirmation."""
 import os
@@ -8,8 +9,8 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://shopify-migrate-3.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PASSWORD = "Admin@PurePeptide2026"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PASSWORD = private_admin_password()
 
 # In-stock SKUs to use for orders (from review request)
 IN_STOCK_HANDLES = ["3-ipamorelin-1", "dsip-5mg", "aasghrp-2", "cahexarelin"]

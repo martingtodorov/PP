@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration 35 — NextLevel Fulfillment integration module + RevOrder removal + geolocation UX.
 
 Covers:
@@ -18,9 +19,9 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://shopify-migrate-3.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PASSWORD = "Admin@PurePeptide2026"
-PREVIEW_ORDER_ID = "4f1deeca-ce40-4da0-a9dc-09ca410b7127"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PASSWORD = private_admin_password()
+PREVIEW_ORDER_ID = os.environ.get("TEST_ORDER_ID", "synthetic-order")
 
 
 @pytest.fixture(scope="session")

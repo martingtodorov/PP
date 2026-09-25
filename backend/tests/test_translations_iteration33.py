@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """
 Iteration 33: Test bulk translation queue admin endpoints,
 product H1/H2 heading rules on public API, collection titles.
@@ -8,8 +9,8 @@ import requests
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://shopify-migrate-3.preview.emergentagent.com').rstrip('/')
 
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PASSWORD = "Admin@PurePeptide2026"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PASSWORD = private_admin_password()
 
 
 @pytest.fixture(scope="session")

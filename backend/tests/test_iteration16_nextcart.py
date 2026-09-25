@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration 16 — NextCart proxy tests."""
 import os
 import pytest
@@ -98,7 +99,7 @@ class TestEvent:
 class TestRegression:
     def test_admin_login(self):
         r = requests.post(f"{API}/auth/login",
-                          json={"email": "admin@purepeptide.bg", "password": "Admin@PurePeptide2026"},
+                          json={"email": private_admin_email(), "password": private_admin_password()},
                           timeout=10)
         assert r.status_code == 200
         assert "token" in r.json() or "access_token" in r.json()

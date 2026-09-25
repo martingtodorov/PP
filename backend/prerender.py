@@ -682,7 +682,8 @@ async def _home(locale: str) -> Dict[str, str]:
     ]
     # the hero is the home page's LCP image, so it is preloaded here and nowhere else — the old
     # site-wide preload in index.html made every other page warn about an unused preload
-    hero = '<link rel="preload" as="image" href="/hero-home.webp" fetchpriority="high">'
+    hero_url = (_SITE.get("media") or {}).get("hero") or "/hero-home.webp"
+    hero = f'<link rel="preload" as="image" href="{esc(hero_url)}" fetchpriority="high">'
     return {"head": _head(locale, "/", title, description, "", extra=ld + hero),
             "body": "".join(body)}
 

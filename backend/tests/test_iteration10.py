@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration-10 backend tests: contact form, push, best-seller ordering,
 NAD+/Bacteriostatic water hidden, manual ordering, pages, checkout notify."""
 import os
@@ -7,8 +8,8 @@ import requests
 
 BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://shopify-migrate-3.preview.emergentagent.com").rstrip("/")
 API = f"{BASE}/api"
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PASS = "Admin@PurePeptide2026"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PASS = private_admin_password()
 
 
 @pytest.fixture(scope="module")

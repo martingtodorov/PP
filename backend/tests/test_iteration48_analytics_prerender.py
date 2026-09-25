@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Integration tests for iteration 48:
 - POST /api/track: bot detection + visitor cookies (24h/7d/30d)
 - GET /api/admin/analytics: bot exclusion, visitors windows, deltas, conversion clamp
@@ -16,8 +17,8 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 BASE = os.environ.get("REACT_APP_BACKEND_URL") or "https://shopify-migrate-3.preview.emergentagent.com"
 BASE = BASE.rstrip("/")
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PASSWORD = "Admin@PurePeptide2026"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PASSWORD = private_admin_password()
 
 REAL_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
            "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")

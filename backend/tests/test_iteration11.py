@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration 11 tests — meta coverage, structured data data, scientific literature,
 contact HTML escaping, checkout speed, sitemap/robots.
 """
@@ -11,8 +12,8 @@ BASE = (os.environ.get("REACT_APP_BACKEND_URL")
         or "https://shopify-migrate-3.preview.emergentagent.com").rstrip("/")
 API = f"{BASE}/api"
 
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PW = "Admin@PurePeptide2026"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PW = private_admin_password()
 
 
 @pytest.fixture(scope="session")

@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration 39 — customer & admin order cancellation (integration).
 
 Seeds fake orders directly in Mongo so the real NextLevel warehouse is not touched.
@@ -16,8 +17,8 @@ load_dotenv("/app/backend/.env")
 load_dotenv("/app/frontend/.env")
 
 BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") + "/api"
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PW = "Admin@PurePeptide2026"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PW = private_admin_password()
 
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]

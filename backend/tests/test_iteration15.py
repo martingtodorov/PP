@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration-15 tests: variant images, restored HTML, slim() list payloads, WebP images."""
 import os
 import re
@@ -131,7 +132,7 @@ class TestAdminLogin:
     def test_admin_login(self):
         r = requests.post(
             f"{BASE}/api/auth/login",
-            json={"email": "admin@purepeptide.bg", "password": "Admin@PurePeptide2026"},
+            json={"email": private_admin_email(), "password": private_admin_password()},
             timeout=15,
         )
         assert r.status_code == 200, r.text

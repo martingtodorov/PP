@@ -50,6 +50,7 @@ async def _snapshot_catalog_state(db):
 
 @pytest.fixture()
 def isolated_db(monkeypatch):
+    monkeypatch.setenv("ENABLE_DEMO_DATA", "true")
     mongo = AsyncIOMotorClient(os.environ["MONGO_URL"])
     db_name = f"{os.environ['DB_NAME']}_iter55_{uuid.uuid4().hex[:8]}"
     temp_db = mongo[db_name]
@@ -81,6 +82,45 @@ def isolated_db(monkeypatch):
 
 
 # seed_catalog data neutrality against existing shop data
+@pytest.mark.parametrize("enabled", [None, "false"])
+def test_demo_catalog_requires_explicit_opt_in(isolated_db, monkeypatch, enabled):
+    if enabled is None:
+        monkeypatch.delenv("ENABLE_DEMO_DATA", raising=False)
+    else:
+        monkeypatch.setenv("ENABLE_DEMO_DATA", enabled)
+    run(server.seed_catalog())
+    for name in ("products", "collections_cat", "articles", "settings"):
+        assert run(isolated_db[name].count_documents({})) == 0
+
+
+@pytest.mark.parametrize("enabled", ["false", "true"])
+def test_no_automatic_test_customer_without_private_credentials(isolated_db, monkeypatch, enabled):
+    monkeypatch.setenv("ENABLE_DEMO_DATA", enabled)
+    monkeypatch.delenv("DEMO_CUSTOMER_EMAIL", raising=False)
+    monkeypatch.delenv("DEMO_CUSTOMER_PASSWORD", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD_RESET", raising=False)
+    monkeypatch.setattr(server, "ADMIN_EMAIL", "technical-admin@example.invalid")
+    admin = {"id": "synthetic-admin", "email": server.ADMIN_EMAIL, "role": "admin", "password_hash": "unchanged-test-hash"}
+    run(isolated_db.users.insert_one(admin.copy()))
+    run(server.seed_admin())
+    docs = run(isolated_db.users.find({}, {"_id": 0}).to_list(10))
+    assert docs == [admin]
+
+
+def test_explicit_demo_customer_is_fictional_and_does_not_replace_admin(isolated_db, monkeypatch):
+    monkeypatch.setenv("ENABLE_DEMO_DATA", "true")
+    monkeypatch.setenv("DEMO_CUSTOMER_EMAIL", "fictional@example.invalid")
+    monkeypatch.setenv("DEMO_CUSTOMER_PASSWORD", "Fictional-Fixture-Only-123")
+    monkeypatch.delenv("ADMIN_PASSWORD_RESET", raising=False)
+    monkeypatch.setattr(server, "ADMIN_EMAIL", "technical-admin@example.invalid")
+    admin = {"id": "synthetic-admin", "email": server.ADMIN_EMAIL, "role": "admin", "password_hash": "unchanged-test-hash"}
+    run(isolated_db.users.insert_one(admin.copy()))
+    run(server.seed_admin())
+    assert run(isolated_db.users.find_one({"id": admin["id"]}, {"_id": 0})) == admin
+    customer = run(isolated_db.users.find_one({"role": "customer"}, {"_id": 0}))
+    assert customer["synthetic_fixture"] is True
+    assert customer["email"].endswith("@example.invalid")
+    assert customer["phone"] == ""
 @pytest.mark.parametrize(
     "site_value,allow_reseed",
     [

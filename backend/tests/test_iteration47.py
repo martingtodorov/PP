@@ -1,3 +1,4 @@
+from private_test_credentials import admin_email as private_admin_email, admin_password as private_admin_password
 """Iteration 47 — order cancel → warehouse push, rotated URL parity, exact-handle restore, storefront regression.
 
 The unit-level cancel behaviour lives in test_cancel_fulfillment.py — this file adds
@@ -17,8 +18,8 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", ".env"))
 
 BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
-ADMIN_EMAIL = "admin@purepeptide.bg"
-ADMIN_PASS = "Admin@PurePeptide2026"
+ADMIN_EMAIL = private_admin_email()
+ADMIN_PASS = private_admin_password()
 
 
 @pytest.fixture(scope="module")

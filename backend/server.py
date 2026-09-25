@@ -298,15 +298,22 @@ async def seed_admin():
         )
         log.warning("Admin password re-synced from ADMIN_PASSWORD (ADMIN_PASSWORD_RESET=1)")
 
-    test_email = "customer@example.com"
+    # No publicly known test account may appear automatically on a real store.
+    test_email = os.environ.get("DEMO_CUSTOMER_EMAIL")
+    test_password = os.environ.get("DEMO_CUSTOMER_PASSWORD")
+    if os.environ.get("ENABLE_DEMO_DATA") != "true" or not test_email or not test_password:
+        return
+    if not test_email.endswith("@example.invalid"):
+        raise RuntimeError("Demo customer must use the reserved example.invalid domain")
     if not await db.users.find_one({"email": test_email}):
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
             "email": test_email,
-            "password_hash": hash_password("Customer123!"),
-            "name": "Иван Петров",
-            "phone": "+359888000111",
+            "password_hash": hash_password(test_password),
+            "name": "Fictional test customer",
+            "phone": "",
             "role": "customer",
+            "synthetic_fixture": True,
             "created_at": now_utc(),
         })
 
@@ -327,6 +334,8 @@ async def backfill_settings():
 
 async def seed_catalog():
     """Initialize an empty catalog only. Startup must never replace existing shop data."""
+    if os.environ.get("ENABLE_DEMO_DATA") != "true":
+        return
     current = await db.settings.find_one({"key": "site"})
     if ((current or {}).get("value") or {}).get("catalog_imported"):
         return
@@ -373,7 +382,7 @@ async def seed_catalog():
                 "id": str(uuid.uuid4()),
                 "published_at": now_utc(),
                 **a,
-                "translations": ARTICLE_TR.get(a["handle"], {}),
+                "translations": ARTICLE_TR.get(a["handle"], a.get("translations", {})),
             })
 
     if not current:
@@ -3367,6 +3376,8 @@ async def track_visit(payload: TrackIn, request: Request, response: Response):
     visitor id for 24h / 7d / 30d. Without consent nothing is stored on the device — the same
     windows are derived from a daily-salted IP+UA hash instead.
     """
+    if os.environ.get("APP_ENV") == "privacy-preview":
+        return {"ok": True, "tracking": "disabled-in-privacy-preview"}
     ua = (request.headers.get("user-agent") or "")[:300]
     bot = analytics_bots.is_bot(ua)
     # analytics cookies only after the visitor accepted them (pp_consent = "<analytics><marketing>")

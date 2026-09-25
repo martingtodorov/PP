@@ -17,10 +17,10 @@ from matrixify_import import store_image  # noqa: E402
 db = MongoClient(os.environ["MONGO_URL"])[os.environ["DB_NAME"]]
 storage.init_storage()
 
-HERO_SRC = "https://cdn.shopify.com/s/files/1/0941/8965/0294/files/brand-3_b5f4565b-7bec-41db-9d3b-7bbd1c49e2ac.png?v=1767112972"
+HERO_SRC = os.environ.get("MIGRATION_HERO_URL")
 HERO_DEST = ROOT.parent / "frontend" / "public" / "hero-home.png"
 
-if not HERO_DEST.exists():
+if not HERO_DEST.exists() and HERO_SRC:
     resp = requests.get(HERO_SRC, timeout=90)
     resp.raise_for_status()
     HERO_DEST.write_bytes(resp.content)
