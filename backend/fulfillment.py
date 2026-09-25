@@ -382,8 +382,11 @@ async def refresh_order(order_id: str) -> Dict[str, Any]:
         raise HTTPException(404, "Няма фулфилмент поръчка")
     if not cfg.get("has_api"):
         raise HTTPException(400, "Статусът идва от NextLevel през WooCommerce API-то (PUT /orders) — няма какво да се дърпа без app-secret")
+    external = ((ff.get("payload") or {}).get("order_id") or ff.get("number"))
+    if not external:
+        raise HTTPException(400, "Поръчката няма номер в NextLevel — подайте я наново към склада")
     try:
-        res = await _call(cfg, "GET", f"/external/{ff['payload']['order_id']}")
+        res = await _call(cfg, "GET", f"/external/{external}")
     except NextLevelError as ex:
         raise HTTPException(502, str(ex))
     if isinstance(res, list):

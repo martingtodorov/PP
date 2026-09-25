@@ -52,6 +52,8 @@ import email_service
 from starlette.concurrency import run_in_threadpool
 
 import currency
+import autolink
+import link_audit
 from links_map import LINK_TARGETS
 import email_templates
 import push_service
@@ -1012,7 +1014,10 @@ async def get_article(handle: str, locale: str = Query(DEFAULT_LOCALE)):
                                        "published": {"$ne": False}}, {"_id": 0, "author": 0})
     if not doc:
         raise HTTPException(404, "Статията не е намерена")
-    return {"article": localize_doc(doc, loc)}
+    # the peptides named in the copy link to the product pages that are live right now
+    prefix = "" if loc == DEFAULT_LOCALE else f"/{loc}"
+    article = await autolink.link_article(localize_doc(doc, loc), loc, href_of=lambda p: f"{prefix}{p}")
+    return {"article": article}
 
 
 @api.get("/locales")
@@ -1020,6 +1025,36 @@ async def get_locales():
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
     return {"locales": LOCALES, "meta": LOCALE_META, "routes": routes}
+
+
+class LinkAuditIn(BaseModel):
+    locale: str = DEFAULT_LOCALE
+    limit: int = 200
+
+
+@api.get("/admin/link-audit")
+async def read_link_audit(user=Depends(require_admin)):
+    doc = await db.link_audits.find_one({}, {"_id": 0}, sort=[("started_at", -1)])
+    return {"job": doc}
+
+
+@api.post("/admin/link-audit")
+async def start_link_audit(payload: LinkAuditIn, user=Depends(require_admin)):
+    """Crawl the prerendered site and list every internal link that does not answer 200."""
+    running = await db.link_audits.find_one({"status": "running"}, {"_id": 0})
+    if running:
+        fresh = (datetime.now(timezone.utc)
+                 - datetime.fromisoformat(running["updated_at"])).total_seconds() < 300
+        if fresh:
+            return {"job": running, "message": "Вече върви проверка"}
+        await db.link_audits.update_one({"id": running["id"]}, {"$set": {"status": "stopped"}})
+    loc = normalize_locale(payload.locale)
+    job = {"id": str(uuid.uuid4()), "status": "running", "locale": loc,
+           "limit": max(1, min(payload.limit, link_audit.MAX_PAGES)), "crawled": 0, "broken": [],
+           "started_at": now_utc(), "updated_at": now_utc(), "actor": user["email"]}
+    await db.link_audits.insert_one(job.copy())
+    asyncio.create_task(link_audit.run(job["id"], loc, job["limit"]))
+    return {"job": {k: v for k, v in job.items() if k != "_id"}}
 
 
 # ---------- Delisted / retired URLs (content rotation board) ----------
@@ -5046,6 +5081,17 @@ import wc_api  # noqa: E402
 api.include_router(nextlevel.init(db, require_admin))
 api.include_router(fulfillment.init(db, require_admin))
 fulfillment.set_cancel_hook(_cancel_from_warehouse)
+link_audit.init(db)
+
+
+async def _nextlevel_error_handler(request: Request, exc: Exception):
+    """A NextLevel failure is the courier's answer, not our crash: 502 with their own message."""
+    log.warning("NextLevel error on %s: %s", request.url.path, exc)
+    return JSONResponse({"detail": str(exc)}, status_code=502)
+
+
+app.add_exception_handler(nextlevel.NextLevelError, _nextlevel_error_handler)
+
 _wc_router = wc_api.init(db, fulfillment.get_config)
 app.add_exception_handler(wc_api.WCError, wc_api.wc_error_handler)
 
