@@ -1173,3 +1173,13 @@ handle на документа е новият (`retatrutide-tnn`), а `translat
   browser FAQ, science content и реална навигация към статия PASS; build PASS със стари warnings.
 - Нов ASGI read-only audit: 547 URLs, 0 broken anchor targets, 0 noncanonical; 22 sitemap 404
   само за липсващи demo about-1/cookies. Менюто остава непокътнато.
+
+## 2026-09-24 — Проверка: експорт извън Git, продукционните данни се пазят
+- По заявка за премахване на конкретния клиентски Matrixify export: установено, че файлът вече
+  е премахнат и игнориран. Потвърдено с exists/git ls-files/git check-ignore; няма повторно
+  изтриване на файлове или DB съдържание.
+- Изрично уточнение на собственика: работещата продукция запазва клиентите, поръчките и
+  останалите live данни при deploy. Няма нов purge/seed reset/автоматичен import.
+- Проверени Ansible shared-file preservation и default(false) guard за run_catalog_import;
+  11 safety/opt-in теста PASS. Старите Git комити не са пренаписвани.
+- Offer.validFrom остава без кодова промяна до потвърждение на действителната дата/политика.
