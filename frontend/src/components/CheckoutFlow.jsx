@@ -623,10 +623,6 @@ export default function CheckoutFlow() {
       <div className="nc2-dialog">
         <div className="nc2-hd">
           <img src={siteMedia("logo", "/logo-header.png")} alt="PurePeptide" className="nc2-logo" />
-          <span className="nc2-hd-title">{t("quickOrder")}</span>
-          <button type="button" className="nc2-back" onClick={() => nav(lp("/cart"))} data-testid="checkout-back-to-cart">
-            {t("backToCart")}
-          </button>
         </div>
 
         <div className="nc2-body">

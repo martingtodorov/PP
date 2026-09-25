@@ -136,3 +136,11 @@ neither its visibility nor remote history has been independently checked or alte
   existing link, hyphenated names not split). Applied at serve time in `get_article` and in
   `prerender._article`, so a rotation can never leave a dead in-copy link. 5-minute alias cache.
 - Testing: iteration_60 — backend 18/18, all targeted frontend flows pass, no open issues.
+
+## 2026-06 — Checkout re-verified + header trimmed
+- iteration_61: full manual order on /checkout (Econt office + COD) passes, validation paths,
+  empty-cart redirect, cart-drawer navigation, upsell add on the success page, /checkout noindex and
+  title without brand suffix. Backend 11/12 (1 skipped: no public active-discounts endpoint).
+- Owner request: the „Бърза поръчка" heading and the „Обратно към количката" link were removed from
+  the checkout header — only the logo remains.
+- Open, low priority: pre-existing console warning `<span> cannot be a child of <option>`.
