@@ -88,3 +88,21 @@ neither its visibility nor remote history has been independently checked or alte
   footer disappeared when clicking "Научни статии" (desktop nav, mobile sliding nav and drawer).
   Page is now wrapped in Layout; inner <main> changed to <div> to avoid nested main. Verified with
   browser: header+footer present, drawer navigation works.
+
+## 2026-06 (fork) — Checkout page, order upsells, 301 toggle
+- **Dedicated /checkout route**: the accelerated checkout left PreCheckoutModal and became
+  `components/CheckoutFlow.jsx`, rendered by a lazy-loaded `pages/CheckoutPage.jsx` inside Layout.
+  Cart drawer and /cart now navigate to /checkout; the terms checkbox lives on the checkout page;
+  an empty cart redirects to /cart. The modal is gone.
+- **Order upsells + 5-minute grace window**: every order gets `dispatch_at` = created_at + 5 min and
+  is only handed to NextLevel by `fulfillment.dispatch_when_due` / `delayed_dispatch_loop` (claimed
+  once via `dispatch_claimed_at`). New API: `GET /api/orders/{id}/upsells` (admin-pinned
+  `site.upsell_handles` first, then catalogue, excluding what is already in the order) and
+  `POST /api/orders/{id}/items` (adds to the same order, recomputes discount/totals, keeps shipping,
+  decrements stock, logs inventory; 409 after the window). UI: `components/OrderUpsells.jsx` on the
+  thank-you page with a live countdown. Pinned handles editor in Admin -> Settings.
+- **301 rotation toggle**: `GET/PUT /api/admin/rotation-policy` (settings key `rotation_policy`);
+  new rotations stamp `redirect_mode` latest_301 or none accordingly (history untouched). Switch in
+  Admin -> Изтеглени линкове (`rotation-301-toggle`).
+- Testing: iteration_59 report — backend 8/8, all targeted frontend flows pass. Known LOW,
+  pre-existing console warning: `<span> cannot be a child of <option>`.
