@@ -120,3 +120,19 @@ neither its visibility nor remote history has been independently checked or alte
 - Link audit tool added: backend/tools/link_audit.py (crawls /api/seo/prerender). Current result:
   0 dead internal links.
 - Pending, awaiting owner: NextLevel 500 -> readable 502 + 4 hardening spots; admin dead-link report.
+
+## 2026-06 — NextLevel errors, dead-link report, contextual links
+- **Readable NextLevel errors**: `app.add_exception_handler(nextlevel.NextLevelError)` turns every
+  courier failure into 502 with their own message. Hardened the four crashing spots:
+  `/nextlevel/test` (list vs paginated answer, bad sender_id), `/nextlevel/preview` (incomplete
+  payload), `create_shipment` (API answering a list) and `fulfillment.refresh_order` (order without
+  a stored NextLevel number).
+- **Dead-link report**: `backend/link_audit.py` crawls the prerendered site in-process;
+  `POST/GET /api/admin/link-audit` (job doc in `db.link_audits`, duplicate-run guard). UI card in
+  Admin -> Изтеглени линкове (`link-audit-card`, `link-audit-run`, `link-audit-result`). Current
+  result: 54 pages, 0 dead links. The standalone CLI tool was removed in favour of this.
+- **Contextual internal links**: `backend/autolink.py` links the first mention of each product in an
+  article body to the handle that is live right now (max 6 per article, never inside a heading or an
+  existing link, hyphenated names not split). Applied at serve time in `get_article` and in
+  `prerender._article`, so a rotation can never leave a dead in-copy link. 5-minute alias cache.
+- Testing: iteration_60 — backend 18/18, all targeted frontend flows pass, no open issues.
