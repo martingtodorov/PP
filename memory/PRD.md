@@ -92,6 +92,11 @@ test fixtures. Never delete or overwrite production records/media.
   `_alert_if_stuck` при паркирана пратка. Дедупликация по текста на грешката / по статуса.
 - Проверено: iteration_66 (12/12 pytest + UI на 1920 и 390 px).
 
+## 2026-06-25 — Upsells на мобилно + текст
+- Upsell картите на телефон са в **2 колони** (`grid-cols-2`, 4 продукта = 2 реда); от `lg` остават 4.
+- Текстът е „Поръчката ви е успешно направена!" + „Желаете ли да добавите някой от тези продукти? …"
+  (`upsellTitle` / `upsellNote` в `i18n/checkoutStrings.js`, bg + en; другите езици падат към en).
+
 ## Backlog- P1: catalog sync throttling (rate-limited external source).
 - P1: decide the 404 strategy for the 474 legacy URLs (301 to the closest live handle vs 410).
 - P2: product reviews with ratings; post-delivery review request emails.

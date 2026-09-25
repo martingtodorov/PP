@@ -61,7 +61,7 @@ export const OrderUpsells = ({ orderId, onAdded }) => {
       </div>
       <p className="text-sm text-slate-600 mt-2">{t("upsellNote")}</p>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid gap-3 grid-cols-2 sm:gap-4 lg:grid-cols-4">
         {products.map((p) => {
           const variants = p.variants || [];
           const sku = chosen[p.handle] || variants[0]?.sku;
