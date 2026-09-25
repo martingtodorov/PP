@@ -1,4 +1,4 @@
-"""Extra live coverage for iter52: brand-suffix titles, rotation 404s, product JSON-LD, sitemap image ns."""
+"""Extra live coverage for iter52: titles as entered, rotation 404s, product JSON-LD, sitemap image ns."""
 import re
 import requests
 
@@ -25,11 +25,13 @@ def test_title_suffix_home_no_double_brand():
     assert t.count("PurePeptide") == 1, t
 
 
-def test_title_suffix_product():
+def test_title_of_a_product_is_the_stored_one():
+    """No brand suffix is appended any more (owner's call): the title is what the admin holds."""
     r = _prerender("/products/21-retatrutide-5-lrp")
     assert r.status_code == 200
     t = _title(r.text)
-    assert t.endswith("- PurePeptide"), t
+    meta = requests.get(f"{API}/products/21-retatrutide-5-lrp", params={"locale": "bg"}, timeout=30).json()["product"]
+    assert t == (meta.get("seo_title") or meta.get("title")), t
 
 
 def test_title_suffix_cart_and_track():

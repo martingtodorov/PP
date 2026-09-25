@@ -1,4 +1,4 @@
-"""Brand suffix in every title, one live URL per rotated product, images in the sitemap."""
+"""Titles are published exactly as entered, one live URL per rotated product, images in the sitemap."""
 import os
 import re
 import sys
@@ -17,28 +17,41 @@ API = "http://localhost:8001/api"
 ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 
 
-# ---------- brand suffix ----------
+# ---------- the owner's title, byte-for-byte ----------
 
 @pytest.mark.parametrize("raw,expected", [
-    ("Ретатрутид (Retatrutide) 5/10/30mg | цена", "Ретатрутид (Retatrutide) 5/10/30mg | цена - PurePeptide"),
-    ("Сермарелин", "Сермарелин - PurePeptide"),
-    ("PurePeptide – Nº1 пептиди", "PurePeptide – Nº1 пептиди"),   # already names the brand
-    ("", "PurePeptide"),
-    ("Цена на GH| пептид", "Цена на GH | пептид - PurePeptide"),  # pipe spacing kept
+    ("Ретатрутид (Retatrutide) 5/10/30mg | цена", "Ретатрутид (Retatrutide) 5/10/30mg | цена"),
+    ("Сермарелин", "Сермарелин"),
+    ("PurePeptide – Nº1 пептиди", "PurePeptide – Nº1 пептиди"),
+    ("", "PurePeptide"),                             # only an empty title falls back to the brand
+    ("Цена на GH| пептид", "Цена на GH| пептид"),    # no re-spacing either
 ])
 def test_brand_title(raw, expected):
     assert prerender.brand_title(raw) == expected
 
 
-def test_frontend_mirrors_the_suffix():
+def test_frontend_mirrors_the_title_policy():
     seo = open(os.path.join(ROOT, "frontend", "src", "lib", "seo.js")).read()
     assert 'const BRAND = "PurePeptide"' in seo
-    assert "${text} - ${BRAND}" in seo
+    assert "${text} - ${BRAND}" not in seo           # no automatic brand suffix any more
     assert "brandTitle(title)" in seo
     pages = os.path.join(ROOT, "frontend", "src", "pages")
     for name in os.listdir(pages):
         if name.endswith(".jsx"):
             assert " | PurePeptide" not in open(os.path.join(pages, name)).read(), name
+
+
+def test_no_boot_task_rewrites_a_title():
+    """A deploy may fix body copy, never a title the owner maintains himself."""
+    assert server._fix_typos({"title": "удобрени пептиди"}) == {"title": "удобрени пептиди"}
+    assert server._fix_typos({"seo_title": "удобрени"}) == {"seo_title": "удобрени"}
+    assert server._fix_typos({"description": "удобрени"}) == {"description": "одобрени"}
+    assert server._fix_typos({"translations": {"en": {"title": "удобрени", "body": "удобрени"}}}) == {
+        "translations": {"en": {"title": "удобрени", "body": "одобрени"}}}
+    src = open(os.path.join(ROOT, "backend", "server.py")).read()
+    resume = src.split("async def resume_translate_jobs", 1)[1].split("async def _missing_translations", 1)[0]
+    assert 'job.get("locales") or [], False)' in resume      # never overwrite on a deploy
+    assert "RESTORE_BODY_HEADINGS" in src                    # heading restore is opt-in
 
 
 # ---------- one live URL per rotated document ----------

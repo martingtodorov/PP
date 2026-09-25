@@ -167,12 +167,11 @@ BRAND_SUFFIX = f" - {BRAND}"
 
 
 def brand_title(title: str) -> str:
-    """Shopify parity: every title ends with " - PurePeptide" unless it already names the brand.
+    """The owner's title is published byte-for-byte (owner's call, 06.2026): no brand suffix and no
+    re-spacing, so a deploy can never rewrite a SEO title — only the admin panel can.
     Mirrored in frontend/src/lib/seo.js — bots and browsers must see the same <title>."""
-    text = _tidy(str(title or ""))
-    if not text:
-        return BRAND
-    return text if BRAND.lower() in text.lower() else text + BRAND_SUFFIX
+    text = str(title or "").strip()
+    return text or BRAND
 
 
 def _head(locale: str, route: str, title: str, description: str, image: str,

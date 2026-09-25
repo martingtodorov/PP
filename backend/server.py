@@ -427,17 +427,21 @@ async def run_once(name: str, fn):
 
 
 TYPO_FIXES = {"удобрени": "одобрени", "паренетерално": "парентерално"}
+# a boot task must never rewrite a title the owner maintains himself (owner's call, 06.2026)
+PROTECTED_TITLE_FIELDS = ("title", "seo_title", "menu_title", "subtitle")
 
 
-def _fix_typos(value: Any) -> Any:
+def _fix_typos(value: Any, key: str = "") -> Any:
+    if key in PROTECTED_TITLE_FIELDS:
+        return value
     if isinstance(value, str):
         for bad, good in TYPO_FIXES.items():
             value = value.replace(bad, good)
         return value
     if isinstance(value, dict):
-        return {k: _fix_typos(v) for k, v in value.items()}
+        return {k: _fix_typos(v, k) for k, v in value.items()}
     if isinstance(value, list):
-        return [_fix_typos(v) for v in value]
+        return [_fix_typos(v, key) for v in value]
     return value
 
 
@@ -643,10 +647,12 @@ async def on_startup():
     asyncio.create_task(fulfillment.delayed_dispatch_loop())
     asyncio.create_task(wc_api.backfill_wc_ids())
     from restore_headings import restore_headings
-    try:
-        await run_once("restore_body_headings", lambda: restore_headings(db, storage))
-    except Exception as ex:
-        log.error("Heading restore failed: %s", ex)
+    # a deploy must not rewrite the headings the owner maintains — opt in explicitly
+    if (os.environ.get("RESTORE_BODY_HEADINGS") or "").strip().lower() in ("1", "true", "yes"):
+        try:
+            await run_once("restore_body_headings", lambda: restore_headings(db, storage))
+        except Exception as ex:
+            log.error("Heading restore failed: %s", ex)
     await resume_translate_jobs()
     asyncio.create_task(auto_translate_watch())
     asyncio.create_task(daily_report_loop())
@@ -4502,13 +4508,18 @@ async def _run_bulk_translate(job_id: str, resource: str, targets: List[str], ov
 
 
 async def resume_translate_jobs():
-    """A deploy or restart must not lose a queued translation — pick it up where it stopped."""
+    """A deploy or restart must not lose a queued translation — pick it up where it stopped.
+
+    The resumed run never overwrites existing copy: a job started with „overwrite" in the admin
+    panel must not silently rewrite titles again on the next deploy (owner's call, 06.2026).
+    """
     job = await db.translate_jobs.find_one({"status": {"$in": ["queued", "running"]}}, {"_id": 0},
                                            sort=[("created_at", -1)])
     if job:
-        log.info("Resuming translation job %s (%s/%s)", job["id"], job.get("done"), job.get("total"))
+        log.info("Resuming translation job %s (%s/%s), overwrite disabled on resume",
+                 job["id"], job.get("done"), job.get("total"))
         asyncio.create_task(_run_bulk_translate(job["id"], job.get("resource", "everything"),
-                                                job.get("locales") or [], bool(job.get("overwrite"))))
+                                                job.get("locales") or [], False))
 
 
 async def _missing_translations(targets: List[str]) -> int:

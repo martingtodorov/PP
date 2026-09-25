@@ -32,13 +32,9 @@ const BRAND = "PurePeptide";
 export const alternateHref = (hreflang) =>
   document.head.querySelector(`link[rel="alternate"][hreflang="${hreflang}"]`)?.getAttribute("href") || "";
 
-/* Shopify parity: every title ends with " - PurePeptide" unless it already names the brand.
-   Mirrored in backend/prerender.py `brand_title` — bots and browsers must see the same <title>. */
-export const brandTitle = (title) => {
-  const text = String(title || "").replace(/\s*\|\s*/g, " | ").trim();
-  if (!text) return BRAND;
-  return text.toLowerCase().includes(BRAND.toLowerCase()) ? text : `${text} - ${BRAND}`;
-};
+/* The owner's title is published byte-for-byte (owner's call, 06.2026): no brand suffix, no
+   re-spacing. Mirrored in backend/prerender.py `brand_title`. */
+export const brandTitle = (title) => String(title || "").trim() || BRAND;
 
 /**
  * SEO head manager: title, description, canonical, hreflang alternates and JSON-LD.
