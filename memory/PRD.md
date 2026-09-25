@@ -69,8 +69,18 @@ test fixtures. Never delete or overwrite production records/media.
   Duplicate Google chose different canonical (7), access forbidden 403 (1)**. In GSC: click the
   reason row → the examples table → Export.
 
-## Backlog
-- P1: catalog sync throttling (rate-limited external source).
+## 2026-06-25 — 403 за датацентър IP-та (Cloudflare Bot Fight Mode)
+- Причината НЕ е в приложението: nginx има само гео-403, а той е изключен (`blocked_countries: []`);
+  origin-ът връща 200 за всички пътища и UA-и. Собственикът потвърди, че виновникът е
+  **Cloudflare → Security → Bots → Bot Fight Mode** (блокира датацентър ASN-и на ръба и не може да
+  се заобиколи със WAF skip на безплатния план).
+- Документирано в `deploy/hetzner/CLOUDFLARE_BOT_FIGHT_MODE.md` (как се изключва + какво да сложи
+  вместо него: rate limiting за /api/auth/login, /api/checkout, /api/orders/track и Managed
+  Challenge само за /admin*).
+- Повторяем тест: `backend/tests/test_cloudflare_bot_fight_mode.py` (iteration_65, 41/41 passed) —
+  пуска се от всеки IP и събира `cf-ray` за тикет към Cloudflare, ако 403-ката се върне.
+
+## Backlog- P1: catalog sync throttling (rate-limited external source).
 - P1: decide the 404 strategy for the 474 legacy URLs (301 to the closest live handle vs 410).
 - P2: product reviews with ratings; post-delivery review request emails.
 - P2: iOS Safari autofill feedback.
