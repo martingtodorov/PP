@@ -780,6 +780,12 @@ def _set_lang(html: str, locale: str) -> str:
     return re.sub(r"<html\b", f'<html lang="{lang}"', html, count=1)
 
 
+def _private_shell(html: str) -> str:
+    """Cart/checkout/account/track: no canonical, robots noindex — same verdict as React."""
+    out = re.sub(r'<meta\s+name="robots"[^>]*>', "", html)
+    return out.replace("</head>", '<meta name="robots" content="noindex, follow"></head>', 1)
+
+
 def _inject(shell: str, head: str, body: str, locale: str = DEFAULT_LOCALE) -> str:
     """Our tags win: drop the static title/description/OG of the shell, then add ours.
 
@@ -816,7 +822,9 @@ async def render(path: str, host: str) -> Optional[Tuple[str, int]]:
         return None
     locale = normalize_locale(locale_of(host, clean))
     if route.startswith(PRIVATE_PREFIXES):
-        return _set_lang(shell, locale), 200
+        # the shell says index, React says noindex — Google filed 177 URLs as "excluded by noindex"
+        # after rendering. The crawler HTML must say the same thing the app says.
+        return _private_shell(_set_lang(shell, locale)), 200
     if looks_like_a_file:
         return _set_lang(shell, locale), 404
     try:

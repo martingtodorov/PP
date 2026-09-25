@@ -11,6 +11,7 @@ import Breadcrumbs from "../components/Breadcrumbs";
 import StickyBuyBar from "../components/StickyBuyBar";
 import { api, fmtPrice, fmtBGN, showsBGN, img, isMissing } from "../lib/api";
 import { useCart } from "../context/CartContext";
+import { gaViewItem } from "../lib/ga4";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { PRODUCT_BLOCKS, pick, LOCALES } from "../i18n/locales";
 import { useSeo } from "../lib/seo";
@@ -85,6 +86,10 @@ export default function ProductPage() {
 
   const p = data.product;
   const v = p?.variants?.[variantIdx];
+
+  useEffect(() => {
+    if (p && v) gaViewItem(p, v);
+  }, [p?.handle]);  // eslint-disable-line react-hooks/exhaustive-deps
   const alternates = {};
   if (p?.handles) LOCALES.forEach((l) => { alternates[l] = `/products/${p.handles[l]}`; });
 
@@ -111,7 +116,6 @@ export default function ProductPage() {
   });
 
   if (gone) return <Layout><NotFoundBlock /></Layout>;
-
   /* Skeleton mirrors the real layout AND reserves the full page height, so nothing that is visible
      in the viewport moves when the product arrives (CLS) */
   if (!p) return (

@@ -54,6 +54,9 @@ DEFAULT_SETTINGS = {
     "resend_api_key": "", "resend_from": "", "bank_name": "", "bank_iban": "",
     "bank_bic": "", "bank_holder": "", "company_name": "", "company_eik": "",
     "company_vat": "", "company_address": "", "discount_codes": [],
+    # Google Analytics 4: one shop-wide measurement ID, with an optional per-locale/per-domain
+    # override ({"bg": "G-…", "en": "G-…"}). Public IDs, so they travel with /api/settings.
+    "ga4_measurement_id": "", "ga4_ids": {},
     "locale_routes": {loc: {**route, "home_path": "/", "enabled": True}
                       for loc, route in SITE_ORIGINS.items()},
 }

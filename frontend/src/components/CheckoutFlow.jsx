@@ -6,6 +6,7 @@ import { link } from "../lib/links";
 import { api, fmtPrice, fmtAmount, amountOf, cartAmounts, fmtBGN, showsBGN, img, formatErr } from "../lib/api";
 import { loadSaved, saveCheckout, pfCountries, pfGeo, pfDeviceGeo, pfConfig, pfPickups } from "../lib/checkoutPrefetch";
 import { useCart } from "../context/CartContext";
+import { gaBeginCheckout } from "../lib/ga4";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { LOCALE_META, countryForLocale } from "../i18n/locales";
 
@@ -366,6 +367,7 @@ export default function CheckoutFlow() {
     // the permission dialog is asked for only when the visitor taps "find the nearest to me"
     locate({ prompt: false });
     track("checkout_opened");
+    gaBeginCheckout(items, total);
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // visitor's country from IP — only when the storefront has no country of its own (owner's rule:

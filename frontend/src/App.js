@@ -7,6 +7,7 @@ import { CartProvider } from "./context/CartContext";
 import { LocaleProvider } from "./i18n/LocaleContext";
 import { LOCALES, DEFAULT_LOCALE } from "./i18n/locales";
 import Layout from "./components/Layout";
+import Analytics from "./components/Analytics";
 import NotFoundBlock from "./components/NotFoundBlock";
 import HomePage from "./pages/HomePage";
 import CollectionPage from "./pages/CollectionPage";
@@ -85,6 +86,7 @@ function App() {
           <BrowserRouter>
             <LocaleProvider>
               <ScrollToTop />
+              <Analytics />
               <Toaster position="top-right" richColors />
               <Routes>
                 {PREFIXES.map((prefix) =>

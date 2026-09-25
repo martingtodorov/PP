@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { api } from "../lib/api";
+import { gaAddToCart } from "../lib/ga4";
 
 const CartCtx = createContext(null);
 const KEY = "pp_cart_v1";
@@ -62,6 +63,7 @@ export const CartProvider = ({ children }) => {
   }, [note, discount, hydrated]);
 
   const add = (product, variant, quantity = 1) => {
+    gaAddToCart(product, variant, quantity);
     setItems((cur) => {
       const idx = cur.findIndex((x) => x.product_id === product.id && x.variant_sku === variant.sku);
       if (idx >= 0) {

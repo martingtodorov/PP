@@ -5047,11 +5047,12 @@ async def robots(request: Request):
         "Content-Signal: search=yes, ai-input=yes, ai-train=yes, use=full",
         "Allow: /",
         "Disallow: /admin",
-        "Disallow: /checkout",
-        "Disallow: /cart",
-        "Disallow: /account",
+        "Disallow: /*/admin",
         "",
     ]
+    # cart/checkout/account/track are NOT disallowed any more: a blocked URL keeps Google from ever
+    # seeing the noindex, so GSC listed them as "blocked by robots.txt" instead of dropping them.
+    # They answer noindex (prerender._private_shell + React), which is what removes them for good.
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     routes = ((s or {}).get("value") or {}).get("locale_routes") or SITE_ORIGINS
     # a domain advertises its OWN sitemaps only — the other storefronts have their own robots.txt

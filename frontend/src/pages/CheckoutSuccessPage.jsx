@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { CheckCircle2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import Layout from "../components/Layout";
+import { gaPurchase } from "../lib/ga4";
 import { useSeo } from "../lib/seo";
 import { Button } from "../components/ui/button";
 import { api, fmtEUR, fmtAmount, amountOf, fmtBGN, showsBGN } from "../lib/api";
@@ -28,6 +29,11 @@ export default function CheckoutSuccessPage() {
       .catch(() => {});
   }, [orderId]);
   useEffect(() => { load(); }, [load]);
+
+  /* GA4 revenue: once per order number, a refresh must not count the sale twice */
+  useEffect(() => {
+    if (data?.order) gaPurchase(data.order);
+  }, [data?.order]);
 
   if (!data) return <Layout><div className="max-w-3xl mx-auto py-20 px-4 text-slate-500">{t("loadingText")}</div></Layout>;
   const { order, bank_transfer } = data;

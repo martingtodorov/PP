@@ -8,6 +8,14 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { api, formatErr } from "../lib/api";
 
+/* GA4 ID per storefront — empty means "use the shop-wide ID above" */
+const GA_DOMAINS = [
+  ["bg", "purepeptide.bg (български)"],
+  ["en", "purepeptide.eu (английски и /de /fr /pl /cz /hu /sk /si)"],
+  ["gr", "purepeptide.gr (гръцки)"],
+  ["ro", "purepeptide.ro (румънски)"],
+];
+
 export default function AdminSettingsPage() {
   const [s, setS] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -68,6 +76,31 @@ export default function AdminSettingsPage() {
               <div className="flex-1"><Label>Тестов имейл до</Label><Input value={testTo} onChange={(e) => setTestTo(e.target.value)} data-testid="test-email-input" /></div>
               <Button type="button" variant="outline" onClick={sendTest} disabled={busy || !testTo} data-testid="test-email-btn">Изпрати тест</Button>
             </div>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-200 pt-5">
+          <h2 className="font-bold text-slate-900 mb-3">Google Analytics 4</h2>
+          <p className="text-xs text-slate-500 mb-3">
+            Един Measurement ID може да обслужва всички домейни (в GA4 разделяш по „Hostname").
+            Ако искаш отделно измерване за даден домейн, попълни ID само за него по-долу.
+            Зарежда се само след като посетителят приеме аналитичните бисквитки.
+          </p>
+          <div>
+            <Label>Measurement ID (за всички домейни)</Label>
+            <Input className="font-mono" placeholder="G-XXXXXXXXXX" value={s.ga4_measurement_id || ""}
+              onChange={(e) => set("ga4_measurement_id", e.target.value.trim())} data-testid="set-ga4-id" />
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4 mt-4">
+            {GA_DOMAINS.map(([loc, label]) => (
+              <div key={loc}>
+                <Label>{label}</Label>
+                <Input className="font-mono" placeholder="(използва общия ID)"
+                  value={(s.ga4_ids || {})[loc] || ""}
+                  onChange={(e) => set("ga4_ids", { ...(s.ga4_ids || {}), [loc]: e.target.value.trim() })}
+                  data-testid={`set-ga4-id-${loc}`} />
+              </div>
+            ))}
           </div>
         </div>
 
