@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { link } from "../lib/links";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { followRotation } from "../lib/rotationRedirect";
 import Layout, { USPRow } from "../components/Layout";
 import ProductCard from "../components/ProductCard";
 import NotFoundBlock from "../components/NotFoundBlock";
@@ -15,6 +16,7 @@ import { demoteHeadings, dropLeadingHeading } from "../lib/richText";
 
 export default function CollectionPage() {
   const { handle = "2all-the-peptides-1" } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState({ collection: null, products: [], siblings: [] });
   const [sort, setSort] = useState("featured");
   const [gone, setGone] = useState(false);
@@ -22,8 +24,12 @@ export default function CollectionPage() {
 
   useEffect(() => {
     setGone(false);
-    api.get(`/collections/${handle}`).then(({ data }) => setData(data)).catch((e) => setGone(isMissing(e)));
-  }, [handle, locale]);
+    let active = true;
+    api.get(`/collections/${handle}`).then((response) => {
+      if (active && !followRotation(response, "collections", handle, navigate)) setData(response.data);
+    }).catch((e) => { if (active) setGone(isMissing(e)); });
+    return () => { active = false; };
+  }, [handle, locale, navigate]);
 
   const c = data.collection;
   const descText = (c?.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();

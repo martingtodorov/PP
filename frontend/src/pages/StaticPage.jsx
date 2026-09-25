@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { followRotation } from "../lib/rotationRedirect";
 import Layout, { USPRow } from "../components/Layout";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PPCalculator from "../components/PPCalculator";
@@ -72,6 +73,7 @@ const PAGE_TITLES = {
 
 export default function StaticPage() {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const { lp, t, locale } = useLocaleCtx();
   const [articles, setArticles] = useState([]);
   const [articlesSeo, setArticlesSeo] = useState(null);
@@ -94,10 +96,12 @@ export default function StaticPage() {
     setFaqOpen("");
     if (slug === "articles") return;
     let active = true;
-    api.get(`/pages/${slug}`).then(({ data }) => { if (active) setRemote(data.page); })
+    api.get(`/pages/${slug}`).then((response) => {
+      if (active && !followRotation(response, "pages", slug, navigate)) setRemote(response.data.page);
+    })
       .catch(() => { if (active) setRemote(null); });
     return () => { active = false; };
-  }, [slug, locale]);
+  }, [slug, locale, navigate]);
 
   const table = BODY[locale] || BODY.en;
   const fallback = table[slug] || BODY.en[slug] || null;
