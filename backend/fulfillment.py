@@ -486,6 +486,43 @@ async def dispatch_new_order(order_id: str):
         log.exception("Fulfillment auto-create for %s crashed", order_id)
 
 
+GRACE_SEC = 300
+
+
+async def dispatch_if_due(order_id: str) -> bool:
+    """Claim the order once — the in-process timer and the sweeper must never submit it twice."""
+    res = await _db.orders.update_one(
+        {"id": order_id, "dispatch_claimed_at": {"$exists": False}, "status": {"$ne": "cancelled"}},
+        {"$set": {"dispatch_claimed_at": _now()}})
+    if not res.matched_count:
+        return False
+    await dispatch_new_order(order_id)
+    return True
+
+
+async def dispatch_when_due(order_id: str, seconds: float = GRACE_SEC) -> None:
+    """The customer may still add products for five minutes; only then the order leaves for NextLevel."""
+    try:
+        await asyncio.sleep(max(seconds, 0))
+        await dispatch_if_due(order_id)
+    except Exception:
+        log.exception("Delayed dispatch for %s crashed", order_id)
+
+
+async def delayed_dispatch_loop():
+    """Safety net for the timer above: a restart must not leave an order sitting in its grace window."""
+    while True:
+        try:
+            due = await _db.orders.find(
+                {"dispatch_at": {"$lte": _now()}, "dispatch_claimed_at": {"$exists": False},
+                 "status": {"$ne": "cancelled"}}, {"_id": 0, "id": 1}).to_list(200)
+            for o in due:
+                await dispatch_if_due(o["id"])
+        except Exception as ex:
+            log.warning("Delayed dispatch sweep: %s", ex)
+        await asyncio.sleep(60)
+
+
 async def on_paid(order_id: str):
     """Marking a bank transfer as paid does NOT submit it either — submission stays manual."""
     return

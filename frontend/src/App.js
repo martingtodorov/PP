@@ -1,5 +1,5 @@
 import "@/App.css";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./context/AuthContext";
@@ -13,7 +13,9 @@ import CollectionPage from "./pages/CollectionPage";
 import ProductPage from "./pages/ProductPage";
 import ArticlePage from "./pages/ArticlePage";
 import CartPage from "./pages/CartPage";
-import CheckoutPage from "./pages/CheckoutPage";
+/* the accelerated checkout (couriers, offices, address autocomplete) is a page of its own now and
+   is only downloaded when somebody actually goes to pay */
+const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
 import CheckoutSuccessPage from "./pages/CheckoutSuccessPage";
 import AccountPage from "./pages/AccountPage";
 import TrackOrderPage from "./pages/TrackOrderPage";
@@ -50,7 +52,7 @@ const STOREFRONT = [
   { path: "/products/:handle", el: <ProductPage /> },
   { path: "/articles/:handle", el: <ArticlePage /> },
   { path: "/cart", el: <CartPage /> },
-  { path: "/checkout", el: <CheckoutPage /> },
+  { path: "/checkout", el: <Suspense fallback={<div className="min-h-screen bg-white" />}><CheckoutPage /></Suspense> },
   { path: "/checkout/success/:orderId", el: <CheckoutSuccessPage /> },
   { path: "/track", el: <TrackOrderPage /> },
   { path: "/pages/articles", el: <ArticlesIndexPage /> },

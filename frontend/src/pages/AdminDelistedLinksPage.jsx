@@ -21,9 +21,23 @@ export default function AdminDelistedLinksPage() {
   const [busy, setBusy] = useState(false);
   const [bulk, setBulk] = useState("");
   const [rotating, setRotating] = useState("");
+  const [rotation301, setRotation301] = useState(null);
+
+  const loadPolicy = () => api.get("/admin/rotation-policy")
+    .then(({ data }) => setRotation301(!!data.enabled)).catch(() => {});
+
+  const saveRotationPolicy = async () => {
+    const next = !rotation301;
+    setBusy(true);
+    try {
+      const { data } = await api.put("/admin/rotation-policy", { enabled: next });
+      setRotation301(!!data.enabled);
+      toast.success(data.enabled ? "Ротациите ще оставят 301" : "Ротациите вече няма да оставят 301");
+    } catch (err) { toast.error(formatErr(err)); } finally { setBusy(false); }
+  };
 
   const load = () => api.get("/admin/delisted-links").then(({ data }) => setLinks(data.links));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadPolicy(); }, []);
 
   const add = async (e) => {
     e.preventDefault();
@@ -159,6 +173,28 @@ export default function AdminDelistedLinksPage() {
           Бъдещите ротации дават <span className="font-semibold text-slate-700">301 директно към последния активен адрес</span>,
           без верига. Старите записи не се променят автоматично; изтритото или скритото съдържание остава 404.
         </p>
+        <div className="flex items-start justify-between gap-4 mb-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">301 пренасочване при ротация</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Включено: старият адрес получава 301 към новия. Изключено: смяната на handle е „тиха“ —
+              старият адрес остава 404 и не се картографира. Важи само за нови ротации.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={saveRotationPolicy}
+            disabled={rotation301 === null || busy}
+            role="switch"
+            aria-checked={!!rotation301}
+            className={`shrink-0 relative h-7 w-12 rounded-full transition-colors disabled:opacity-50 ${
+              rotation301 ? "bg-coral-600" : "bg-slate-300"
+            }`}
+            data-testid="rotation-301-toggle"
+          >
+            <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${rotation301 ? "left-6" : "left-1"}`} />
+          </button>
+        </div>
         <textarea
           rows={4}
           value={bulk}

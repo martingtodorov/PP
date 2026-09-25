@@ -8,6 +8,7 @@ import { Button } from "../components/ui/button";
 import { api, fmtEUR, fmtAmount, amountOf, fmtBGN, showsBGN } from "../lib/api";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import CancelOrderButton from "../components/CancelOrderButton";
+import OrderUpsells from "../components/OrderUpsells";
 
 export default function CheckoutSuccessPage() {
   const { t } = useLocaleCtx();
@@ -45,6 +46,8 @@ export default function CheckoutSuccessPage() {
             {t("orderWord")} <span className="font-mono font-semibold text-slate-900" data-testid="order-number">{order.order_number}</span>
           </p>
         </div>
+
+        <OrderUpsells orderId={orderId} onAdded={load} />
 
         <section className="mt-10 bg-white border border-slate-200 rounded-xl p-8" data-testid="order-tracking">
           <h2 className="font-display font-bold text-xl text-slate-900">{t("trackingTitle")}</h2>
