@@ -1504,13 +1504,14 @@ ORDER_CODE_DIGITS = "0123456789"
 
 
 async def _next_order_number() -> str:
-    """Random 5-character order code: 3 letters + 2 digits (e.g. KTX48)."""
+    """Random 6-character order code: 4 letters + 2 digits (e.g. KTXQ48)."""
     for _ in range(50):
-        code = "".join(secrets.choice(ORDER_CODE_LETTERS) for _ in range(3)) + \
+        code = "".join(secrets.choice(ORDER_CODE_LETTERS) for _ in range(4)) + \
                "".join(secrets.choice(ORDER_CODE_DIGITS) for _ in range(2))
         if not await db.orders.find_one({"order_number": code}):
             return code
-    return "".join(secrets.choice(ORDER_CODE_LETTERS + ORDER_CODE_DIGITS) for _ in range(5))
+    return "".join(secrets.choice(ORDER_CODE_LETTERS) for _ in range(4)) + \
+           "".join(secrets.choice(ORDER_CODE_DIGITS) for _ in range(2))
 
 
 async def _resolve_discount(code: str, subtotal: float) -> Dict[str, Any]:

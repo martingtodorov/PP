@@ -415,6 +415,9 @@ export default function CheckoutFlow() {
     return seen.map((d) => t(DEST_KEY[d])).join(" / ");
   };
 
+  // the domestic trio ships in 1-3 working days, the rest of the EU in 5-8
+  const etaDays = ["BG", "GR", "RO"].includes(contact.country) ? "1–3" : "5–8";
+
   // cash on delivery is the default where we ship it — prepaid-only markets (Spain) get bank transfer
   const prevCountry = useRef(contact.country);
   useEffect(() => {
@@ -659,6 +662,9 @@ export default function CheckoutFlow() {
                 </div>
 
                 <h2 className="nc2-sec-title mt-6">{t("deliverySection")}</h2>
+                <p className="nc2-eta" data-testid="pc-delivery-eta">
+                  {t("deliveryEta", { days: etaDays })}
+                </p>
                 <div className="nc2-couriers" data-testid="pc-couriers">
                   {(cfg.delivery_providers || []).map((p) => (
                     <button key={p.key} type="button"
