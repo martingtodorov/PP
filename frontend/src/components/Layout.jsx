@@ -16,8 +16,8 @@ import { LocaleSwitcher } from "./LocaleSwitcher";
 import { rememberLocale } from "../i18n/geoLocale";
 import { api, fmtPrice, fmtBGN, showsBGN, formatErr, img } from "../lib/api";
 import { toast } from "sonner";
-import PreCheckoutModal from "./PreCheckoutModal";
 import CookieConsent from "./CookieConsent";
+
 import { setSiteMedia, siteMedia, setShippingInfo } from "../lib/media";
 import { alternateHref } from "../lib/seo";
 import { prefetchCheckout } from "../lib/checkoutPrefetch";
@@ -263,8 +263,6 @@ const CartDrawer = () => {
   } = useCart();
   const { lp, t, locale } = useLocaleCtx();
   const [code, setCode] = useState("");
-  const [terms, setTerms] = useState(false);
-  const [preCheckout, setPreCheckout] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
@@ -287,17 +285,12 @@ const CartDrawer = () => {
   };
 
   const goCheckout = () => {
-    if (!terms) {
-      toast.error(t("termsRequired"));
-      return;
-    }
     setOpen(false);
-    setPreCheckout(true);
+    nav(lp("/checkout"));
   };
 
   return (
     <>
-    <PreCheckoutModal open={preCheckout} onClose={() => setPreCheckout(false)} termsAccepted={terms} />
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent className="w-[88vw] sm:w-[400px] sm:max-w-none flex flex-col p-0" data-testid="cart-drawer">
         <div className="pp-drawer-right flex flex-col h-full min-h-0">
@@ -411,26 +404,9 @@ const CartDrawer = () => {
               <Price eur={total} className="font-bold" />
             </div>
 
-            <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={terms}
-                onChange={(e) => setTerms(e.target.checked)}
-                className="mt-0.5 accent-coral-600"
-                data-testid="cart-terms-checkbox"
-              />
-              <span>
-                {t("termsConsent18")}{" "}
-                <Link to={lp(link("terms"))} className="underline hover:text-coral-600" target="_blank">
-                  {t("termsLinkLabel")}
-                </Link>
-              </span>
-            </label>
-
             <Button
-              className="w-full h-14 text-base sm:text-lg font-semibold bg-coral-600 hover:bg-coral-700 disabled:opacity-50"
+              className="w-full h-14 text-base sm:text-lg font-semibold bg-coral-600 hover:bg-coral-700"
               onClick={goCheckout}
-              disabled={!terms}
               data-testid="cart-checkout-btn"
             >
               {t("checkout")}

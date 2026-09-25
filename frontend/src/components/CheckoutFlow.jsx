@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, Minus, Plus, Trash2, Loader2, Check, Search } from "lucide-react";
+import { Minus, Plus, Trash2, Loader2, Check, Search } from "lucide-react";
 import { toast } from "sonner";
+import { link } from "../lib/links";
 import { api, fmtPrice, fmtAmount, amountOf, cartAmounts, fmtBGN, showsBGN, img, formatErr } from "../lib/api";
 import { loadSaved, saveCheckout, pfCountries, pfGeo, pfDeviceGeo, pfConfig, pfPickups } from "../lib/checkoutPrefetch";
 import { siteMedia } from "../lib/media";
@@ -295,7 +296,7 @@ const AddressSuggest = ({ mode, value, onPick, onChangeText, placeholder, placeI
   );
 };
 
-export default function PreCheckoutModal({ open, onClose, termsAccepted = false }) {
+export default function CheckoutFlow() {
   const nav = useNavigate();
   const { lp, locale, t } = useLocaleCtx();
   const { items, updateQty, remove, subtotal, discount, discountAmount, applyDiscount, clear } = useCart();
@@ -323,12 +324,12 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
   const placed = useRef(false);
 
   // lock the page behind the overlay, the overlay itself scrolls
+  const [termsAccepted, setTermsAccepted] = useState(false);
+
+  // an empty cart has nothing to check out
   useEffect(() => {
-    if (!open) return undefined;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, [open]);
+    if (!items.length && !placed.current) nav(lp("/cart"), { replace: true });
+  }, [items.length]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   /** The device position is the only accurate source of the visitor's city. */
   const [locateErr, setLocateErr] = useState("");
@@ -366,7 +367,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
     // the permission dialog is asked for only when the visitor taps "find the nearest to me"
     locate({ prompt: false });
     track("checkout_opened");
-  }, [open]);
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // visitor's country from IP — only when the storefront has no country of its own (owner's rule:
   // the domain wins, e.g. a Greek visitor on purepeptide.ro still gets Romania) and nothing was remembered
@@ -380,7 +381,6 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
 
   // couriers and prices depend on the destination country
   useEffect(() => {
-    if (!open) return;
     setCfg(null);
     /* clear the previous country's courier first — a stale selection must never reach checkout */
     setProvider("");
@@ -395,7 +395,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
         setMethodKey(def ? def.key : "");
       })
       .catch((e) => setErr(formatErr(e)));
-  }, [open, contact.country]);
+  }, [contact.country]);
 
   const methods = useMemo(
     () => (cfg?.delivery_methods || []).filter((m) => m.provider_key === provider),
@@ -542,14 +542,14 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
 
   // remember everything for 90 days
   useEffect(() => {
-    if (!open || !cfg) return;
+    if (!cfg) return;
     saveCheckout({ contact, methodKey: method?.key || methodKey, provider, pickup, addr, payment,
                    dialTouched: dialTouched.current });
-  }, [open, cfg, contact, method, methodKey, provider, pickup, addr, payment]);
+  }, [cfg, contact, method, methodKey, provider, pickup, addr, payment]);
 
   // abandoned cart capture — as soon as we have a usable email, never after the order is placed
   useEffect(() => {
-    if (!open || placed.current || !items.length || !EMAIL_RE.test(contact.email)) return undefined;
+    if (placed.current || !items.length || !EMAIL_RE.test(contact.email)) return undefined;
     const id = setTimeout(() => {
       api.post("/cart/track", {
         email: contact.email,
@@ -563,7 +563,7 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
       }).catch(() => {});
     }, 1500);
     return () => clearTimeout(id);
-  }, [open, items, contact.email, contact.name, contact.phone, contact.dial, locale]);
+  }, [items, contact.email, contact.name, contact.phone, contact.dial, locale]);
 
   const applyCode = async () => {
     try { await applyDiscount(code); toast.success(t("codeApplied", { code })); }
@@ -610,7 +610,6 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
       track("checkout_completed", { order: data.order?.order_number, total });
       placed.current = true;          // no cart snapshot may follow a paid order
       clear();
-      onClose();
       nav(lp(`/checkout/success/${data.order.id}`));
     } catch (e) {
       toast.error(formatErr(e));
@@ -619,16 +618,14 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div className="nc2-backdrop" role="dialog" aria-modal="true" data-testid="precheckout-modal">
+    <div className="nc2-page" data-testid="checkout-flow">
       <div className="nc2-dialog">
         <div className="nc2-hd">
           <img src={siteMedia("logo", "/logo-header.png")} alt="PurePeptide" className="nc2-logo" />
           <span className="nc2-hd-title">{t("quickOrder")}</span>
-          <button type="button" className="nc2-x" aria-label={t("close")} onClick={onClose} data-testid="precheckout-close">
-            <X className="h-5 w-5" />
+          <button type="button" className="nc2-back" onClick={() => nav(lp("/cart"))} data-testid="checkout-back-to-cart">
+            {t("backToCart")}
           </button>
         </div>
 
@@ -832,6 +829,15 @@ export default function PreCheckoutModal({ open, onClose, termsAccepted = false 
                   <div className="nc2-sum-row nc2-sum-total"><strong>{t("totalLabel")}</strong><strong data-testid="pc-total">{fmtAmount(amt.total)}</strong></div>
                   {showsBGN() && <p className="nc2-muted text-right">{fmtBGN(total)}</p>}
                 </div>
+
+                <label className="nc2-terms">
+                  <input type="checkbox" checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)} data-testid="checkout-terms-checkbox" />
+                  <span>
+                    {t("termsConsent18")}{" "}
+                    <a href={lp(link("terms"))} target="_blank" rel="noreferrer">{t("termsLinkLabel")}</a>
+                  </span>
+                </label>
 
                 <button type="button" className="nc2-cta" disabled={busy} onClick={trySubmit} data-testid="pc-continue">
                   {busy ? t("submittingText") : `${t("submitOrder")} · ${fmtAmount(amt.total)}`}

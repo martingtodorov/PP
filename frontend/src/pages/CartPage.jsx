@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { link } from "../lib/links";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
-import PreCheckoutModal from "../components/PreCheckoutModal";
 import { useSeo } from "../lib/seo";
 import { Button } from "../components/ui/button";
 import { useCart } from "../context/CartContext";
@@ -17,9 +16,8 @@ export default function CartPage() {
 
   const { items, remove, updateQty, subtotal, discount, discountAmount, applyDiscount, removeDiscount } = useCart();
   const [code, setCode] = useState("");
-  const [preCheckout, setPreCheckout] = useState(false);
-  const [terms, setTerms] = useState(false);
   const [applying, setApplying] = useState(false);
+  const nav = useNavigate();
   const shipping = subtotal === 0 ? 0 : 5.99;
   const total = Math.max(subtotal - discountAmount, 0) + shipping;
   /* the amounts actually shown: rounded per line, then summed — same rule as the backend */
@@ -102,19 +100,8 @@ export default function CartPage() {
                     </div>
                   )}
                 </div>
-                <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer mb-3">
-                  <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)}
-                    className="mt-0.5 accent-coral-600" data-testid="cart-terms-checkbox" />
-                  <span>
-                    {t("termsConsent18")}{" "}
-                    <Link to={lp(link("terms"))} className="underline hover:text-coral-600" target="_blank">
-                      {t("termsLinkLabel")}
-                    </Link>
-                  </span>
-                </label>
                 <Button className="w-full h-14 text-base sm:text-lg font-semibold bg-coral-600 hover:bg-coral-700"
-                  disabled={!terms}
-                  onClick={() => setPreCheckout(true)} data-testid="cart-checkout-btn">
+                  onClick={() => nav(lp("/checkout"))} data-testid="cart-checkout-btn">
                   {t("toPayment")}
                 </Button>
                 <p className="text-xs text-slate-500 text-center">{t("payHint")}</p>
@@ -123,7 +110,6 @@ export default function CartPage() {
           </div>
         )}
       </div>
-      <PreCheckoutModal open={preCheckout} onClose={() => setPreCheckout(false)} termsAccepted={terms} />
     </Layout>
   );
 }

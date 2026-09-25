@@ -1651,6 +1651,30 @@ button.bg-coral-600:disabled { box-shadow: none; }
   .nc2-hd { position: sticky; top: 0; background: #fff; z-index: 4; }
 }
 
+/* the accelerated checkout as a page (no overlay) */
+.nc2-page { max-width: 1040px; margin: 0 auto; padding: 28px 16px 64px; }
+.nc2-page .nc2-dialog {
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid #eef1f5;
+  animation: none;
+}
+.nc2-back {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  padding: 6px 10px;
+  border-radius: 999px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.nc2-back:hover { background: #f1f5f9; color: #0f172a; }
+.nc2-terms { display: flex; align-items: flex-start; gap: 8px; margin-top: 16px; font-size: 12px; color: #475569; cursor: pointer; }
+.nc2-terms input { margin-top: 2px; accent-color: #fe6f61; }
+.nc2-terms a { text-decoration: underline; }
+@media (max-width: 860px) {
+  .nc2-page { padding: 0 0 40px; }
+  .nc2-page .nc2-dialog { border: 0; border-radius: 0; box-shadow: none; }
+}
+
 /* accelerated checkout additions */
 .nc2-hd-title { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #94a3b8; }
 .nc2-combo {

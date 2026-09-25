@@ -45,7 +45,8 @@ from i18n import (
 from pages_seed import PAGE_SLUGS, PAGE_LABELS, DEFAULT_PAGES, LEGACY_PAGE_ALIASES
 from page_content import resolve_page_content
 from literature_copy import LITERATURE_COPY
-from rotation_redirects import KINDS as ROTATION_KINDS, LATEST_ROTATION_301, content_path, latest_rotation_path
+from rotation_redirects import (KINDS as ROTATION_KINDS, LATEST_ROTATION_301, content_path,
+                                latest_rotation_path, rotation_redirects_enabled)
 import storage
 import email_service
 from starlette.concurrency import run_in_threadpool
@@ -639,6 +640,7 @@ async def on_startup():
     asyncio.create_task(_abandoned.sweeper_loop())
     asyncio.create_task(nextlevel.sync_loop())
     asyncio.create_task(fulfillment.sync_loop())
+    asyncio.create_task(fulfillment.delayed_dispatch_loop())
     asyncio.create_task(wc_api.backfill_wc_ids())
     from restore_headings import restore_headings
     try:
@@ -1124,6 +1126,26 @@ async def delete_delisted_link(link_id: str, user=Depends(require_admin)):
     return {"ok": True}
 
 
+class RotationPolicyIn(BaseModel):
+    enabled: bool
+
+
+@api.get("/admin/rotation-policy")
+async def get_rotation_policy(user=Depends(require_admin)):
+    """Whether a NEW handle rotation leaves a 301 from the retired URL (history is never rewritten)."""
+    return {"enabled": await rotation_redirects_enabled(db)}
+
+
+@api.put("/admin/rotation-policy")
+async def set_rotation_policy(payload: RotationPolicyIn, user=Depends(require_admin)):
+    await db.settings.update_one(
+        {"key": "rotation_policy"},
+        {"$set": {"enabled": payload.enabled, "updated_at": now_utc(), "updated_by": user["email"]}},
+        upsert=True)
+    prerender.bump()
+    return {"enabled": payload.enabled}
+
+
 # ---------- Content rotation ----------
 ROTATABLE = {"collections": ("collections_cat", "handle"), "products": ("products", "handle"),
              "articles": ("articles", "handle"), "pages": ("pages", "slug")}
@@ -1244,7 +1266,7 @@ async def rotate_page(link: Dict[str, Any], handle: str, loc: str, user_email: s
 
     rotations.append({"locale": loc, "from": doc.get("pub_slug") or doc["slug"], "to": new_slug,
                       "code": new_slug.split("-")[-1], "rewritten": rewritten, "at": now_utc(), "by": user_email,
-                      "redirect_mode": LATEST_ROTATION_301})
+                      "redirect_mode": (LATEST_ROTATION_301 if await rotation_redirects_enabled(db) else "none")})
     update = {"pub_slug": new_slug, "rotations": rotations, "updated_at": now_utc()}
     if rewritten:
         update["html"] = html
@@ -1308,7 +1330,7 @@ async def rotate_content(kind: str, handle: str, loc: str, user_email: str, to: 
                  if not (r.get("locale") == loc and r.get("from") == previous)]
     rotations.append({"locale": loc, "from": previous, "to": new_handle, "code": new_handle.split("-")[-1],
                       "rewritten": rewritten, "at": now_utc(), "by": user_email,
-                      "redirect_mode": LATEST_ROTATION_301})
+                      "redirect_mode": (LATEST_ROTATION_301 if await rotation_redirects_enabled(db) else "none")})
     result = await coll.update_one({"handle": doc["handle"], "rotations": doc.get("rotations")},
                                   {"$set": {"translations": tr, "rotations": rotations,
                                             "updated_at": now_utc(), **base_updates}})
@@ -1600,6 +1622,8 @@ async def checkout(payload: CheckoutIn, request: Request):
         "fulfillment_status": "unfulfilled",
         "payment_method": pay_method,
         "tracking": None,
+        # the customer gets five minutes to add products before the order leaves for the warehouse
+        "dispatch_at": (datetime.now(timezone.utc) + timedelta(seconds=fulfillment.GRACE_SEC)).isoformat(),
         "created_at": now_utc(),
         "updated_at": now_utc(),
     }
@@ -1625,7 +1649,7 @@ async def checkout(payload: CheckoutIn, request: Request):
             if pay_method == "bank_transfer" else None)
     order_clean = {k: v for k, v in order.items() if k != "_id"}
     await db.orders.update_one({"id": order["id"]}, {"$set": {"wc_id": wc_api.wc_int(order["id"])}})
-    asyncio.create_task(fulfillment.dispatch_new_order(order["id"]))
+    asyncio.create_task(fulfillment.dispatch_when_due(order["id"]))
     try:
         await email_service.send_order_confirmation(order_clean, bank, site_settings)
     except Exception:
@@ -1687,6 +1711,110 @@ async def get_order(order_id: str, request: Request):
             o["shipment"] = {k: v for k, v in o["shipment"].items() if k != "payload"}
         return {"order": o, "bank_transfer": bank, "guest_view": True}
     return {"order": o, "bank_transfer": bank}
+
+
+def grace_window(o: Dict[str, Any]) -> Dict[str, Any]:
+    """How long the customer may still add products before the order leaves for the warehouse."""
+    at = o.get("dispatch_at")
+    closed = {"open": False, "seconds_left": 0, "dispatch_at": at}
+    if not at or o.get("dispatch_claimed_at") or o.get("status") == "cancelled":
+        return closed
+    if (o.get("shipment") or {}).get("awb") or (o.get("fulfillment") or {}).get("number"):
+        return closed
+    try:
+        left = int((datetime.fromisoformat(at) - datetime.now(timezone.utc)).total_seconds())
+    except ValueError:
+        return closed
+    return {"open": left > 0, "seconds_left": max(left, 0), "dispatch_at": at}
+
+
+async def _pinned_upsells() -> List[str]:
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    raw = ((s or {}).get("value") or {}).get("upsell_handles") or []
+    return [str(h).strip() for h in raw if str(h).strip()]
+
+
+@api.get("/orders/{order_id}/upsells")
+async def order_upsells(order_id: str, locale: str = Query(DEFAULT_LOCALE), limit: int = 4):
+    """Products offered on the thank-you page: the admin's pinned handles first, then the catalogue."""
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Поръчката не е намерена")
+    loc = normalize_locale(locale)
+    limit = max(1, min(limit, 8))
+    have = {i.get("product_handle") for i in (o.get("items") or [])}
+    picked: List[Dict[str, Any]] = []
+    pinned = await _pinned_upsells()
+    if pinned:
+        found = await db.products.find({"handle": {"$in": pinned}, "active": {"$ne": False}},
+                                       {"_id": 0}).to_list(20)
+        by_handle = {d["handle"]: d for d in found}
+        picked = [by_handle[h] for h in pinned if h in by_handle and h not in have]
+    if len(picked) < limit:
+        seen = have | {d["handle"] for d in picked}
+        extra = await db.products.find(
+            {"active": {"$ne": False}, "handle": {"$nin": list(seen)}}, {"_id": 0},
+        ).sort([("featured", -1), ("created_at", -1)]).limit(limit * 3).to_list(limit * 3)
+        picked += extra[: limit - len(picked)]
+    return {"window": grace_window(o),
+            "products": slim(localize_list(picked[:limit], loc), "description")}
+
+
+class AddOrderItemsIn(BaseModel):
+    items: List[CartLine]
+
+
+@api.post("/orders/{order_id}/items")
+async def add_order_items(order_id: str, payload: AddOrderItemsIn):
+    """Add products to an order that has not left for the warehouse yet (5-minute grace window)."""
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Поръчката не е намерена")
+    if not grace_window(o)["open"]:
+        raise HTTPException(409, "Времето за добавяне към тази поръчка изтече")
+    if not payload.items:
+        raise HTTPException(400, "Няма избрани продукти")
+
+    items = [dict(i) for i in (o.get("items") or [])]
+    for li in payload.items:
+        prod = await db.products.find_one({"variants.sku": li.variant_sku, "active": {"$ne": False}}, {"_id": 0})
+        if not prod:
+            raise HTTPException(400, f"Продуктът вече не се предлага (SKU {li.variant_sku})")
+        variant = next((v for v in prod.get("variants", []) if v.get("sku") == li.variant_sku), None)
+        if not variant:
+            raise HTTPException(400, f"Вариант не е намерен: {li.variant_sku}")
+        if variant.get("stock", 0) < li.quantity:
+            raise HTTPException(400, f"Недостатъчна наличност за {prod['title']} {variant['name']}")
+        existing = next((x for x in items if x.get("variant_sku") == li.variant_sku), None)
+        if existing:
+            existing["quantity"] = int(existing.get("quantity") or 1) + li.quantity
+        else:
+            items.append({
+                "product_id": prod["id"], "product_handle": prod["handle"], "title": prod["title"],
+                "image": prod.get("image", ""), "variant_sku": variant["sku"], "variant_name": variant["name"],
+                "price_eur": float(variant["price_eur"]), "quantity": li.quantity,
+            })
+        await db.products.update_one({"id": prod["id"], "variants.sku": li.variant_sku},
+                                     {"$inc": {"variants.$.stock": -li.quantity}})
+        await log_inventory(prod, variant.get("name", ""), -li.quantity,
+                            int(variant.get("stock") or 0) - li.quantity,
+                            f"Допълнение към поръчка {o['order_number']}", "upsell")
+
+    subtotal_raw = sum(x["price_eur"] * x["quantity"] for x in items)
+    try:
+        discount = await _resolve_discount((o.get("discount") or {}).get("code") or "", subtotal_raw)
+    except HTTPException:
+        discount = o.get("discount") or {"code": "", "discount_eur": 0.0}
+    totals = _calc_totals(items, o.get("shipping_method") or "", discount.get("discount_eur", 0.0),
+                          o.get("shipping_eur"))
+    fx = await currency.rate_for_locale(db, o.get("locale") or DEFAULT_LOCALE)
+    local = currency.order_amounts(items, totals, discount, fx["currency"], fx["rate"])
+    for x, price in zip(items, local.pop("item_prices", [])):
+        x["price_orig"] = price
+    await db.orders.update_one({"id": order_id}, {"$set": {
+        "items": items, "discount": discount, **totals, **local, "updated_at": now_utc()}})
+    fresh = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return {"order": fresh, "window": grace_window(fresh), "bank_transfer": await _bank_block(fresh)}
 
 
 @api.get("/me/orders")

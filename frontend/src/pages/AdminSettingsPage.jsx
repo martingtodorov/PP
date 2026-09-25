@@ -121,6 +121,17 @@ export default function AdminSettingsPage() {
             + Нов код
           </Button>
         </div>
+        <div className="border-t border-slate-200 pt-5">
+          <h2 className="font-bold text-slate-900 mb-3">Допълнителни продукти след поръчка</h2>
+          <p className="text-xs text-slate-500 mb-3">
+            Handle-ите (по един на ред) се показват първи на страницата „Благодарим“ в 5-минутния прозорец
+            за добавяне. Оставете празно и системата сама подбира продукти, които не са в поръчката.
+          </p>
+          <Textarea rows={3} placeholder={"ghk-cu\nbpc-157"} value={(s.upsell_handles || []).join("\n")}
+            onChange={(e) => set("upsell_handles", e.target.value.split("\n").map((x) => x.trim()).filter(Boolean))}
+            data-testid="set-upsell-handles" />
+        </div>
+
         <div className="grid sm:grid-cols-2 gap-4">
           <div><Label>Имейл за контакт</Label><Input value={s.contact_email || ""} onChange={(e) => set("contact_email", e.target.value)} /></div>
           <div><Label>Телефон</Label><Input value={s.contact_phone || ""} onChange={(e) => set("contact_phone", e.target.value)} /></div>
