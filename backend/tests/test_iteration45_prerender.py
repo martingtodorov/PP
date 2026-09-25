@@ -11,7 +11,7 @@ import re
 import pytest
 import requests
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://shopify-migrate-3.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://peptide-checkout-32.preview.emergentagent.com").rstrip("/")
 PRE = f"{BASE}/api/seo/prerender"
 # NOTE: The preview ingress strips X-Forwarded-Host, so we hit the backend directly on
 # localhost:8001 for prerender tests. This matches the review-request guidance:

@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL") or "https://shopify-migrate-3.preview.emergentagent.com"
+BASE = os.environ.get("REACT_APP_BACKEND_URL") or "https://peptide-checkout-32.preview.emergentagent.com"
 BASE = BASE.rstrip("/")
 ADMIN_EMAIL = private_admin_email()
 ADMIN_PASSWORD = private_admin_password()

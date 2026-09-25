@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 import pytest
 import requests
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://shopify-migrate-3.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://peptide-checkout-32.preview.emergentagent.com").rstrip("/")
 
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) TestAgent/1.0"}
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL")
