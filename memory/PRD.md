@@ -106,3 +106,17 @@ neither its visibility nor remote history has been independently checked or alte
   Admin -> Изтеглени линкове (`rotation-301-toggle`).
 - Testing: iteration_59 report — backend 8/8, all targeted frontend flows pass. Known LOW,
   pre-existing console warning: `<span> cannot be a child of <option>`.
+
+## 2026-06 — Titles are the owner's (no deploy may touch them)
+- `prerender.brand_title` and `frontend/src/lib/seo.js` publish the stored title byte-for-byte:
+  the automatic " - PurePeptide" suffix and the pipe re-spacing are gone (all locales). An empty
+  title still falls back to the brand.
+- Boot tasks can no longer rewrite a title: `_fix_typos` skips title/seo_title/menu_title/subtitle,
+  `resume_translate_jobs` always resumes with overwrite=False, and `restore_headings` only runs when
+  RESTORE_BODY_HEADINGS=true.
+- Tests updated: tests/test_brand_titles_and_rotation_404.py (new `test_no_boot_task_rewrites_a_title`),
+  tests/test_iter52_live_seo.py. Two live tests in that file still need the real catalogue and fail
+  in the purged preview (product 21-retatrutide-5-lrp does not exist) — pre-existing.
+- Link audit tool added: backend/tools/link_audit.py (crawls /api/seo/prerender). Current result:
+  0 dead internal links.
+- Pending, awaiting owner: NextLevel 500 -> readable 502 + 4 hardening spots; admin dead-link report.
