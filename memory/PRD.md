@@ -80,8 +80,21 @@ test fixtures. Never delete or overwrite production records/media.
 - Повторяем тест: `backend/tests/test_cloudflare_bot_fight_mode.py` (iteration_65, 41/41 passed) —
   пуска се от всеки IP и събира `cf-ray` за тикет към Cloudflare, ако 403-ката се върне.
 
+## 2026-06-25 — Чекаут ред, админ филтри по плащане, alert при отказ от NextLevel
+- /checkout: телефонният ред (префикс + номер) е преди държавата; държавата е на отделен ред на
+  цялата ширина. Префиксите показват само `+359` (без ISO код), дедупликирани по код.
+- Админ → Поръчки: нови табове „Банков превод" и „Наложен платеж"
+  (`ORDER_FILTERS["bank_transfer"|"cod"]`; поръчки без поле се броят за банков превод), бадж за
+  начина на плащане и за кода за отстъпка на всеки ред.
+- Админ → Поръчка: в картата за плащане се виждат „Начин на плащане" и „Код за отстъпка".
+- Alert при проблем със склада — **само PWA push на телефона, без имейл** (решение на собственика):
+  `fulfillment._alert_failed` при непреминала валидация, отказ от API или webhook грешка и
+  `_alert_if_stuck` при паркирана пратка. Дедупликация по текста на грешката / по статуса.
+- Проверено: iteration_66 (12/12 pytest + UI на 1920 и 390 px).
+
 ## Backlog- P1: catalog sync throttling (rate-limited external source).
 - P1: decide the 404 strategy for the 474 legacy URLs (301 to the closest live handle vs 410).
 - P2: product reviews with ratings; post-delivery review request emails.
+- P2: `/api/nextcart/config` flaps to 503 on a cold hit (iteration_66) — warm the courier client on boot.
 - P2: iOS Safari autofill feedback.
 - LOW: pre-existing console warning `<span> cannot be a child of <option>` (dial-code select).
