@@ -65,15 +65,15 @@ def _base_env(tmp_backend: Path, mongo_url: str, db_name: str):
 @pytest.mark.parametrize(
     "patches,preview_url,error_snippet",
     [
-        ({"APP_ENV": "production"}, "https://demo.preview.emergentagent.com", "privacy-preview"),
-        ({"PREVIEW_ONLY": "false"}, "https://demo.preview.emergentagent.com", "privacy-preview"),
-        ({"ALLOW_MANAGED_STORAGE": "true"}, "https://demo.preview.emergentagent.com", "Managed storage"),
+        ({"APP_ENV": "production"}, "https://peptide-checkout-32.preview.emergentagent.com", "privacy-preview"),
+        ({"PREVIEW_ONLY": "false"}, "https://peptide-checkout-32.preview.emergentagent.com", "privacy-preview"),
+        ({"ALLOW_MANAGED_STORAGE": "true"}, "https://peptide-checkout-32.preview.emergentagent.com", "Managed storage"),
         ({}, "https://example.com", "preview origin"),
-        ({"MONGO_URL": "mongodb://mongo.example.com:27017/test_db"}, "https://demo.preview.emergentagent.com", "loopback"),
-        ({"MONGO_URL": "mongodb+srv://cluster.example.mongodb.net/test_db"}, "https://demo.preview.emergentagent.com", "standalone loopback"),
-        ({"MONGO_URL": "mongodb://127.0.0.1:27017,localhost:27018/test_db"}, "https://demo.preview.emergentagent.com", "multi-host"),
-        ({"MONGO_URL": "mongodb://127.0.0.1:27017/test_db?replicaSet=rs0"}, "https://demo.preview.emergentagent.com", "Replica/proxy"),
-        ({"MONGO_URL": "mongodb://127.0.0.1:27017/test_db?loadBalanced=true"}, "https://demo.preview.emergentagent.com", "Replica/proxy"),
+        ({"MONGO_URL": "mongodb://mongo.example.com:27017/test_db"}, "https://peptide-checkout-32.preview.emergentagent.com", "loopback"),
+        ({"MONGO_URL": "mongodb+srv://cluster.example.mongodb.net/test_db"}, "https://peptide-checkout-32.preview.emergentagent.com", "standalone loopback"),
+        ({"MONGO_URL": "mongodb://127.0.0.1:27017,localhost:27018/test_db"}, "https://peptide-checkout-32.preview.emergentagent.com", "multi-host"),
+        ({"MONGO_URL": "mongodb://127.0.0.1:27017/test_db?replicaSet=rs0"}, "https://peptide-checkout-32.preview.emergentagent.com", "Replica/proxy"),
+        ({"MONGO_URL": "mongodb://127.0.0.1:27017/test_db?loadBalanced=true"}, "https://peptide-checkout-32.preview.emergentagent.com", "Replica/proxy"),
     ],
 )
 def test_validate_target_refuses_unsafe_targets(patches, preview_url, error_snippet):
@@ -93,7 +93,7 @@ def test_validate_target_refuses_proxy_like_uri_options():
         backend.mkdir(parents=True, exist_ok=True)
         env = _base_env(backend, "mongodb://127.0.0.1:27017/test_db?proxyHost=127.0.0.1", "test_db")
         with pytest.raises((ValueError, ConfigurationError)):
-            purge_preview_data.validate_target(env, "test_db", "https://demo.preview.emergentagent.com", backend=backend)
+            purge_preview_data.validate_target(env, "test_db", "https://peptide-checkout-32.preview.emergentagent.com", backend=backend)
 
 
 def test_validate_target_refuses_mismatched_db_confirmation():
@@ -102,7 +102,7 @@ def test_validate_target_refuses_mismatched_db_confirmation():
         backend.mkdir(parents=True, exist_ok=True)
         env = _base_env(backend, "mongodb://127.0.0.1:27017/preview_db", "preview_db")
         with pytest.raises(ValueError) as exc:
-            purge_preview_data.validate_target(env, "other_db", "https://demo.preview.emergentagent.com", backend=backend)
+            purge_preview_data.validate_target(env, "other_db", "https://peptide-checkout-32.preview.emergentagent.com", backend=backend)
         assert "explicitly confirmed database" in str(exc.value)
 
 
@@ -112,7 +112,7 @@ def test_validate_target_refuses_uri_db_mismatch():
         backend.mkdir(parents=True, exist_ok=True)
         env = _base_env(backend, "mongodb://127.0.0.1:27017/db_in_uri", "db_env")
         with pytest.raises(ValueError) as exc:
-            purge_preview_data.validate_target(env, "db_env", "https://demo.preview.emergentagent.com", backend=backend)
+            purge_preview_data.validate_target(env, "db_env", "https://peptide-checkout-32.preview.emergentagent.com", backend=backend)
         assert "URI database differs" in str(exc.value)
 
 
@@ -132,7 +132,7 @@ def test_validate_target_refuses_symlinked_or_external_runtime_paths():
         media_link.symlink_to(outside, target_is_directory=True)
         env["MEDIA_ROOT"] = str(media_link)
         with pytest.raises(ValueError) as exc:
-            purge_preview_data.validate_target(env, "test_db", "https://demo.preview.emergentagent.com", backend=backend)
+            purge_preview_data.validate_target(env, "test_db", "https://peptide-checkout-32.preview.emergentagent.com", backend=backend)
         assert "MEDIA_ROOT" in str(exc.value)
 
 
@@ -144,7 +144,7 @@ def test_validate_target_accepts_literal_loopback_preview_target():
         uri = purge_preview_data.validate_target(
             env,
             "test_db",
-            "https://shop.preview.emergentagent.com",
+            "https://peptide-checkout-32.preview.emergentagent.com",
             backend=backend,
         )
         assert uri.startswith("mongodb://127.0.0.1")

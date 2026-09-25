@@ -5,7 +5,7 @@ import pytest
 import requests
 
 BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get("REACT_APP_BACKEND_URL") \
-    else "https://shopify-migrate-3.preview.emergentagent.com"
+    else "https://peptide-checkout-32.preview.emergentagent.com"
 API = f"{BASE}/api"
 ADMIN_EMAIL = private_admin_email()
 ADMIN_PW = private_admin_password()
