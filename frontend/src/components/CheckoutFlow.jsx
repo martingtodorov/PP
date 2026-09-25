@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { link } from "../lib/links";
 import { api, fmtPrice, fmtAmount, amountOf, cartAmounts, fmtBGN, showsBGN, img, formatErr } from "../lib/api";
 import { loadSaved, saveCheckout, pfCountries, pfGeo, pfDeviceGeo, pfConfig, pfPickups } from "../lib/checkoutPrefetch";
-import { siteMedia } from "../lib/media";
 import { useCart } from "../context/CartContext";
 import { useLocaleCtx } from "../i18n/LocaleContext";
 import { LOCALE_META, countryForLocale } from "../i18n/locales";
@@ -621,10 +620,6 @@ export default function CheckoutFlow() {
   return (
     <div className="nc2-page" data-testid="checkout-flow">
       <div className="nc2-dialog">
-        <div className="nc2-hd">
-          <img src={siteMedia("logo", "/logo-header.png")} alt="PurePeptide" className="nc2-logo" />
-        </div>
-
         <div className="nc2-body">
           {err && <p className="nc2-err" data-testid="precheckout-error">{err}</p>}
           {!cfg && !err && <p className="nc2-muted"><Loader2 className="h-4 w-4 animate-spin inline mr-2" />{t("loadingText")}</p>}
@@ -641,7 +636,7 @@ export default function CheckoutFlow() {
                   onChange={(e) => setContact({ ...contact, email: e.target.value })}
                   onBlur={(e) => setContact((c) => ({ ...c, email: e.target.value }))}
                   data-testid="pc-email" />
-                <div className="nc2-row2">
+                <div className="nc2-row2 nc2-row2--contact">
                   <select className="nc2-inp" value={contact.country} aria-label={t("countryLabel")}
                     onChange={(e) => setContact({ ...contact, country: e.target.value })} data-testid="pc-country">
                     {(countries.length ? countries : [{ iso2: contact.country, name: contact.country }]).map((tt) => (
