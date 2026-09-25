@@ -226,6 +226,30 @@ async def _send(cfg: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
             "number": str(data.get("order_id") or payload["order_id"])}
 
 
+async def _alert_failed(order: Dict[str, Any], reason: str, stage: str) -> None:
+    """The order could not be handed over to NextLevel — nothing will ship until somebody looks.
+
+    Deduped per error text so a retry loop cannot turn one broken order into a mail flood.
+    """
+    oid = order.get("id") or ""
+    if (order.get("fulfillment") or {}).get("alerted_error") == reason:
+        return
+    await _db.orders.update_one({"id": oid}, {"$set": {"fulfillment.alerted_error": reason,
+                                                      "fulfillment.alerted_error_at": _now()}})
+    from server import alert_admin_bg          # late: server imports this module
+    number = order.get("order_number") or oid
+    await alert_admin_bg(
+        "ПРОБЛЕМ СЪС СКЛАДА",
+        f"Поръчка {number} НЕ влезе в NextLevel",
+        f"{stage}: {reason}\n\nКлиент: {(order.get('shipping') or {}).get('full_name') or order.get('customer_name') or '—'}"
+        f"\nТелефон: {(order.get('shipping') or {}).get('phone') or order.get('customer_phone') or '—'}"
+        f"\n\nНяма товарителница. Оправи данните и натисни „Подай към склада“.",
+        f"/admin/orders/{oid}",
+        f"ff-error-{oid}",
+    )
+    log.error("Order %s not accepted by NextLevel (%s): %s", number, stage, reason)
+
+
 async def create_order(order_id: str, force: bool = False) -> Dict[str, Any]:
     cfg = await get_config()
     order = await _db.orders.find_one({"id": order_id}, {"_id": 0})
@@ -240,11 +264,13 @@ async def create_order(order_id: str, force: bool = False) -> Dict[str, Any]:
         payload = build_order(order, cfg)
     except ValueError as ex:
         await _db.orders.update_one({"id": order_id}, {"$set": {"fulfillment_error": str(ex), "fulfillment_error_at": _now()}})
+        await _alert_failed(order, str(ex), "Данните на поръчката не минават проверката")
         raise HTTPException(422, str(ex))
     try:
         summary = await _send(cfg, payload)
     except NextLevelError as ex:
         await _db.orders.update_one({"id": order_id}, {"$set": {"fulfillment_error": str(ex), "fulfillment_error_at": _now()}})
+        await _alert_failed(order, str(ex), "NextLevel отказа поръчката")
         raise HTTPException(502, str(ex))
     record = {**summary, "payload": payload}
     await _db.orders.update_one({"id": order_id}, {
@@ -267,9 +293,11 @@ async def _create_via_woocommerce(order: Dict[str, Any], cfg: Dict[str, Any]) ->
         res = await wc_api.push_webhook(order, cfg, "order.created")
     except Exception as ex:
         await _db.orders.update_one({"id": order["id"]}, {"$set": {"fulfillment_error": str(ex), "fulfillment_error_at": _now()}})
+        await _alert_failed(order, str(ex), "Webhook-ът към NextLevel не мина")
         raise HTTPException(502, f"NextLevel webhook: {ex}")
     if res["status_code"] >= 400:
         await _db.orders.update_one({"id": order["id"]}, {"$set": {"fulfillment_error": str(res["response"]), "fulfillment_error_at": _now()}})
+        await _alert_failed(order, f"{res['status_code']}: {res['response']}", "NextLevel отказа webhook-а")
         raise HTTPException(502, f"NextLevel webhook {res['status_code']}: {res['response']}")
     record = {"transport": "woocommerce", "number": wc["number"], "wc_id": wc["id"], "nl_id": (res["response"] or {}).get("id") if isinstance(res["response"], dict) else None,
               "status": (res["response"] or {}).get("status") if isinstance(res["response"], dict) else "pending", "wc_status": wc["status"],
@@ -428,11 +456,13 @@ async def _alert_if_stuck(order: Dict[str, Any], ff: Dict[str, Any], fresh: Dict
                                           "needs_attention": {"status": status,
                                                               "reason": ATTENTION_STATUSES[status],
                                                               "at": _now()}}})
-    from server import notify_admin_push_bg          # late: server imports this module
-    await notify_admin_push_bg(
+    from server import alert_admin_bg          # late: server imports this module
+    await alert_admin_bg(
+        "СКЛАДЪТ Е СПРЯЛ ПРАТКА",
         f"Пратка {order.get('order_number') or ''} {ATTENTION_STATUSES[status]}".strip(),
-        f"{(order.get('shipping') or {}).get('full_name') or order.get('customer_name') or ''} · "
-        f"NextLevel статус: {fresh.get('status')}",
+        f"{(order.get('shipping') or {}).get('full_name') or order.get('customer_name') or ''}\n"
+        f"NextLevel статус: {fresh.get('status')}\n\n"
+        f"Оправи данните в поръчката и натисни „Обнови статуса“.",
         f"/admin/orders/{order['id']}",
         f"ff-{status}-{order['id']}",
     )

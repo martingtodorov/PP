@@ -454,7 +454,8 @@ export default function CheckoutFlow() {
     const seen = new Set();
     const list = [];
     (src || []).forEach((x) => {
-      const key = `${x.iso2}-${x.dial}`;
+      // the option shows the prefix only, so two countries sharing +1 must not appear twice
+      const key = String(x.dial);
       if (!x.dial || seen.has(key)) return;
       seen.add(key);
       list.push({ iso2: x.iso2, dial: String(x.dial), name: x.name || x.iso2 });
@@ -645,27 +646,25 @@ export default function CheckoutFlow() {
                   onChange={(e) => setContact({ ...contact, email: e.target.value })}
                   onBlur={(e) => setContact((c) => ({ ...c, email: e.target.value }))}
                   data-testid="pc-email" />
-                <div className="nc2-row2 nc2-row2--contact">
-                  <select className="nc2-inp" value={contact.country} aria-label={t("countryLabel")}
-                    onChange={(e) => setContact({ ...contact, country: e.target.value })} data-testid="pc-country">
-                    {(countries.length ? countries : [{ iso2: contact.country, name: contact.country }]).map((tt) => (
-                      <option key={tt.iso2} value={tt.iso2}>{countryName(tt.iso2, locale, tt.name)}</option>
+                <div className="nc2-phone">
+                  <select className="nc2-dial-select" value={contact.dial} aria-label={t("dialLabel")}
+                    onChange={(e) => { dialTouched.current = true; setContact({ ...contact, dial: e.target.value }); }}
+                    data-testid="pc-dial">
+                    {dialOptions.map((d) => (
+                      <option key={d.dial} value={d.dial}>{`+${d.dial}`}</option>
                     ))}
                   </select>
-                  <div className="nc2-phone">
-                    <select className="nc2-dial-select" value={contact.dial} aria-label={t("dialLabel")}
-                      onChange={(e) => { dialTouched.current = true; setContact({ ...contact, dial: e.target.value }); }}
-                      data-testid="pc-dial">
-                      {dialOptions.map((d) => (
-                        <option key={`${d.iso2}-${d.dial}`} value={d.dial}>+{d.dial} {d.iso2}</option>
-                      ))}
-                    </select>
-                    <input className={`nc2-inp${bad("phone")}`} placeholder={t("phonePh")} autoComplete="tel" value={contact.phone}
-                      onChange={(e) => setContact({ ...contact, phone: e.target.value })}
-                      onBlur={(e) => setContact((c) => ({ ...c, phone: e.target.value }))}
-                      data-testid="pc-phone" />
-                  </div>
+                  <input className={`nc2-inp${bad("phone")}`} placeholder={t("phonePh")} autoComplete="tel" value={contact.phone}
+                    onChange={(e) => setContact({ ...contact, phone: e.target.value })}
+                    onBlur={(e) => setContact((c) => ({ ...c, phone: e.target.value }))}
+                    data-testid="pc-phone" />
                 </div>
+                <select className="nc2-inp" value={contact.country} aria-label={t("countryLabel")}
+                  onChange={(e) => setContact({ ...contact, country: e.target.value })} data-testid="pc-country">
+                  {(countries.length ? countries : [{ iso2: contact.country, name: contact.country }]).map((tt) => (
+                    <option key={tt.iso2} value={tt.iso2}>{countryName(tt.iso2, locale, tt.name)}</option>
+                  ))}
+                </select>
 
                 <h2 className="nc2-sec-title mt-6">{t("deliverySection")}</h2>
                 <p className="nc2-eta" data-testid="pc-delivery-eta">

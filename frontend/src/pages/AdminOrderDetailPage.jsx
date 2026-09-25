@@ -6,7 +6,7 @@ import AdminLayout from "../components/AdminLayout";
 import { ShipmentCard } from "../components/admin/ShipmentCard";
 import { FulfillmentOrderCard } from "../components/admin/FulfillmentOrderCard";
 import { api, fmtEUR, fmtMoney, formatErr, img } from "../lib/api";
-import { Badge, PAY_BADGE, FUL_BADGE } from "./AdminOrdersPage";
+import { Badge, PAY_BADGE, FUL_BADGE, PAY_METHOD } from "./AdminOrdersPage";
 
 const CopyField = ({ label, value, testId, multiline = false }) => {
   const [copied, setCopied] = useState(false);
@@ -198,7 +198,19 @@ export default function AdminOrderDetailPage() {
             </div>
 
             <dl className="text-sm space-y-2">
-              <div className="flex justify-between"><dt className="text-slate-500">{order.items_count} артикула · Междинна сума</dt><dd className="font-medium">{m(order.subtotal_display ?? order.subtotal_eur)}</dd></div>
+              <div className="flex justify-between items-center">
+                <dt className="text-slate-500">Начин на плащане</dt>
+                <dd data-testid="order-payment-method">
+                  <Badge map={PAY_METHOD} value={order.payment_method || "bank_transfer"} />
+                </dd>
+              </div>
+              <div className="flex justify-between items-center">
+                <dt className="text-slate-500">Код за отстъпка</dt>
+                <dd className="font-mono font-semibold text-slate-900" data-testid="order-discount-code">
+                  {order.discount_code || "—"}
+                </dd>
+              </div>
+              <div className="flex justify-between border-t border-slate-100 pt-2"><dt className="text-slate-500">{order.items_count} артикула · Междинна сума</dt><dd className="font-medium">{m(order.subtotal_display ?? order.subtotal_eur)}</dd></div>
               {(order.discount_display ?? order.discount_eur) > 0 && (
                 <div className="flex justify-between"><dt className="text-slate-500">Отстъпка</dt><dd className="font-medium text-emerald-700">− {m(order.discount_display ?? order.discount_eur)}</dd></div>
               )}

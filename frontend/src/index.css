@@ -1529,11 +1529,7 @@ button.bg-coral-600:disabled { box-shadow: none; }
 }
 .nc2-inp:focus { outline: none; border-color: #fe6f61; box-shadow: 0 0 0 3px rgba(254, 111, 97, 0.14); }
 .nc2-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-/* the country picker only holds a country name — the phone deserves the extra width */
-.nc2-row2--contact { grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr); }
-@media (max-width: 420px) {
-  .nc2-row2--contact { grid-template-columns: 1fr; }
-}
+
 .nc2-phone { display: grid; grid-template-columns: 118px 1fr; gap: 10px; }
 .nc2-dial { padding-inline: 8px; }
 .nc2-couriers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }

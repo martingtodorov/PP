@@ -9,9 +9,16 @@ const TABS = [
   { key: "attention", label: "За намеса" },
   { key: "unfulfilled", label: "Неизпратени" },
   { key: "unpaid", label: "Неплатени" },
+  { key: "bank_transfer", label: "Банков превод" },
+  { key: "cod", label: "Наложен платеж" },
   { key: "open", label: "Отворени" },
   { key: "archived", label: "Архив" },
 ];
+
+export const PAY_METHOD = {
+  bank_transfer: { label: "Банков превод", cls: "bg-sky-100 text-sky-900" },
+  cod: { label: "Наложен платеж", cls: "bg-violet-100 text-violet-900" },
+};
 
 const PAY_BADGE = {
   paid: { label: "Платена", cls: "bg-emerald-100 text-emerald-800" },
@@ -107,6 +114,15 @@ export default function AdminOrdersPage() {
               )}
               <Badge map={FUL_BADGE} value={o.fulfillment_status} />
               <Badge map={PAY_BADGE} value={o.payment_status} />
+              <span data-testid={`order-pay-method-${o.order_number}`}>
+                <Badge map={PAY_METHOD} value={o.payment_method || "bank_transfer"} />
+              </span>
+              {o.discount_code && (
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 font-mono"
+                  data-testid={`order-discount-${o.order_number}`}>
+                  {o.discount_code}
+                </span>
+              )}
             </div>
             {o.shipping_method && <p className="text-sm text-slate-500 mt-1.5">{o.shipping_method}</p>}
           </Link>
@@ -131,3 +147,4 @@ export default function AdminOrdersPage() {
 }
 
 export { PAY_BADGE, FUL_BADGE };
+

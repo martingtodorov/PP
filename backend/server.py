@@ -2068,6 +2068,9 @@ ORDER_FILTERS = {
     "awaiting_payment": {"payment_status": {"$in": ["awaiting_payment", "pending"]}},
     "shipped": {"$or": [{"fulfillment_status": {"$in": ["shipped", "fulfilled"]}}, {"status": "shipped"}]},
     "archived": {"$or": [{"status": "cancelled"}, {"payment_status": "paid", "fulfillment_status": {"$in": ["fulfilled", "shipped"]}}]},
+    # orders without the field predate the payment choice and were all bank transfers
+    "bank_transfer": {"payment_method": {"$in": ["bank_transfer", None, ""]}, "status": {"$ne": "cancelled"}},
+    "cod": {"payment_method": "cod", "status": {"$ne": "cancelled"}},
 }
 
 
@@ -4149,6 +4152,14 @@ async def notify_admin_push_bg(title: str, body: str, url: str = "/admin/orders"
             log.exception("Background push failed")
 
     asyncio.create_task(runner())
+
+
+async def alert_admin_bg(badge: str, title: str, body: str, url: str = "/admin/orders", tag: str = "pp") -> None:
+    """Warehouse trouble goes to the phone: the admin PWA push, nothing else (owner's call).
+
+    `badge` keeps the call sites readable; the push itself carries title + body + a deep link.
+    """
+    await notify_admin_push_bg(title, body, url, tag)
 
 
 @api.post("/contact")
