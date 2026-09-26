@@ -116,6 +116,16 @@ test fixtures. Never delete or overwrite production records/media.
 - Известно: `dryrun.py` показва един FAIL („nginx -t with listen variant") само защото в контейнера
   няма адрес 10.0.0.2 — синтаксисът минава, това не е регресия.
 
+## 2026-06-26 — Одит на собственика: IBAN, двойни 301, alt текстове
+- `GET /api/settings` вече **не** връща `bank_iban / bank_bic / bank_holder / bank_name`. Банковите
+  данни идват само в отговора на поръчка с банков превод (`_bank_block`) и в админ настройките.
+- Единичен 301: port-80 сървърът и www-TLS сървърът пращат директно към крайния адрес
+  (`$pp_apex$pp_home_path`, за споделените домейни `/en/#geo`) вместо apex → втори редирект.
+  Проверено с локален nginx: www.eu, apex.eu, www.gr, www.bg/pages/faq — по един хоп.
+- `prerender.fix_images()` + `richText.fixImages()`: изхвърлят `<img>` без `src` и пълнят празния
+  `alt` със заглавието на страницата (30-те изображения на `chemical-analysis` във всички езици).
+- Проверено: iteration_69 (17/17 pytest, `test_iteration69_bank_privacy_and_alt.py`).
+
 ## Backlog- P1: catalog sync throttling (rate-limited external source).
 - P1: decide the 404 strategy for the 474 legacy URLs (301 to the closest live handle vs 410).
 - P2: product reviews with ratings; post-delivery review request emails.
