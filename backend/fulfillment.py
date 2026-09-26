@@ -26,6 +26,10 @@ API = "https://api.nextlevel.delivery/v1/fulfillment/orders"
 SETTINGS_KEY = "integrations.nextlevel_fulfillment"
 SYNC_SEC = 600
 DONE_STATUSES = {"delivered", "returned", "cancelled", "duplicated", "trash"}
+# https://nextlevel-delivery.readme.io/reference/order-status — 3 = cancelled by the sender
+CANCELLED_STATUS_ID = 3
+# the admin is waiting in front of a browser: answer with our own error long before Cloudflare's
+CANCEL_TIMEOUT_SEC = 25
 # NextLevel statuses that stop the order dead in the hub until somebody in the office acts
 # (https://nextlevel-delivery.readme.io/reference/order-status)
 ATTENTION_STATUSES = {
@@ -350,7 +354,14 @@ async def cancel_order(order_id: str) -> Dict[str, Any]:
 
     async def confirm() -> tuple:
         if cfg.get("has_api"):
-            return "api", await _call(cfg, "POST", f"/{number}/cancel")
+            try:
+                return "api", await _call(cfg, "POST", f"/{number}/cancel")
+            except NextLevelError as ex:
+                # Some orders refuse /cancel (already picked, hub state) — the owner's rule is then
+                # to simply set the status to cancelled, which the update endpoint accepts.
+                log.warning("NextLevel /cancel refused %s (%s) — trying the status update", number, ex)
+                return "api_status", await _call(cfg, "PUT", f"/{number}",
+                                                 json={"status_id": CANCELLED_STATUS_ID})
         if cfg.get("webhook_url"):
             import wc_api
 
@@ -362,7 +373,14 @@ async def cancel_order(order_id: str) -> Dict[str, Any]:
                              "Админ → Интеграции, за да стига отказът до склада", 400)
 
     try:
-        transport, res = await confirm()
+        # bounded: without this the request could sit for minutes and Cloudflare would answer the
+        # admin with its own 520/524 instead of our error
+        transport, res = await asyncio.wait_for(confirm(), timeout=CANCEL_TIMEOUT_SEC)
+    except asyncio.TimeoutError:
+        msg = f"NextLevel не отговори до {CANCEL_TIMEOUT_SEC} секунди"
+        await _db.orders.update_one({"id": order_id}, {"$set": {
+            "fulfillment.cancel_error": msg, "fulfillment.cancel_error_at": _now()}})
+        raise HTTPException(504, msg)
     except (NextLevelError, HTTPException) as ex:
         detail = ex.detail if isinstance(ex, HTTPException) else str(ex)
         await _db.orders.update_one({"id": order_id}, {"$set": {

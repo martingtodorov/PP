@@ -41,9 +41,9 @@ map $host $pp_apex {
 }
 
 # ---------- countries we do not serve ----------
-# Empty by default (owner's call 20.06.2026: the US/CA block is off again). Cloudflare hands the
-# country over in CF-IPCountry, so the decision can be made here at the origin — list the codes in
-# `blocked_countries` (group_vars/all.yml) to switch it back on for a country.
+# Owner's call 25.09.2026: US + China do not see the store. Cloudflare hands the country over in
+# CF-IPCountry, so the decision is made here at the origin — the list lives in `blocked_countries`
+# (default ["US", "CN"] in tasks/infra_defaults.yml, overridable in group_vars/all.yml).
 map $http_cf_ipcountry $pp_geo_blocked {
     default   0;
 {% for c in blocked_countries | default([]) %}    {{ c }}        1;
@@ -59,6 +59,11 @@ map $http_user_agent $pp_crawler {
     "~*(gptbot|oai-searchbot|chatgpt-user|perplexitybot|perplexity-user|claudebot|claude-user|anthropic-ai|amazonbot|meta-externalagent|bytespider|google-extended)" 1;
     "~*(facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|slackbot|discordbot|pinterest)" 1;
     "~*(uptimerobot|pingdom|better ?uptime|statuscake|cf-uam)"        1;
+    # Owner's call 25.09.2026: only residential visitors from the blocked countries must be stopped.
+    # Datacenter traffic is automation in practice, and an ASN lookup is not available at the origin
+    # (Cloudflare's verified-bot/ASN data is a paid feature), so ANY non-browser user agent — every
+    # bot, crawler, library and monitoring client — is let through by this catch-all.
+    "~*(bot|crawler|spider|scraper|scrapy|curl|wget|python|okhttp|java/|go-http|libwww|axios|node-fetch|got/|guzzle|postman|insomnia|headless|puppeteer|playwright|lighthouse|pagespeed|monitor|validator|feed|preview|archive|screaming ?frog|sitebulb)" 1;
 }
 
 map "$pp_geo_blocked:$pp_crawler" $pp_block {

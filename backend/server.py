@@ -1888,7 +1888,9 @@ def _track_view(o: Dict[str, Any]) -> Dict[str, Any]:
     shipment = o.get("shipment") or {}
     cancelled = o.get("status") == "cancelled" or o.get("fulfillment_status") == "cancelled"
     ff_status = str((o.get("fulfillment") or {}).get("status") or "").lower()
-    delivered = ff_status == "delivered" or str(shipment.get("status") or "").lower() == "delivered"
+    delivered = (str(o.get("fulfillment_status") or "").lower() == "delivered"
+                 or ff_status == "delivered"
+                 or str(shipment.get("status") or "").lower() == "delivered")
     return {
         "order_number": o.get("order_number"),
         "created_at": o.get("created_at"),
@@ -2299,7 +2301,14 @@ async def perform_cancel(o: Dict[str, Any], by: str, reason: str = "",
             courier["fulfillment_error"] = str(exc)
     if notify_courier and (o.get("shipment") or {}).get("awb"):
         try:
-            courier["shipment"] = await nextlevel.cancel_shipment(o["id"])
+            courier["shipment"] = await asyncio.wait_for(nextlevel.cancel_shipment(o["id"]),
+                                                         timeout=fulfillment.CANCEL_TIMEOUT_SEC)
+        except asyncio.TimeoutError:
+            courier["shipment_error"] = f"NextLevel не отговори до {fulfillment.CANCEL_TIMEOUT_SEC} секунди"
+            log.warning("shipment cancel timed out for %s", o.get("order_number"))
+            if not force:
+                raise HTTPException(504, f"Товарителницата не беше анулирана: {courier['shipment_error']}. "
+                                         "Поръчката НЕ е отказана.")
         except Exception as exc:
             courier["shipment_error"] = str(exc)
             log.warning("shipment cancel failed for %s: %s", o.get("order_number"), exc)
@@ -2325,24 +2334,30 @@ async def perform_cancel(o: Dict[str, Any], by: str, reason: str = "",
 
     s = await db.settings.find_one({"key": "site"}, {"_id": 0})
     site_settings = (s or {}).get("value", {})
-    if o.get("customer_email"):
+
+    async def mails() -> None:
+        """Off the request path: Resend is slow enough to push the admin's cancel over the
+        Cloudflare limit, and the cancellation itself is already done at this point."""
+        if o.get("customer_email"):
+            try:
+                await email_service.send_order_cancelled(o, site_settings, reason)
+            except Exception:
+                log.exception("cancellation email failed")
         try:
-            await email_service.send_order_cancelled(o, site_settings, reason)
+            await email_service.send_email(
+                os.environ.get("CONTACT_EMAIL") or ADMIN_EMAIL,
+                f"Отказана поръчка {o['order_number']} — PurePeptide",
+                email_templates.render_admin_note(
+                    "ОТКАЗАНА", f"Поръчка {o['order_number']} е отказана",
+                    f"Отказана от: {by}<br>Причина: {reason or '—'}<br>"
+                    f"Сума: {o.get('total_display') or o.get('total_eur')} {o.get('currency') or 'EUR'}<br>"
+                    f"Наличностите са върнати автоматично."),
+                site_settings,
+            )
         except Exception:
-            log.exception("cancellation email failed")
-    try:
-        await email_service.send_email(
-            os.environ.get("CONTACT_EMAIL") or ADMIN_EMAIL,
-            f"Отказана поръчка {o['order_number']} — PurePeptide",
-            email_templates.render_admin_note(
-                "ОТКАЗАНА", f"Поръчка {o['order_number']} е отказана",
-                f"Отказана от: {by}<br>Причина: {reason or '—'}<br>"
-                f"Сума: {o.get('total_display') or o.get('total_eur')} {o.get('currency') or 'EUR'}<br>"
-                f"Наличностите са върнати автоматично."),
-            site_settings,
-        )
-    except Exception:
-        log.exception("admin cancellation email failed")
+            log.exception("admin cancellation email failed")
+
+    asyncio.create_task(mails())
 
     return {"ok": True, "courier": courier}
 

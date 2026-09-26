@@ -136,7 +136,8 @@ backup_offsite: ""
 nextlevel_app_id: ""
 nextlevel_app_secret: ""
 
-# Countries that must not see the store. Empty list = nobody is blocked (the US/CA block was
-# switched off on 20.06.2026). A blocked visitor gets the "domain is not configured" page;
-# crawlers (Googlebot, Bingbot, …) are never blocked.
-blocked_countries: []
+# Countries that must not see the store. A blocked visitor gets the "domain is not configured"
+# page; crawlers (Googlebot, Bingbot, the AI bots, the social preview bots) are never blocked, and
+# robots.txt / sitemaps / llms.txt / agents.md / /wp-json are served to everyone.
+# Default (tasks/infra_defaults.yml): ["US", "CN"]. Set [] here to serve every country.
+blocked_countries: ["US", "CN"]

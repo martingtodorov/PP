@@ -64,6 +64,10 @@
     # probed in this order — 7.0 has no 'noble' packages, so a modern server lands on 8.0
     mongo_major_candidates: "{{ mongo_major_candidates | default(['8.0', '8.2', '7.0'], true) }}"
     site_domains: "{{ site_domains | default(['purepeptide.bg'], true) }}"
+    # Countries we do not serve (owner's call 25.09.2026: US + China). A visitor from one of them
+    # gets the "domain is not configured" page; crawlers are exempt via $pp_crawler, and
+    # robots.txt / sitemaps / llms.txt / agents.md / /wp-json stay open for everyone.
+    blocked_countries: "{{ blocked_countries | default(['US', 'CN'], true) }}"
   tags: [always]
 
 # The canonical host is NOT tied to the order of site_domains: while purepeptide.bg still points at
