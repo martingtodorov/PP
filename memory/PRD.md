@@ -97,6 +97,25 @@ test fixtures. Never delete or overwrite production records/media.
 - Текстът е „Поръчката ви е успешно направена!" + „Желаете ли да добавите някой от тези продукти? …"
   (`upsellTitle` / `upsellNote` в `i18n/checkoutStrings.js`, bg + en; другите езици падат към en).
 
+## 2026-06-25 — Отказ на поръчка, US/CN блок, tracking поправка
+- **Отказът на поръчка вече не дава Cloudflare 520**: `fulfillment.cancel_order` първо пробва
+  `POST /{number}/cancel`, а при отказ минава на `PUT /{number}` със `status_id: 3` (cancelled).
+  Двете NextLevel заявки са ограничени с `CANCEL_TIMEOUT_SEC = 25` → наш 504 вместо увисване, а
+  имейлите (клиент + админ) вече тръгват във фонов task, извън заявката.
+- **Публичното проследяване**: `_track_view` четеше само `fulfillment.status`, затова
+  `steps.delivered` оставаше false след `mark_delivered`. Сега ORва и `fulfillment_status`.
+- **Блокирани държави: US + CN** (`blocked_countries` по подразбиране в `tasks/infra_defaults.yml`).
+  Блокираният вижда `_not-live.html` („домейнът не е конфигуриран"). Изключени са Googlebot и
+  всички търсачки, AI ботовете, социалните превюта, мониторингът и — по желание на собственика —
+  **всеки не-браузър User-Agent** (curl, python, headless, playwright…), защото датацентър трафикът
+  е автоматизация, а ASN проверка на origin-а не е възможна на безплатния Cloudflare план.
+  `/robots.txt`, `/sitemap*.xml`, `/llms.txt`, `/agents.md` и `/wp-json/` НЕ са зад блока, тоест
+  индексирането е непокътнато. Документация: `deploy/hetzner/BLOCK_COUNTRIES.md`.
+  За прилагане на живо: `ansible-playbook playbooks/deploy_nginx.yml --tags config`.
+- Проверено: iteration_68 (17/17 pytest + локален nginx с 6 curl сценария).
+- Известно: `dryrun.py` показва един FAIL („nginx -t with listen variant") само защото в контейнера
+  няма адрес 10.0.0.2 — синтаксисът минава, това не е регресия.
+
 ## Backlog- P1: catalog sync throttling (rate-limited external source).
 - P1: decide the 404 strategy for the 474 legacy URLs (301 to the closest live handle vs 410).
 - P2: product reviews with ratings; post-delivery review request emails.
