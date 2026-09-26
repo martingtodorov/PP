@@ -6,6 +6,17 @@ export const demoteHeadings = (markup) =>
 
 const plain = (s) => String(s || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
 
+/** Imported copy carries empty `<img>` tags and `alt=""`: drop the sourceless ones, describe the rest. */
+export const fixImages = (markup, title = "") => {
+  const label = String(title || "").replace(/"/g, "&quot;").trim();
+  return String(markup || "")
+    .replace(/<img(?![^>]*\ssrc\s*=)[^>]*>/gi, "")
+    .replace(/<img\b[^>]*>/gi, (tag) => {
+      if (/\salt\s*=\s*"[^"]+"/i.test(tag) || !label) return tag;
+      return tag.replace(/\salt\s*=\s*"[^"]*"/i, "").replace(/\s*\/?>$/, ` alt="${label}">`);
+    });
+};
+
 /** Drops the opening heading of the copy when it only repeats the page H1 (no title twice). */
 export const dropLeadingHeading = (markup, heading) => {
   if (!markup || !heading) return markup;

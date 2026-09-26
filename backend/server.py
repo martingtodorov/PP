@@ -1493,6 +1493,10 @@ async def get_settings(locale: str = Query(DEFAULT_LOCALE)):
     value = dict(s["value"]) if s else dict(DEFAULT_SETTINGS)
     for secret in ("resend_api_key", "discount_codes"):
         value.pop(secret, None)
+    # the bank account belongs in a bank-transfer order (`_bank_block`), not in a public settings
+    # dump anyone can curl — an exposed IBAN invites invoices issued in the shop's name
+    for private in ("bank_iban", "bank_bic", "bank_holder", "bank_name"):
+        value.pop(private, None)
     # Google's merchant listings want the delivery and return terms inside the product offer
     value["shipping"] = await shipping_summary(normalize_locale(locale))
     return value

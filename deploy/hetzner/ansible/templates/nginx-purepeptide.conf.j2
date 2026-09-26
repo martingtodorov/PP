@@ -76,6 +76,9 @@ server {
     listen [::]:80;
     server_name {{ site_domains | join(' ') }} www.{{ site_domains | join(' www.') }};
     location = /index.html { return 301 https://$pp_apex$pp_home_path$is_args$args; }
+    # one hop, not two: the apex over TLS would send the root of a shared domain on to /en/, so
+    # send the http visitor straight there (an audit found http://(www.)purepeptide.eu/ doing 301→301)
+    location = / { return 301 https://$pp_apex$pp_home_path$is_args$args; }
     location / { return 301 https://$pp_apex$request_uri; }
 }
 
@@ -330,12 +333,13 @@ server {
 
     location = /index.html { return 301 https://$pp_apex$pp_home_path$is_args$args; }
 
-    # www root: same "#geo" marker as the apex, so the IP check still runs for a bare www visit
+    # the www root: one hop to the final URL. On a shared domain that is /en/ (the apex would only
+    # redirect again), everywhere else the apex root itself.
     location = / {
         if ($pp_needs_en) {
             return 301 "https://$pp_apex/en/$is_args$args#geo";
         }
-        return 301 https://$pp_apex/$is_args$args;
+        return 301 https://$pp_apex$pp_home_path$is_args$args;
     }
 
     # single hop: on the shared domain the final URL already carries the /en prefix

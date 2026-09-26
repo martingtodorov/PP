@@ -13,7 +13,7 @@ import { ContactForm } from "../components/ContactForm";
 import { ContactInfo } from "../components/ContactInfo";
 import { graph, faqLd, breadcrumbLd, organizationLd, websiteLd } from "../lib/schema";
 import { isAllCollection } from "../lib/collections";
-import { demoteHeadings } from "../lib/richText";
+import { demoteHeadings, fixImages } from "../lib/richText";
 
 const BODY = {
   bg: {
@@ -202,7 +202,7 @@ export default function StaticPage() {
         )}
 
         {page?.html && !isArticles && !isContact && !(isFaq && untranslated) && (
-          <div className="pp-rte mt-6" dangerouslySetInnerHTML={{ __html: demoteHeadings(page.html) }} data-testid="static-body" />
+          <div className="pp-rte mt-6" dangerouslySetInnerHTML={{ __html: fixImages(demoteHeadings(page.html), page.title) }} data-testid="static-body" />
         )}
 
         {isContact && (

@@ -132,6 +132,26 @@ _ALL_HANDLES = {"2all-the-peptides-1", "all-peptides"}
 
 
 
+def fix_images(markup: str, title: str = "") -> str:
+    """Imported copy carries empty `<img>` tags and `alt=""` — an audit found 30 such images.
+
+    Sourceless tags are dropped (they render nothing) and a missing or empty alt is filled with the
+    page title, so the picture is described instead of being announced as decorative.
+    """
+    text = str(markup or "")
+    text = re.sub(r"<img(?![^>]*\bsrc\s*=)[^>]*>", "", text, flags=re.I)
+    label = esc(title).strip()
+
+    def one(m: re.Match) -> str:
+        tag = m.group(0)
+        if re.search(r'\balt\s*=\s*"[^"]+"', tag, flags=re.I) or not label:
+            return tag
+        without = re.sub(r'\balt\s*=\s*"[^"]*"', "", tag, flags=re.I)
+        return re.sub(r"\s*/?>$", f' alt="{label}">', without, count=1)
+
+    return re.sub(r"<img\b[^>]*>", one, text, flags=re.I)
+
+
 def demote(markup: str) -> str:
     """Imported copy sometimes starts with its own <h1> — one H1 per page, the rest become H2."""
     out = re.sub(r"<h1(\s[^>]*)?>", "<h2>", str(markup or ""), flags=re.I)
@@ -524,7 +544,8 @@ async def _page(locale: str, slug: str) -> Optional[Dict[str, str]]:
     ld = _ld({"@type": "WebPage", "@id": f'{url_for(locale, route)}#page', "name": doc.get("title"),
               "description": _text(description, 500), "url": url_for(locale, route)},
              _breadcrumbs(locale, trail), _organization(locale), _website(locale), faq_schema)
-    body = [_crumb_html(locale, trail), f'<h1>{esc(doc.get("title"))}</h1>', demote(doc.get("html"))]
+    body = [_crumb_html(locale, trail), f'<h1>{esc(doc.get("title"))}</h1>',
+            fix_images(demote(doc.get("html")), doc.get("title") or "")]
     if faq_items:
         body.append('<section data-testid="faq-prerender">' + "".join(
             f'<h2>{esc(item["q"])}</h2><p>{esc(item["a"])}</p>' for item in faq_items) + "</section>")
