@@ -94,7 +94,8 @@ export default function AdminOrderDetailPage() {
   if (!order) return <AdminLayout title="Поръчка"><p className="text-sm text-slate-400">Зареждане…</p></AdminLayout>;
 
   const paid = order.payment_status === "paid";
-  const fulfilled = ["fulfilled", "shipped"].includes(order.fulfillment_status);
+  const fulfilled = ["fulfilled", "shipped", "delivered"].includes(order.fulfillment_status);
+  const delivered = order.fulfillment_status === "delivered";
   const cur = order.currency || "EUR";
   const m = (n) => fmtMoney(n, cur);
   const totalDisp = order.total_display ?? order.total_eur;
@@ -144,8 +145,8 @@ export default function AdminOrderDetailPage() {
           <section className="bg-white border border-slate-200 rounded-xl p-5" data-testid="order-fulfillment-card">
             <div className="flex items-center gap-2 mb-4">
               {fulfilled
-                ? <span className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-800 text-sm font-bold px-3 py-1.5 rounded-lg"><PackageCheck className="h-4 w-4" /> Изпратена ({order.items_count})</span>
-                : <span className="inline-flex items-center gap-2 bg-amber-100 text-amber-900 text-sm font-bold px-3 py-1.5 rounded-lg"><Truck className="h-4 w-4" /> Неизпратена ({order.items_count})</span>}
+                ? <span className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-800 text-sm font-bold px-3 py-1.5 rounded-lg" data-testid="order-fulfillment-state"><PackageCheck className="h-4 w-4" /> {delivered ? `Доставена и платена (${order.items_count})` : `Изпратена (${order.items_count})`}</span>
+                : <span className="inline-flex items-center gap-2 bg-amber-100 text-amber-900 text-sm font-bold px-3 py-1.5 rounded-lg" data-testid="order-fulfillment-state"><Truck className="h-4 w-4" /> Неизпратена ({order.items_count})</span>}
               {order.shipping_method && <span className="text-sm text-slate-500">{order.shipping_method}</span>}
             </div>
 

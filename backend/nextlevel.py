@@ -369,7 +369,7 @@ async def sync_open_shipments() -> Dict[str, Any]:
             if tracking["ready"]:
                 await _notify_once(by_awb[awb])
             if str(row.get("status") or "").lower() == "delivered":
-                await notify_delivered(by_awb[awb])
+                await mark_delivered(by_awb[awb])
     return {"open": len(by_awb), "updated": updated}
 
 
@@ -427,6 +427,23 @@ async def refresh_all_tracking() -> Dict[str, Any]:
             "waiting_for_courier_number": still_missing, "unreachable": failed}
 
 
+async def mark_delivered(order_id: str) -> None:
+    """NextLevel says the parcel is in the customer's hands: delivered AND paid.
+
+    The courier collects the cash on delivery, and a bank transfer is in before dispatch — either
+    way a delivered order is a paid order, so the admin does not have to tick it by hand.
+    """
+    order = await _db.orders.find_one({"id": order_id}, {"_id": 0, "payment_status": 1, "payment_method": 1})
+    if not order:
+        return
+    patch = {"fulfillment_status": "delivered", "status": "delivered",
+             "shipment.delivered_at": _now(), "updated_at": _now()}
+    if order.get("payment_status") != "paid":
+        patch.update({"payment_status": "paid", "paid_at": _now(), "paid_by": "nextlevel_delivered"})
+    await _db.orders.update_one({"id": order_id}, {"$set": patch})
+    await notify_delivered(order_id)
+
+
 async def notify_delivered(order_id: str) -> None:
     """One thank-you email per order when the courier confirms delivery."""
     import email_service
@@ -434,8 +451,7 @@ async def notify_delivered(order_id: str) -> None:
     order = await _db.orders.find_one({"id": order_id, "shipment.delivered_notified_at": {"$exists": False}}, {"_id": 0})
     if not order or not order.get("customer_email") or order.get("source") == "nextlevel-selftest":
         return
-    await _db.orders.update_one({"id": order_id}, {"$set": {"shipment.delivered_notified_at": _now(), "fulfillment_status": "fulfilled",
-                                                            "shipment.delivered_at": _now()}})
+    await _db.orders.update_one({"id": order_id}, {"$set": {"shipment.delivered_notified_at": _now()}})
     try:
         s = await _db.settings.find_one({"key": "site"}, {"_id": 0})
         await email_service.send_delivered(order, (s or {}).get("value") or {})

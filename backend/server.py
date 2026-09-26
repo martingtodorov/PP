@@ -1901,7 +1901,7 @@ def _track_view(o: Dict[str, Any]) -> Dict[str, Any]:
         "steps": {
             "placed": True,
             "paid": o.get("payment_status") == "paid" or (o.get("payment_method") == "cod" and bool(shipment.get("awb"))),
-            "shipped": bool(shipment.get("awb")) or o.get("fulfillment_status") in ("shipped", "fulfilled"),
+            "shipped": bool(shipment.get("awb")) or o.get("fulfillment_status") in ("shipped", "fulfilled", "delivered"),
             "delivered": delivered,
         },
         "cancelled": cancelled,
@@ -2062,12 +2062,13 @@ def _order_view(o: Dict[str, Any]) -> Dict[str, Any]:
 
 ORDER_FILTERS = {
     "attention": {"needs_attention": {"$ne": None}, "status": {"$ne": "cancelled"}},
-    "unfulfilled": {"fulfillment_status": {"$nin": ["fulfilled", "shipped"]}, "status": {"$ne": "cancelled"}},
+    "unfulfilled": {"fulfillment_status": {"$nin": ["fulfilled", "shipped", "delivered"]}, "status": {"$ne": "cancelled"}},
     "unpaid": {"payment_status": {"$ne": "paid"}, "status": {"$ne": "cancelled"}},
     "paid": {"payment_status": "paid"},
     "awaiting_payment": {"payment_status": {"$in": ["awaiting_payment", "pending"]}},
-    "shipped": {"$or": [{"fulfillment_status": {"$in": ["shipped", "fulfilled"]}}, {"status": "shipped"}]},
-    "archived": {"$or": [{"status": "cancelled"}, {"payment_status": "paid", "fulfillment_status": {"$in": ["fulfilled", "shipped"]}}]},
+    "shipped": {"$or": [{"fulfillment_status": {"$in": ["shipped", "fulfilled", "delivered"]}}, {"status": "shipped"}]},
+    "delivered": {"fulfillment_status": "delivered"},
+    "archived": {"$or": [{"status": "cancelled"}, {"payment_status": "paid", "fulfillment_status": {"$in": ["fulfilled", "shipped", "delivered"]}}]},
     # orders without the field predate the payment choice and were all bank transfers
     "bank_transfer": {"payment_method": {"$in": ["bank_transfer", None, ""]}, "status": {"$ne": "cancelled"}},
     "cod": {"payment_method": "cod", "status": {"$ne": "cancelled"}},

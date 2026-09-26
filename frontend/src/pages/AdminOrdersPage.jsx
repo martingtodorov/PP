@@ -9,6 +9,7 @@ const TABS = [
   { key: "attention", label: "За намеса" },
   { key: "unfulfilled", label: "Неизпратени" },
   { key: "unpaid", label: "Неплатени" },
+  { key: "delivered", label: "Доставени" },
   { key: "bank_transfer", label: "Банков превод" },
   { key: "cod", label: "Наложен платеж" },
   { key: "open", label: "Отворени" },
@@ -31,6 +32,7 @@ const FUL_BADGE = {
   unfulfilled: { label: "Неизпратена", cls: "bg-amber-100 text-amber-900" },
   fulfilled: { label: "Изпратена", cls: "bg-emerald-100 text-emerald-800" },
   shipped: { label: "Изпратена", cls: "bg-emerald-100 text-emerald-800" },
+  delivered: { label: "Доставена", cls: "bg-emerald-600 text-white" },
   cancelled: { label: "Отказана", cls: "bg-slate-200 text-slate-700" },
 };
 

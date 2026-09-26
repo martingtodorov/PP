@@ -425,7 +425,7 @@ async def refresh_order(order_id: str) -> Dict[str, Any]:
     if fresh.get("awb"):
         await _apply_awb(order, fresh)
     if str(fresh.get("status") or "").lower() == "delivered" or str(fresh.get("shipment_status") or "").lower() == "delivered":
-        await nextlevel.notify_delivered(order_id)
+        await nextlevel.mark_delivered(order_id)
     if str(fresh.get("status") or "").lower() == "cancelled" and order.get("status") != "cancelled":
         await warehouse_cancelled(order_id)
     await _alert_if_stuck(order, ff, fresh)
